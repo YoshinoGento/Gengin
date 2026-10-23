@@ -4,6 +4,11 @@
 // 前方宣言
 class SceneManager;
 
+struct SceneClipPlanes {
+    float nearClip = 0.1f;
+    float farClip = 1000.0f;
+};
+
 /**
  * BaseSceneクラス
  * すべてのシーンの親クラスです（スライド25,26準拠）。
@@ -31,6 +36,8 @@ public:
 	// Called once after the opaque cover was presented; no Scene resource exchange occurs.
 	virtual void OnScreenTransitionCovered() {}
 	virtual void Draw() = 0;
+	// Default depth range preserves scenes that do not supply a custom posteffect camera.
+	[[nodiscard]] virtual SceneClipPlanes GetPostEffectClipPlanes() const noexcept { return {}; }
 
 	// シーンマネージャをセットするSetter（スライド25準拠）
 	virtual void SetSceneManager(SceneManager* sceneManager) {

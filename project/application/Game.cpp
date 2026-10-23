@@ -1,6 +1,5 @@
 #include "Game.h"
 
-#include "3d/Camera.h"
 #include "base/DirectXCommon.h"
 #include "base/FrameClock.h"
 #include "base/ImGuiManager.h"
@@ -11,7 +10,6 @@
 #endif
 #include "effect/PostEffectSystem.h"
 #include "2d/Sprite.h"
-#include "scene/GamePlayScene.h"
 #include "scene/SceneFactory.h"
 #include "scene/SceneManager.h"
 
@@ -91,17 +89,9 @@ void Game::Draw() {
 	// The scene is rendered into the offscreen RenderTexture first.
 	sceneManager->Draw();
 
-	float nearClip = 0.1f;
-	float farClip = 1000.0f;
-	if (BaseScene* currentScene = sceneManager->GetCurrentScene()) {
-		if (GamePlayScene* playScene = dynamic_cast<GamePlayScene*>(currentScene)) {
-			if (playScene->GetCamera()) {
-				nearClip = playScene->GetCamera()->GetNearClip();
-				farClip = playScene->GetCamera()->GetFarClip();
-			}
-		}
-	}
-	postEffectSystem_->Execute(nearClip, farClip);
+	const BaseScene* currentScene = sceneManager->GetCurrentScene();
+	const SceneClipPlanes clips = currentScene ? currentScene->GetPostEffectClipPlanes() : SceneClipPlanes{};
+	postEffectSystem_->Execute(clips.nearClip, clips.farClip);
 
 
 	// ImGui is composited on the swapchain after the gamma-corrected game image.

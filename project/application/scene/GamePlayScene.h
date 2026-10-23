@@ -1,5 +1,6 @@
 #pragma once
 #include "scene/BaseScene.h"
+#include "editor/GamePlayEditorScene.h"
 #include "math/Struct.h"
 #include <memory>
 #include <cstdint>
@@ -8,7 +9,7 @@ class Camera;
 class FieldManager;
 class SkyboxManager;
 namespace editor { class GamePlayEditorBridge; }
-class GamePlayScene final : public BaseScene {
+class GamePlayScene final : public BaseScene, public editor::GamePlayEditorScene {
 public:
     GamePlayScene();
     ~GamePlayScene() override;
@@ -20,12 +21,13 @@ public:
     void FixedUpdate(float fixedDeltaTime) override;
     void Update() override;
     void Draw() override;
-    editor::GamePlayEditorBridge& GetEditorBridge() noexcept;
+    SceneClipPlanes GetPostEffectClipPlanes() const noexcept override;
+    editor::GamePlayEditorBridge& GetEditorBridge() noexcept override;
     const editor::GamePlayEditorBridge& GetEditorBridge() const noexcept;
     const Camera* GetCamera() const noexcept;
-    bool IsFarmGameMode() const noexcept;
-    bool SetFarmGameMode(bool enabled);
-    void RequestFarmLayoutLibrary() noexcept;
+    bool IsFarmGameMode() const noexcept override;
+    bool SetFarmGameMode(bool enabled) override;
+    void RequestFarmLayoutLibrary() noexcept override;
 private:
     std::unique_ptr<GamePlaySessionSystem> session_;
 };

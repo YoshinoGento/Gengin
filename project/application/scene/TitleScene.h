@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BaseScene.h"
+#include "scene/SceneViewportInput.h"
 #include "title/TitlePresentationSystem.h"
 #include "title/TitleFarmRenderer.h"
 #include "title/TitleView.h"
@@ -9,7 +10,7 @@
 #include "title/TitleAudioSettingsView.h"
 #include "title/TitlePondRenderer.h"
 
-class TitleScene : public BaseScene {
+class TitleScene final : public BaseScene, public scene::ViewportInputTarget {
 public:
 	void Initialize() override;
     InitializationTask InitializeIncrementally() override;
@@ -18,8 +19,13 @@ public:
 	void UpdateTransitionPresentation() override { Update(); }
 	void Draw() override;
     void RequestStart() noexcept;
-	void SetSettingsViewportInput(const title::AudioSettingsInput& input, bool focused) noexcept {
-		viewportInput_ = input; viewportFocused_ = focused;
+	void SetViewportPointerInput(const scene::ViewportPointerInput& input) noexcept override {
+		viewportInput_ = {};
+		viewportInput_.pointer = input.position;
+		viewportInput_.pointerValid = input.valid;
+		viewportInput_.pressed = input.pressed;
+		viewportInput_.held = input.held;
+		viewportFocused_ = input.focused;
 	}
 
 private:

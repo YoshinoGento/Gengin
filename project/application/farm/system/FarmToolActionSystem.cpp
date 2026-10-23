@@ -1,4 +1,5 @@
 #include "farm/system/FarmToolActionSystem.h"
+#include "farm/system/FarmToolBehavior.h"
 #include "farm/system/FarmContestSubmissionSystem.h"
 #include "farm/system/FarmSoilSystem.h"
 
@@ -15,9 +16,6 @@
 namespace {
 constexpr float kFullMoisture = 1.0f;
 constexpr float kMinimumWateringIncrement = 0.01f;
-constexpr float kInitialGrowth = 0.0f;
-constexpr float kHarvestReadyGrowth = 1.0f;
-constexpr float kHarvestMoistureCost = 0.25f;
 
 bool TilesEqual(const farm::FarmTile& left, const farm::FarmTile& right)
 {
@@ -268,161 +266,56 @@ FarmToolActionResult FarmToolActionSystem::EvaluateTool(
 }
 
 FarmToolActionResult FarmToolActionSystem::EvaluateTool(
-	const farm::FarmGrid& grid, int tileIndex, FarmTool tool,
-	farm::CropType selectedCrop,
-	const FarmEconomySystem* economySystem) const noexcept
+    const farm::FarmGrid& grid, int tileIndex, FarmTool tool,
+    farm::CropType selectedCrop, const FarmEconomySystem* economySystem) const noexcept
 {
-	FarmToolActionResult result{};
-	result.tool = tool;
-	result.tileIndex = tileIndex;
-	const farm::FarmTile* tile = grid.GetTile(tileIndex);
-	if (tile == nullptr) {
-		result.status = FarmToolActionStatus::InvalidTarget;
-		return result;
-	}
-	if (tile->feature != farm::FarmTileFeature::None) {
-		result.status = FarmToolActionStatus::InvalidState;
-		return result;
-	}
+    return PlanTool(grid, tileIndex, tool, selectedCrop, economySystem).result;
+}
 
-	switch (tool) {
-	case FarmTool::Hoe:
-		result.status = tile->state == farm::FarmTileState::Empty
-			? FarmToolActionStatus::Applied
-			: FarmToolActionStatus::InvalidState;
-		break;
-	case FarmTool::Water:
-		if ((tile->state != farm::FarmTileState::Tilled &&
-			tile->state != farm::FarmTileState::Planted) ||
-			!std::isfinite(tile->moisture) || tile->moisture < 0.0f ||
-			tile->moisture > kFullMoisture) {
-			result.status = FarmToolActionStatus::InvalidState;
-		} else {
-			result.moistureBefore = tile->moisture;
-			result.moistureAfter = (std::min)(kFullMoisture,
-				tile->moisture + wateringMoistureIncrement_);
-			result.status = tile->moisture >= kFullMoisture
-				? FarmToolActionStatus::AlreadyWatered
-				: FarmToolActionStatus::Applied;
-		}
-		break;
-	case FarmTool::Seed:
-		if (!farm::IsPlantableCrop(selectedCrop)) {
-			result.status = FarmToolActionStatus::InvalidState;
-		} else if ((stageAccess_ && !stageAccess_->Get().Allows(selectedCrop)) ||
-			(economySystem && !economySystem->IsCropUnlocked(selectedCrop))) {
-			result.status = FarmToolActionStatus::Locked;
-		} else if (tile->state != farm::FarmTileState::Tilled) {
-			result.status = FarmToolActionStatus::InvalidState;
-		} else if (economySystem != nullptr &&
-			economySystem->GetSeedCount(selectedCrop) <= 0) {
-			result.status = FarmToolActionStatus::NoSeed;
-		} else {
-			result.status = FarmToolActionStatus::Applied;
-		}
-		break;
-	case FarmTool::Harvest:
-		if (tile->state != farm::FarmTileState::Planted ||
-			tile->crop == farm::CropType::None) {
-			result.status = FarmToolActionStatus::InvalidState;
-		} else if (tile->growth < kHarvestReadyGrowth) {
-			result.status = FarmToolActionStatus::NotReady;
-		} else if (economySystem && economySystem->GetHarvestRecordCount() >= FarmEconomySystem::kMaxHarvestRecords) {
-			result.status = FarmToolActionStatus::InventoryFull;
-		} else {
-			result.status = FarmToolActionStatus::Harvested;
-			result.harvestQuality = cropQualitySystem_.Evaluate(*tile);
-			if (!result.harvestQuality.IsValid()) {
-				result.status = FarmToolActionStatus::InvalidState;
-			} else {
-				result.reward = result.harvestQuality.salePrice;
-			}
-		}
-		break;
-	case FarmTool::BugNet:
-	default:
-		result.status = FarmToolActionStatus::UnsupportedTool;
-		break;
-	}
-	return result;
+FarmToolPlan FarmToolActionSystem::PlanTool(
+    const farm::FarmGrid& grid, int tileIndex, FarmTool tool,
+    farm::CropType selectedCrop, const FarmEconomySystem* economy) const noexcept
+{
+    FarmToolPlan plan;
+    plan.result.tool = tool;
+    plan.result.tileIndex = tileIndex;
+    const auto* tile = grid.GetTile(tileIndex);
+    if (!tile) {
+        plan.result.status = FarmToolActionStatus::InvalidTarget;
+    } else if (tile->feature != farm::FarmTileFeature::None) {
+        plan.result.status = FarmToolActionStatus::InvalidState;
+    } else if (const FarmToolBehavior* behavior = FindFarmToolBehavior(tool)) {
+        plan = behavior->Plan({*tile, selectedCrop, economy, stageAccess_,
+            cropQualitySystem_, wateringMoistureIncrement_});
+        plan.result.tileIndex = tileIndex;
+    } else {
+        plan.result.status = FarmToolActionStatus::UnsupportedTool;
+    }
+    return plan;
 }
 
 FarmToolActionResult FarmToolActionSystem::ApplyToolDetailed(
-	farm::FarmGrid& grid, FarmTool tool, farm::CropType selectedCrop,
-	FarmEconomySystem& economySystem, int harvestedDay)
+    farm::FarmGrid& grid, FarmTool tool, farm::CropType selectedCrop,
+    FarmEconomySystem& economySystem, int harvestedDay)
 {
-	FarmToolActionResult result = EvaluateTool(
-		grid, tool, selectedCrop, &economySystem);
-	if (!result.Succeeded()) {
-		return result;
-	}
+    const FarmToolPlan plan = PlanTool(grid, grid.GetSelectedIndex(), tool, selectedCrop, &economySystem);
+    FarmToolActionResult result = plan.result;
+    if (!result.Succeeded()) return result;
 
-	const int tileIndex = result.tileIndex;
-	const farm::FarmTile* selectedTile = grid.GetTile(tileIndex);
-	if (selectedTile == nullptr) {
-		result.status = FarmToolActionStatus::InvalidTarget;
-		return result;
-	}
-	const farm::FarmTile before = *selectedTile;
-	farm::FarmTile after = before;
-	const char* commandName = "Farm Tool";
-
-	switch (tool) {
-	case FarmTool::Hoe:
-		after.state = farm::FarmTileState::Tilled;
-		commandName = "Hoe Tile";
-		break;
-	case FarmTool::Water:
-		after.moisture = result.moistureAfter;
-		commandName = "Water Tile";
-		break;
-	case FarmTool::Seed:
-		after.state = farm::FarmTileState::Planted;
-		after.crop = selectedCrop;
-		after.growth = kInitialGrowth;
-		after.careHistory = {};
-		commandName = "Plant Seed";
-		break;
-	case FarmTool::Harvest:
-		after.state = farm::FarmTileState::Tilled;
-		after.crop = farm::CropType::None;
-		after.growth = kInitialGrowth;
-		after.moisture = (std::max)(0.0f, before.moisture - kHarvestMoistureCost);
-		after.careHistory = {};
-		commandName = "Harvest Crop";
-		break;
-	case FarmTool::BugNet:
-		result.status = FarmToolActionStatus::UnsupportedTool;
-		return result;
-	default:
-		result.status = FarmToolActionStatus::UnsupportedTool;
-		return result;
-	}
-
-	const FarmCropQualityResult harvestedQuality = tool == FarmTool::Harvest
-		? cropQualitySystem_.Evaluate(before)
-		: FarmCropQualityResult{};
-	const int harvestedQuantity = tool == FarmTool::Harvest ? 1 : 0;
-	const farm::CropType plantedCrop = tool == FarmTool::Seed
-		? selectedCrop
-		: farm::CropType::None;
-	const int plantedQuantity = tool == FarmTool::Seed ? 1 : 0;
-	if (!CommitTileChange(
-		grid, tileIndex, before, after, commandName,
-		&economySystem, harvestedQuality, harvestedQuantity,
-		plantedCrop, plantedQuantity, harvestedDay)) {
-		result.status = FarmToolActionStatus::InvalidState;
-		return result;
-	}
-	if (tool == FarmTool::Harvest) {
-		result.status = FarmToolActionStatus::Harvested;
-		result.harvestQuality = harvestedQuality;
-		result.reward = harvestedQuality.salePrice;
-		result.harvestedTile = before;
-	} else {
-		result.status = FarmToolActionStatus::Applied;
-	}
-	return result;
+    const auto* selectedTile = grid.GetTile(result.tileIndex);
+    if (!selectedTile) {
+        result.status = FarmToolActionStatus::InvalidTarget;
+        return result;
+    }
+    const farm::FarmTile before = *selectedTile;
+    if (!CommitTileChange(grid, result.tileIndex, before, plan.after, plan.commandName,
+        &economySystem, result.harvestQuality, plan.harvestedQuantity,
+        plan.plantedCrop, plan.plantedQuantity, harvestedDay)) {
+        result.status = FarmToolActionStatus::InvalidState;
+        return result;
+    }
+    if (result.status == FarmToolActionStatus::Harvested) result.harvestedTile = before;
+    return result;
 }
 
 bool FarmToolActionSystem::CompostSelectedTile(farm::FarmGrid& grid)

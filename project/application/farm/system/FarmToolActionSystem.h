@@ -9,7 +9,9 @@
 
 #include <vector>
 #include <cstdint>
-#include <optional>
+#include "farm/system/FarmToolActionTypes.h"
+
+struct FarmToolPlan;
 
 namespace farm {
 class FarmGrid;
@@ -17,36 +19,6 @@ struct FarmTile;
 }
 
 class FarmEconomySystem;
-
-enum class FarmToolActionStatus {
-	None,
-	Applied,
-	Harvested,
-	InvalidTarget,
-	InvalidState,
-	AlreadyWatered,
-	NoSeed,
-	InventoryFull,
-	NotReady,
-	UnsupportedTool,
-	Locked,
-};
-
-struct FarmToolActionResult {
-	FarmToolActionStatus status = FarmToolActionStatus::None;
-	FarmTool tool = FarmTool::Hoe;
-	int tileIndex = -1;
-	int reward = 0;
-	FarmCropQualityResult harvestQuality{};
-	float moistureBefore = 0.0f;
-	float moistureAfter = 0.0f;
-	std::optional<farm::FarmTile> harvestedTile; // Present only after the harvest command commits.
-
-	[[nodiscard]] bool Succeeded() const noexcept {
-		return status == FarmToolActionStatus::Applied ||
-			status == FarmToolActionStatus::Harvested;
-	}
-};
 
 class FarmToolActionSystem {
 public:
@@ -99,6 +71,8 @@ public:
 	[[nodiscard]] const CommandHistory& GetHistory() const noexcept { return history_; }
 
 private:
+	[[nodiscard]] FarmToolPlan PlanTool(const farm::FarmGrid& grid, int tileIndex, FarmTool tool,
+		farm::CropType selectedCrop, const FarmEconomySystem* economy) const noexcept;
 	const FarmStageAccessSystem* stageAccess_=nullptr; // Borrowed; stage access reads live date/policy.
 	int historyAccessKey_ = 0;
 	int AccessKey() const noexcept {

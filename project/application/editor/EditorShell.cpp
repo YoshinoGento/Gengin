@@ -10,8 +10,8 @@
 #include "effect/PostEffectSystem.h"
 #include "io/Input.h"
 #include "scene/BaseScene.h"
-#include "scene/GamePlayScene.h"
-#include "scene/TitleScene.h"
+#include "editor/GamePlayEditorScene.h"
+#include "scene/SceneViewportInput.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui_internal.h"
@@ -65,7 +65,7 @@ void EditorShell::Draw(
 	PostEffectSystem* postEffectSystem) {
 #ifdef USE_IMGUI
 	DrawMainMenuBar();
-	GamePlayScene* playScene = dynamic_cast<GamePlayScene*>(currentScene);
+	editor::GamePlayEditorScene* playScene = dynamic_cast<editor::GamePlayEditorScene*>(currentScene);
 	if (playScene) {
 		playScene->GetEditorBridge().BuildViewModel(gamePlayEditorViewModel_);
 		HandleFarmDocumentShortcut(*playScene);
@@ -105,14 +105,15 @@ void EditorShell::Draw(
 			editorSettings_.GetLanguage(), gameMode);
 	}
 
-	if (auto* titleScene = dynamic_cast<TitleScene*>(currentScene)) {
+	if (auto* pointerTarget = dynamic_cast<scene::ViewportInputTarget*>(currentScene)) {
 		const auto& viewport = gameViewportWindow_.GetFrameState();
-		title::AudioSettingsInput pointer;
-		pointer.pointer = viewport.virtualMousePosition;
-		pointer.pointerValid = viewport.imageVisible;
+		scene::ViewportPointerInput pointer;
+		pointer.position = viewport.virtualMousePosition;
+		pointer.valid = viewport.imageVisible;
 		pointer.pressed = viewport.leftClicked;
 		pointer.held = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-		titleScene->SetSettingsViewportInput(pointer,viewport.focused);
+		pointer.focused = viewport.focused;
+		pointerTarget->SetViewportPointerInput(pointer);
 	}
 
 	if (!playScene) {
@@ -402,7 +403,7 @@ void EditorShell::DrawConsole() {
 #endif
 }
 
-void EditorShell::DrawFarmToolbar(GamePlayScene& playScene) {
+void EditorShell::DrawFarmToolbar(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	editor::GamePlayEditorBridge& bridge = playScene.GetEditorBridge();
 	const FarmToolbarActions actions = farmToolbarWindow_.Draw(
@@ -473,7 +474,7 @@ void EditorShell::DrawFarmToolbar(GamePlayScene& playScene) {
 #endif
 }
 
-void EditorShell::HandleFarmDocumentShortcut(GamePlayScene& playScene) {
+void EditorShell::HandleFarmDocumentShortcut(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	if (ImGui::GetIO().WantTextInput ||
 		!ImGui::Shortcut(
@@ -496,7 +497,7 @@ void EditorShell::HandleFarmDocumentShortcut(GamePlayScene& playScene) {
 #endif
 }
 
-void EditorShell::HandleFarmHistoryShortcuts(GamePlayScene& playScene) {
+void EditorShell::HandleFarmHistoryShortcuts(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	if (ImGui::GetIO().WantTextInput) {
 		return;
@@ -526,7 +527,7 @@ void EditorShell::HandleFarmHistoryShortcuts(GamePlayScene& playScene) {
 #endif
 }
 
-void EditorShell::DrawFarmHierarchy(GamePlayScene& playScene) {
+void EditorShell::DrawFarmHierarchy(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	editor::GamePlayEditorBridge& bridge = playScene.GetEditorBridge();
 	const FarmHierarchyActions actions = farmHierarchyWindow_.Draw(
@@ -554,7 +555,7 @@ void EditorShell::DrawFarmHierarchy(GamePlayScene& playScene) {
 #endif
 }
 
-void EditorShell::DrawFarmHistory(GamePlayScene& playScene) {
+void EditorShell::DrawFarmHistory(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	editor::GamePlayEditorBridge& bridge = playScene.GetEditorBridge();
 	const FarmHistoryActions actions = farmHistoryWindow_.Draw(
@@ -581,7 +582,7 @@ void EditorShell::DrawFarmHistory(GamePlayScene& playScene) {
 #endif
 }
 
-void EditorShell::DrawFarmController(GamePlayScene& playScene) {
+void EditorShell::DrawFarmController(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	editor::GamePlayEditorBridge& bridge = playScene.GetEditorBridge();
 	const FarmControllerActions actions = farmControllerWindow_.Draw(
@@ -700,7 +701,7 @@ void EditorShell::DrawFarmController(GamePlayScene& playScene) {
 #endif
 }
 
-void EditorShell::DrawFarmMap(GamePlayScene& playScene) {
+void EditorShell::DrawFarmMap(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI
 	editor::GamePlayEditorBridge& bridge = playScene.GetEditorBridge();
 	const FarmMapActions actions = farmMapWindow_.Draw(

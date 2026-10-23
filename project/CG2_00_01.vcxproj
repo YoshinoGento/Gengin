@@ -729,4 +729,11 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\gameplay\GamePlaySessionSystem.h" />
     <ClInclude Include="application\farm\system\FarmRuntimeContext.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="application\farm\system\FarmToolActionTypes.h" />
+    <ClInclude Include="application\farm\system\FarmToolBehavior.h" />
+    <ClCompile Include="application\farm\system\FarmToolBehavior.cpp" />
+    <ClInclude Include="application\editor\GamePlayEditorScene.h" />
+    <ClInclude Include="application\scene\SceneViewportInput.h" />
+  </ItemGroup>
 </Project>

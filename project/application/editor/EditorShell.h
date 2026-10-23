@@ -21,7 +21,7 @@
 
 class BaseScene;
 class EngineDebugWindowManager;
-class GamePlayScene;
+namespace editor { class GamePlayEditorScene; }
 class Input;
 class PostEffectDebugWindow;
 class PostEffectSystem;
@@ -49,13 +49,13 @@ private:
 	void DrawCG5Demo(PostEffectSystem& postEffectSystem);
 	void DrawEditorSettingsWindow();
 	void DrawConsole();
-	void DrawFarmController(GamePlayScene& playScene);
-	void DrawFarmHierarchy(GamePlayScene& playScene);
-	void DrawFarmHistory(GamePlayScene& playScene);
-	void DrawFarmMap(GamePlayScene& playScene);
-	void DrawFarmToolbar(GamePlayScene& playScene);
-	void HandleFarmDocumentShortcut(GamePlayScene& playScene);
-	void HandleFarmHistoryShortcuts(GamePlayScene& playScene);
+	void DrawFarmController(editor::GamePlayEditorScene& playScene);
+	void DrawFarmHierarchy(editor::GamePlayEditorScene& playScene);
+	void DrawFarmHistory(editor::GamePlayEditorScene& playScene);
+	void DrawFarmMap(editor::GamePlayEditorScene& playScene);
+	void DrawFarmToolbar(editor::GamePlayEditorScene& playScene);
+	void HandleFarmDocumentShortcut(editor::GamePlayEditorScene& playScene);
+	void HandleFarmHistoryShortcuts(editor::GamePlayEditorScene& playScene);
 	void BuildDefaultFarmLayout(unsigned int dockspaceId);
 
 	EditorSettings editorSettings_;
