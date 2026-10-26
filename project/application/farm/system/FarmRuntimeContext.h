@@ -41,7 +41,8 @@ public:
     virtual void ApplyCameraPose(const farm::OverviewPose& pose, bool updateOverview) = 0;
     virtual void SetUsePlayerCamera(bool enabled) = 0;
     virtual void InitializeTimeline() = 0;
-    virtual void ResetFarmSession() = 0;
+    virtual bool ResetFarmSession() = 0;
+    virtual bool RetryCompletedSeason() = 0;
     virtual void RouteFarmSale(const FarmSaleResult& result) = 0;
     virtual void RouteFarmToolFeedback(const FarmToolActionResult& result) = 0;
     virtual bool ConvertMouseToVirtualScreen(const Vector2& position, Vector2& output) const = 0;

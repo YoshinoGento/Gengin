@@ -26,6 +26,7 @@ public:
 	static constexpr int kMaximumHeightLevel = 2;
 
 	void Initialize(const farm::FarmRules& rules = {}) noexcept;
+	[[nodiscard]] float MaximumHarvestSize(farm::CropType crop) const noexcept { return cropQualitySystem_.MaximumHarvestSize(crop); }
 	void BindStageAccess(const FarmStageAccessSystem& access) noexcept { stageAccess_=&access; }
 	[[nodiscard]] int MaximumAllowedHeight() const noexcept {
 		return stageAccess_ ? stageAccess_->Get().maximumHeight : kMaximumHeightLevel;

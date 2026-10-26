@@ -1,6 +1,7 @@
 #pragma once
 #include "3d/Object3dCommon.h"
 #include "3d/Model.h"
+#include "3d/ObjectBufferLayout.h"
 #include "math/Matrix.h"
 #include "3d/Camera.h"
 #include "3d/Skeleton.h"
@@ -18,6 +19,11 @@
  */
 class Object3d {
 public:
+    Object3d() = default;
+    Object3d(const Object3d&) = delete;
+    Object3d& operator=(const Object3d&) = delete;
+    Object3d(Object3d&&) noexcept = default;
+    Object3d& operator=(Object3d&&) noexcept = default;
 	enum class SpecularType : int32_t {
 		Phong = 0,
 		BlinnPhong = 1,
@@ -50,14 +56,14 @@ public:
 	void SetTexture(Texture2DHandle textureHandle) { textureHandle_ = textureHandle; }
 	void SetTexture(uint32_t textureHandle);
 	void SetColor(const Vector4& color);
-	void SetEnableLighting(bool enabled) { if (materialData_) materialData_->enableLighting = enabled ? 1 : 0; }
+	void SetEnableLighting(bool enabled) { if (constantBuffer_ && materialData_) materialData_->enableLighting = enabled ? 1 : 0; }
 	// 環境マップ用のテクスチャハンドルをセット
 	void SetEnvironmentMap(TextureCubeHandle handle) { environmentMapHandle_ = handle; }
 	// 反射強度のセット
 	void SetEnvironmentCoefficient(float coef);
 	void SetCullMode(int cullMode);
 	void SetShininess(float shininess);
-	void SetSpecularType(SpecularType type) { if (materialData_) materialData_->specularType = static_cast<int32_t>(type); }
+	void SetSpecularType(SpecularType type) { if (constantBuffer_ && materialData_) materialData_->specularType = static_cast<int32_t>(type); }
 	// x: specular gain, y: grain contrast, z: cells/world-unit, w: normal variation.
 	bool SetSurfaceDetail(const Vector4& detail);
 	// RGB: sky-fill tint, W: opt-in blend. Zero preserves legacy lighting.
@@ -106,19 +112,7 @@ private:
 	bool isMirrored_ = false;
 	Vector2 shearY_{}; // Per-instance only; zero preserves the standard SRT transform.
 
-	struct Material {
-		Vector4 color;
-		int32_t enableLighting;
-		float shininess;
-		float environmentCoefficient;
-		int32_t specularType;
-		Matrix4x4 uvTransform;
-		Vector4 surfaceDetail;
-		Vector4 outdoorAmbient;
-	};
-	static_assert(offsetof(Material, surfaceDetail) == 96);
-	static_assert(offsetof(Material, outdoorAmbient) == 112);
-	static_assert(sizeof(Material) == 128);
+	using Material = graphics::ObjectMaterial;
 
 	// GPUに送るための頂点スキンデータ
 	struct VertexShaderSkinning
@@ -127,20 +121,14 @@ private:
 		int32_t boneIndices[4]; //頂点シェイダー側でint4となる骨のインデックス
 	};
 
-	struct TransformationMatrix {
-		Matrix4x4 WVP;
-		Matrix4x4 World;
-		Matrix4x4 WorldInverseTranspose;
-	};
-	static_assert(sizeof(TransformationMatrix) == sizeof(Matrix4x4) * 3);
+	using TransformationMatrix = graphics::ObjectTransform;
 
 	Transform transform_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
 
-	Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
+    // Persistently mapped owner; destruction/replacement requires the caller's completed-frame Fence.
+	Microsoft::WRL::ComPtr<ID3D12Resource> constantBuffer_;
 	Material* materialData_ = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
 	TransformationMatrix* transformationMatrixData_ = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12Resource> shadowTransformationMatrixResource_;
 	TransformationMatrix* shadowTransformationMatrixData_ = nullptr;
 
 	// スポットライト用

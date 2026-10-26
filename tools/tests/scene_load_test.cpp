@@ -1,6 +1,8 @@
 #include "scene/SceneLoadSystem.h"
 #include <cassert>
+#include <cmath>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -56,9 +58,26 @@ int main() {
         }
         assert(frames>=4 && frames<1000 && live==0);
         const auto& metrics=loader.GetMetrics();
+        assert(metrics.elapsedMs>=metrics.workMs && metrics.longestFrameWorkMs>=metrics.longestStepMs);
+        std::size_t profiledSteps=0;
+        double profiledMs=0;
+        bool sawChild=false, sawParent=false;
+        for (const auto& function : metrics.functions) {
+            profiledSteps+=function.steps;
+            profiledMs+=function.milliseconds;
+            sawChild |= function.name.find("Child(") != std::string_view::npos;
+            sawParent |= function.name.find("Parent(") != std::string_view::npos;
+        }
+        assert(sawChild && sawParent && profiledSteps==metrics.steps);
+        assert(std::abs(profiledMs-metrics.workMs)<.0001);
+        std::ostringstream report;
+        loader.WriteReport(report);
+        assert(report.str().find("elapsedMs=")!=std::string::npos);
+        assert(report.str().find("Child(")!=std::string::npos);
         assert(metrics.slowest.front().milliseconds==metrics.longestStepMs);
         for(std::size_t i=0;i<metrics.slowest.size();++i) {
             assert(metrics.slowest[i].index<=metrics.steps);
+            if(metrics.slowest[i].index) assert(metrics.slowest[i].location.line()!=0);
             if(i) assert(metrics.slowest[i-1].milliseconds>=metrics.slowest[i].milliseconds);
         }
         assert(loader.GetStatus()==(fail ? scene::SceneLoadSystem::Status::Failed : scene::SceneLoadSystem::Status::Ready));

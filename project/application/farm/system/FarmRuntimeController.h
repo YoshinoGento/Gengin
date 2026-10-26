@@ -6,6 +6,7 @@
 #include "farm/system/FarmArrivalAudioSystem.h"
 #include "farm/system/FarmSeedShopSystem.h"
 #include "farm/system/FarmHarvestDisplaySystem.h"
+#include "farm/system/FarmContestOutcomeSystem.h"
 
 struct FarmRuntimeContext;
 class Input;
@@ -38,13 +39,20 @@ public:
     int SeedShopSelection() const noexcept { return shop_.Selection(); }
     bool ShowsHarvestDisplay() const noexcept { return view_.harvestDisplay; }
     int HarvestDisplaySelection() const noexcept { return view_.counterSelection; }
+    bool ShowsContestDetail() const noexcept { return view_.contestDetail; }
+    FarmContestPresentationSystem::Frame ContestFrame() const noexcept { return contestPresentation_.GetFrame(); }
     [[nodiscard]] int ResolveHoveredTile(const FarmRuntimeContext& context) const;
     void Refresh(const FarmRuntimeContext& context) { BuildView(context); }
+    void RequestSeasonRetry(const FarmRuntimeContext& context) {
+        if (!ready_) return;
+        BuildView(context); Execute(context, {farmui::Action::SeasonRetry}); BuildView(context);
+    }
     void CommitScreenTransition(const FarmRuntimeContext& context);
     void OpenLayoutLibrary(const FarmRuntimeContext& context);
     void UpdateFollowCamera(const FarmRuntimeContext& context) { FrameFarm(context, true); }
 private:
     void BuildView(const FarmRuntimeContext& context);
+    void OpenContestDetail(const FarmRuntimeContext& context, int index, bool replay);
     void Execute(const FarmRuntimeContext& context, farmui::Request request, bool allowTransition = true);
     bool DeferScreenTransition(const FarmRuntimeContext& context, farmui::Request request);
     void EnterObservation(const FarmRuntimeContext& context);
@@ -61,6 +69,9 @@ private:
     FarmArrivalAudioSystem arrivalAudio_;
     FarmSeedShopSystem shop_;
     FarmHarvestDisplaySystem harvestDisplay_;
+    FarmContestPresentationSystem contestPresentation_;
+    FarmContestOutcomeSystem contestOutcome_;
+    bool seasonRetryFailed_ = false;
     farmui::View view_;
     Vector2 pointer_{-1, -1};
     farmui::Action pending_ = farmui::Action::None;

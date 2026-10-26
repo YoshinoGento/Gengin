@@ -1,5 +1,6 @@
 #define NOMINMAX
 #include "Audio.h"
+#include "base/LoadTiming.h"
 
 #include "base/Logger.h"
 
@@ -285,6 +286,7 @@ AudioVoiceHandle Audio::PlayWave(AudioClipHandle clipHandle, bool loop)
 
 AudioVoiceHandle Audio::Play(AudioClipHandle clipHandle, const PlaySettings& settings)
 {
+	loading::Scope timing(loading::Stage::AudioVoiceSetup);
 	if (!initialized_ || !IsOwnerThread("Audio::Play") || !clipHandle) {
 		return {};
 	}
@@ -597,6 +599,7 @@ bool Audio::IsOwnerThread(const char* operation) const
 
 bool Audio::DecodeAudioFile(const std::wstring& filename, Clip& outputClip) const
 {
+	loading::Scope timing(loading::Stage::AudioDecode);
 	Microsoft::WRL::ComPtr<IMFSourceReader> sourceReader;
 	HRESULT result = MFCreateSourceReaderFromURL(filename.c_str(), nullptr, sourceReader.GetAddressOf());
 	if (FAILED(result)) {

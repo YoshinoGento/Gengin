@@ -1,6 +1,7 @@
 #include "2d/TextureManager.h"
 
 #include "base/DirectXCommon.h"
+#include "base/LoadTiming.h"
 #include "base/Logger.h"
 #include "base/SrvManager.h"
 #include "externals/DirectXTex/d3dx12.h"
@@ -398,11 +399,13 @@ bool TextureManager::LoadImage(
 
     DirectX::TexMetadata metadata{};
     HRESULT hr = E_FAIL;
+    loading::Scope decodeTiming(loading::Stage::TextureDecode);
     if (extension == L".dds") {
         hr = DirectX::LoadFromDDSFile(filePath.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, outImage);
     } else {
         hr = DirectX::LoadFromWICFile(filePath.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, &metadata, outImage);
     }
+    decodeTiming.Stop();
     if (FAILED(hr)) {
         LogFailure("load " + filePath.generic_string(), hr);
         return false;
@@ -420,6 +423,7 @@ bool TextureManager::LoadImage(
 
     if (mipPolicy == MipPolicy::GenerateIfMissing && expectedKind == TextureKind::Texture2D &&
         metadata.mipLevels == 1 && metadata.width > 1 && metadata.height > 1) {
+        loading::Scope mipTiming(loading::Stage::TextureMips);
         DirectX::ScratchImage mipChain;
         hr = DirectX::GenerateMipMaps(
             outImage.GetImages(),
@@ -531,6 +535,7 @@ bool TextureManager::RegisterTexture(
 }
 
 ComPtr<ID3D12Resource> TextureManager::CreateTextureResource(const DirectX::TexMetadata& metadata) const {
+    loading::Scope timing(loading::Stage::TextureResource);
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
     desc.Alignment = 0;
@@ -591,6 +596,7 @@ ComPtr<ID3D12Resource> TextureManager::CreateUploadBuffer(uint64_t sizeInBytes) 
 }
 
 bool TextureManager::UploadTexture(ID3D12Resource* texture, const DirectX::ScratchImage& image, bool previouslySampled) {
+    loading::Scope cpuTiming(loading::Stage::TextureUploadCpu);
     if (texture == nullptr) {
         return false;
     }
@@ -659,6 +665,8 @@ bool TextureManager::UploadTexture(ID3D12Resource* texture, const DirectX::Scrat
         return false;
     }
 
+    cpuTiming.Stop();
+    loading::Scope waitTiming(loading::Stage::TextureSubmitWait);
     ID3D12CommandList* commandLists[] = { uploadCommandList_.Get() };
     dxCommon_->GetCommandQueue()->ExecuteCommandLists(1, commandLists);
 

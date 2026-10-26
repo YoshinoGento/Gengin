@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <new>
+#include <stdexcept>
+#include <utility>
 
 namespace {
 	constexpr float kMinimumScaleMagnitude = 1.0e-4f;
@@ -29,14 +32,24 @@ namespace {
 }
 
 void Object3d::Initialize(Object3dCommon* object3dCommon) {
-	assert(object3dCommon);
+	if (!object3dCommon || !object3dCommon->GetDxCommon() || constantBuffer_) {
+        throw std::logic_error("Object3d::Initialize requires valid dependencies and no live buffer");
+    }
+	DirectXCommon* dxCommon = object3dCommon->GetDxCommon();
+    auto buffer = dxCommon->CreateBufferResource(sizeof(graphics::ObjectBufferData));
+    if (!buffer) throw std::runtime_error("Object3d constant buffer allocation failed");
+    void* mapped = nullptr;
+    const D3D12_RANGE noRead{0, 0};
+    if (FAILED(buffer->Map(0, &noRead, &mapped)) || !mapped)
+        throw std::runtime_error("Object3d constant buffer Map failed");
+    auto* data = ::new(mapped) graphics::ObjectBufferData{};
+    constantBuffer_ = std::move(buffer);
+    materialData_ = &data->material;
+    transformationMatrixData_ = &data->transform;
+    shadowTransformationMatrixData_ = &data->shadow;
 	object3dCommon_ = object3dCommon;
 	textureHandle_ = TextureManager::GetInstance()->GetFallback2D();
 	environmentMapHandle_ = TextureManager::GetInstance()->GetFallbackCube();
-	DirectXCommon* dxCommon = object3dCommon_->GetDxCommon();
-
-	materialResource_ = dxCommon->CreateBufferResource(sizeof(Material));
-	materialResource_->Map(0, nullptr, (void**)&materialData_);
 	materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	materialData_->enableLighting = 1;
 	materialData_->shininess = 40.0f;
@@ -46,10 +59,6 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
 	materialData_->surfaceDetail = {1.0f, 0.0f, 0.0f, 0.0f};
 	materialData_->outdoorAmbient = {};
 
-	transformationMatrixResource_ = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
-	transformationMatrixResource_->Map(0, nullptr, (void**)&transformationMatrixData_);
-	shadowTransformationMatrixResource_ = dxCommon->CreateBufferResource(sizeof(TransformationMatrix));
-	shadowTransformationMatrixResource_->Map(0, nullptr, (void**)&shadowTransformationMatrixData_);
 	const Matrix4x4 identity = MatrixMath::MakeIdentity4x4();
 	*transformationMatrixData_ = { identity, identity, identity };
 	*shadowTransformationMatrixData_ = { identity, identity, identity };
@@ -57,7 +66,7 @@ void Object3d::Initialize(Object3dCommon* object3dCommon) {
 }
 
 bool Object3d::SetOutdoorAmbient(const Vector4& skyTint) {
-	if (!materialData_ || !std::isfinite(skyTint.x) || !std::isfinite(skyTint.y) ||
+	if (!constantBuffer_ || !materialData_ || !std::isfinite(skyTint.x) || !std::isfinite(skyTint.y) ||
 		!std::isfinite(skyTint.z) || !std::isfinite(skyTint.w)) return false;
 	materialData_->outdoorAmbient = {std::clamp(skyTint.x,0.0f,1.0f),
 		std::clamp(skyTint.y,0.0f,1.0f),std::clamp(skyTint.z,0.0f,1.0f),std::clamp(skyTint.w,0.0f,1.0f)};
@@ -65,7 +74,7 @@ bool Object3d::SetOutdoorAmbient(const Vector4& skyTint) {
 }
 
 bool Object3d::SetSurfaceDetail(const Vector4& detail) {
-	if (!materialData_ || !std::isfinite(detail.x) || !std::isfinite(detail.y) ||
+	if (!constantBuffer_ || !materialData_ || !std::isfinite(detail.x) || !std::isfinite(detail.y) ||
 		!std::isfinite(detail.z) || !std::isfinite(detail.w)) { return false; }
 	materialData_->surfaceDetail = {
 		std::clamp(detail.x, 0.0f, 1.0f), std::clamp(detail.y, 0.0f, 0.5f),
@@ -78,7 +87,7 @@ void Object3d::Update(Camera* camera) {
 }
 
 void Object3d::Update(Camera* camera, float deltaTime) {
-	assert(camera);
+	if (!constantBuffer_ || !camera) return;
 	computeSkinningPrepared_ = false;
 	if (!std::isfinite(deltaTime)) {
 		deltaTime = 0.0f;
@@ -146,7 +155,7 @@ void Object3d::SetTexture(uint32_t textureHandle) {
 }
 
 void Object3d::Draw() {
-	if (!model_) return;
+	if (!constantBuffer_ || !object3dCommon_ || !model_) return;
 	if (!object3dCommon_->IsObjectPassActive()) {
 		Logger::Log("Object3d::Draw rejected because BeginObjectPass was not called.");
 		assert(false && "Object3d draw outside object pass");
@@ -170,8 +179,9 @@ void Object3d::Draw() {
 		ResolveCullMode(cullMode_, isMirrored_), useVertexShaderSkinning));
 
 	// RootSignature の Index に合わせて定数バッファをセット
-	commandList->SetGraphicsRootConstantBufferView(0, materialResource_->GetGPUVirtualAddress());
-	commandList->SetGraphicsRootConstantBufferView(1, transformationMatrixResource_->GetGPUVirtualAddress());
+	const auto address = constantBuffer_->GetGPUVirtualAddress();
+	commandList->SetGraphicsRootConstantBufferView(0, address + offsetof(graphics::ObjectBufferData, material));
+	commandList->SetGraphicsRootConstantBufferView(1, address + offsetof(graphics::ObjectBufferData, transform));
 	LightingSystem* lightingSystem = object3dCommon_->GetLightingSystem();
 	assert(lightingSystem != nullptr);
 	commandList->SetGraphicsRootConstantBufferView(2, lightingSystem->GetDirectionalLightAddress());
@@ -204,7 +214,7 @@ void Object3d::Draw() {
 }
 
 void Object3d::DrawShadow() {
-	if (!model_ || !object3dCommon_ || !object3dCommon_->IsShadowReady()) {
+	if (!constantBuffer_ || !model_ || !object3dCommon_ || !object3dCommon_->IsShadowReady()) {
 		return;
 	}
 
@@ -229,7 +239,7 @@ void Object3d::DrawShadow() {
 	commandList->SetGraphicsRootSignature(object3dCommon_->GetShadowRootSignature());
 	commandList->SetPipelineState(object3dCommon_->GetShadowPipelineState(useVertexShaderSkinning, isMirrored_));
 	commandList->SetGraphicsRootConstantBufferView(
-		0, shadowTransformationMatrixResource_->GetGPUVirtualAddress());
+		0, constantBuffer_->GetGPUVirtualAddress() + offsetof(graphics::ObjectBufferData, shadow));
 
 	if (useVertexShaderSkinning) {
 		const Model::SkinCluster& skinCluster = model_->GetSkinCluster();
@@ -300,12 +310,12 @@ bool Object3d::SetJointTranslationScale(std::size_t index, const Vector3& transl
     return true;
 }
 void Object3d::SetColor(const Vector4& color) {
-    if (materialData_ && std::isfinite(color.x) && std::isfinite(color.y) && std::isfinite(color.z) && std::isfinite(color.w))
+    if (constantBuffer_ && materialData_ && std::isfinite(color.x) && std::isfinite(color.y) && std::isfinite(color.z) && std::isfinite(color.w))
         materialData_->color = color;
 }
 void Object3d::SetEnvironmentCoefficient(float coefficient) {
-    if (materialData_ && std::isfinite(coefficient)) materialData_->environmentCoefficient = coefficient;
+    if (constantBuffer_ && materialData_ && std::isfinite(coefficient)) materialData_->environmentCoefficient = coefficient;
 }
 void Object3d::SetShininess(float shininess) {
-    if (materialData_ && std::isfinite(shininess) && shininess >= 0.0f) materialData_->shininess = shininess;
+    if (constantBuffer_ && materialData_ && std::isfinite(shininess) && shininess >= 0.0f) materialData_->shininess = shininess;
 }

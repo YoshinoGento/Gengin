@@ -185,6 +185,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\render\FarmArrivalRenderer.cpp" />
     <ClCompile Include="application\farm\system\FarmArrivalAudioSystem.cpp" />
 	<ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
+	<ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
 	<ClCompile Include="engine\command\CommandHistory.cpp" />
     <ClCompile Include="engine\core\Component.cpp" />
     <ClCompile Include="engine\core\GameObject.cpp" />
@@ -221,6 +222,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\scene\BaseScene.cpp" />
     <ClCompile Include="engine\3d\Camera.cpp" />
     <ClCompile Include="engine\base\DirectXCommon.cpp" />
+    <ClCompile Include="engine\base\ShaderCompiler.cpp" />
     <ClCompile Include="engine\base\main.cpp" />
     <ClCompile Include="engine\math\Matrix.cpp" />
     <ClCompile Include="engine\base\Framework.cpp" />
@@ -502,6 +504,12 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
 	<ClInclude Include="application\farm\system\FarmContestSeasonSystem.h" />
 	<ClInclude Include="application\farm\system\FarmStageAccessSystem.h" />
 	<ClInclude Include="application\farm\system\FarmContestGoalSystem.h" />
+	<ClInclude Include="application\farm\system\FarmContestPresentationSystem.h" />
+	<ClInclude Include="application\farm\system\FarmContestOutcomeSystem.h" />
+	<ClInclude Include="application\farm\ui\FarmContestOutcomeView.h" />
+	<ClInclude Include="application\farm\ui\FarmContestDetailView.h" />
+	<ClInclude Include="application\farm\render\FarmContestRenderer.h" />
+	<ClInclude Include="application\farm\render\FarmContestStageLayout.h" />
 	<ClInclude Include="application\farm\system\FarmHarvestVisualSystem.h" />
     <ClInclude Include="application\farm\system\FarmGrowthSystem.h" />
     <ClInclude Include="application\farm\system\FarmSoilSystem.h" />
@@ -568,6 +576,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\scene\BaseScene.h" />
     <ClInclude Include="engine\3d\Camera.h" />
     <ClInclude Include="engine\base\DirectXCommon.h" />
+    <ClInclude Include="engine\base\ShaderCompiler.h" />
+    <ClInclude Include="engine\base\LoadTiming.h" />
+    <ClInclude Include="engine\3d\ObjectBufferLayout.h" />
     <ClInclude Include="engine\base\D3D12DeviceSelection.h" />
     <ClInclude Include="engine\math\Matrix.h" />
     <ClInclude Include="engine\math\Struct.h" />
@@ -634,6 +645,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="engine\2d\BitmapFont.h" />
     <ClInclude Include="engine\2d\RuntimeTextTextureGenerator.h" />
     <ClInclude Include="engine\2d\Sprite.h" />
+    <ClInclude Include="engine\2d\SpriteBufferLayout.h" />
     <ClInclude Include="engine\2d\SpriteCommon.h" />
     <ClInclude Include="engine\2d\TextureManager.h" />
     <ClInclude Include="engine\2d\SpriteText.h" />

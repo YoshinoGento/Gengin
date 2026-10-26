@@ -3,6 +3,7 @@
 #include "farm/ui/FarmRuntimeLabels.h"
 #include "farm/ui/FarmHUDLayout.h"
 #include "farm/ui/FarmHUDIcons.h"
+#include "farm/system/FarmContestPresentationSystem.h"
 #include "2d/Sprite.h"
 #include <array>
 #include <algorithm>
@@ -21,7 +22,8 @@ enum class Action {
     HarvestInventory, HarvestPage, ProtectHarvest, UnprotectHarvest, ReserveContestHarvest, CancelContestReservation,
     ContestPreview, SubmitContest, ContestResults, ContestDayReview, ContestDayPrepare, ContestDayResume, ChangePlayMode,
     ShopSelect, ShopQuantity, ShopReview, ShopConfirm, ShopCancel, ShopClose,
-    HarvestDisplay, HarvestDisplaySelect, HarvestDisplayPage, StartSkip, StageGuide
+    HarvestDisplay, HarvestDisplaySelect, HarvestDisplayPage, StartSkip, StageGuide,
+    ContestDetail, ContestDetailClose, ContestReveal, ContestMissedContinue, ContestOutcome, SeasonRetry
 };
 struct Request { Action action = Action::None; int argument = 0; std::uint64_t inventoryGeneration = 0; };
 struct Item {
@@ -46,6 +48,9 @@ struct Item {
 }
 struct QualityRadar {
     bool visible = false;
+    Vector2 offset{};
+    float scale = 1;
+    Vector4 color{1, .81f, .25f, 1};
     std::array<float, 4> values{};
     std::array<bool, 4> known{};
     inline static constexpr Vector2 center{366, 312};
@@ -87,6 +92,16 @@ struct View {
     bool selectedTile = false;
     bool goalVisible = false;
     QualityRadar radar{};
+    QualityRadar referenceRadar{};
+    bool contestDetail = false;
+    FarmContestPresentationSystem::Frame contestFrame{};
+    bool contestOutcome = false;
+    bool seasonOutcome = false;
+    bool outcomePositive = false;
+    float outcomeReveal = 0;
+    std::array<float, 3> outcomePoints{};
+    std::array<float, 3> outcomeTargets{};
+    std::array<bool, 3> outcomePassed{};
     inline static constexpr Rect kFeedbackPanel{352, 82, 504, 92};
     inline static constexpr Rect kFieldActionsPanel = HUDLayout::fieldActions;
     inline static constexpr Rect kWaterGuidancePanel = HUDLayout::waterGuidance;
@@ -169,7 +184,7 @@ private:
     std::array<Sprite, 84> panels_{};
     std::array<Sprite, 40> labels_{};
     std::array<Sprite, 160> digits_{};
-    std::array<Sprite, 28> radarLines_{};
+    std::array<Sprite, 56> radarLines_{};
     std::array<Sprite, View::kCapacity> icons_{};
     std::array<Sprite, 4> seedPackets_{};
     // Distinct per displayed slot: do not rewrite a submitted Sprite constant buffer.
@@ -178,6 +193,7 @@ private:
     std::array<std::string, 2> cachedNames_{};
     bool namesReady_ = false;
     std::size_t panelCount_ = 0, labelCount_ = 0, digitCount_ = 0, iconCount_ = 0;
+    std::size_t radarLineCount_ = 0;
     bool ready_ = false;
     float opacity_ = 1.0f;
 };

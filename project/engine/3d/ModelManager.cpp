@@ -3,6 +3,7 @@
 #include "base/DirectXCommon.h"
 #include "base/SrvManager.h"
 #include <cassert>
+#include "base/LoadTiming.h"
 
 /**
  * コンストラクタとデストラクタ
@@ -24,6 +25,7 @@ void ModelManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
  * モデルの読み込み
  */
 void ModelManager::LoadModel(const std::string& filename) {
+    loading::Scope timing(loading::Stage::ModelLookup);
     if (models_.find(filename) != models_.end()) {
         return;
     }

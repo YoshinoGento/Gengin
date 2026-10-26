@@ -975,6 +975,26 @@ bool FarmDocumentSystem::SaveAs(
 		documentId, normalizedName, grid, economySystem, cropSelectionSystem);
 }
 
+bool FarmDocumentSystem::ArchiveCompletedSeason(const farm::FarmGrid& grid,
+	const FarmEconomySystem& economySystem, const FarmCropSelectionSystem& cropSelectionSystem) {
+	const auto summary = FarmContestSeasonSystem::Evaluate(Date().GetDay(), economySystem.GetContestResults());
+	if (!Progression().IsContestSeason() || !summary.valid || !summary.finalized) {
+		SetError("Only a completed contest season can be archived for retry.");
+		return false;
+	}
+	const auto id = GenerateDocumentId(saveDirectoryPath_);
+	if (id.empty()) { SetError("Could not allocate a season archive ID."); return false; }
+	// A fresh ID preserves both the original save and this complete, possibly unsaved result.
+	return SaveToDocument(id, "Season result " + id, grid, economySystem, cropSelectionSystem) && !HasError();
+}
+
+void FarmDocumentSystem::BeginUnsavedSession() {
+	activeDocumentId_.clear(); path_.clear(); displayName_ = std::string(kUntitledFarmName);
+	fileExists_ = false; dirty_ = true;
+	// Keep the on-disk catalog on the archive until the new farm is explicitly named/saved.
+	SetStatus(FarmDocumentStatus::Modified, "New unsaved farm; the previous season is archived.");
+}
+
 bool FarmDocumentSystem::Load(
 	const std::string& documentId, farm::FarmGrid& grid,
 	FarmEconomySystem& economySystem,

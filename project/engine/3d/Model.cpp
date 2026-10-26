@@ -1,5 +1,6 @@
 #include "3d/Model.h"
 #include "3d/ModelManager.h"
+#include "base/LoadTiming.h"
 #include "3d/Object3dCommon.h"
 #include "3d/Skeleton.h"
 #include "base/SrvManager.h"
@@ -82,6 +83,7 @@ void Model::Initialize(ModelManager* modelManager, const std::string& directoryP
 	DirectXCommon* dxCommon = modelManager_->GetDxCommon();
 
 	LoadModelFile(directoryPath, filename);
+	loading::Scope bufferTiming(loading::Stage::ModelBuffers);
 
 	vertexResource_ = dxCommon->CreateBufferResource(sizeof(VertexData) * vertices_.size());
 	vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
@@ -176,6 +178,7 @@ Animation Model::LoadAnimation(const std::string& directoryPath, const std::stri
 }
 
 void Model::LoadModelFile(const std::string& directoryPath, const std::string& filename) {
+	loading::Scope timing(loading::Stage::ModelImport);
 	Assimp::Importer importer;
 	std::string filepath = directoryPath + "/" + filename;
 	std::string modelFolder = std::filesystem::path(filepath).parent_path().string();

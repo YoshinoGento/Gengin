@@ -9,6 +9,7 @@
 #include <cstdint>
 #include "effect/RenderTexture.h"
 #include "math/Struct.h"
+#include "base/ShaderCompiler.h"
 
 /**
  * DirectXCommon繧ｯ繝ｩ繧ｹ
@@ -163,6 +164,7 @@ public:
 
     // --- 蜷・ｨｮ繝倥Ν繝代・ ---
     Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(const std::wstring& filePath, const std::wstring& profile);
+    const graphics::ShaderCompiler::Stats& GetShaderCompileStats() const noexcept { return shaderCompiler_.GetStats(); }
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateBufferResource(size_t sizeInBytes);
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateUAVBufferResource(size_t sizeInBytes, D3D12_RESOURCE_STATES initialState);
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateRenderTextureResource(uint32_t width, uint32_t height, DXGI_FORMAT format, const float* clearColor);
@@ -227,7 +229,5 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     uint64_t fenceValue_ = 0;
     HANDLE fenceEvent_ = {};
-    Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
-    Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
-    Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
+    graphics::ShaderCompiler shaderCompiler_;
 };

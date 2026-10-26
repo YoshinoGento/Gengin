@@ -35,6 +35,7 @@
 #include "farm/render/FarmRenderer.h"
 #include "farm/render/FarmArrivalRenderer.h"
 #include "farm/render/FarmSeedShopRenderer.h"
+#include "farm/render/FarmContestRenderer.h"
 #include "farm/ui/FarmHUD.h"
 #include "level/ui/StageClearHUD.h"
 
@@ -128,7 +129,9 @@ private:
 	bool HandleFarmInput();
 	void RouteFarmToolFeedback(const FarmToolActionResult& result) override;
 	void RouteFarmSale(const FarmSaleResult& result) override;
-	void ResetFarmSession();
+	bool ResetFarmSession() override;
+	bool RetryCompletedSeason() override;
+	bool ResetFarmSessionState();
 	bool MovePlayerToFarmTile(int tileIndex);
 	level::LevelGameplaySystem::GroundHeightQuery BuildPlayerGroundQuery() const;
 	bool TryBuildViewportRay(Vector3& outOrigin, Vector3& outDirection) const override;
@@ -305,6 +308,7 @@ private:
 	farm::FarmVisualSystem farmVisualSystem_;
 	farm::FarmRenderer farmRenderer_;
 	FarmSeedShopRenderer farmSeedShopRenderer_;
+	FarmContestRenderer farmContestRenderer_;
 	editor::GamePlayEditorBridge gamePlayEditorBridge_;
 	FarmHUD farmHud_;
 	FarmRuntimeController farmRuntimeController_;

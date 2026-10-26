@@ -9,8 +9,79 @@ namespace {
 void Check(bool value, std::source_location at = std::source_location::current()) {
     if (!value) throw std::runtime_error("transition assertion at line "+std::to_string(at.line()));
 }
+void Advance(scene::SceneTransitionSystem& system, float seconds, bool released = true) {
+    while (seconds > 0) {
+        const float step = (std::min)(seconds, .05f);
+        system.Update(step, released);
+        seconds -= step;
+    }
 }
-int main() {
+void VerifyRipplePacing() {
+    using namespace scene;
+    constexpr float epsilon = .00001f;
+    for (const bool pondEnabled : {false, true}) {
+        for (const float step : {1.0f/30, 1.0f/60, 1.0f/144, .25f, 10000.0f}) {
+            SceneTransitionSystem system;
+            PondRipplePath pond;
+            pond.enabled = pondEnabled;
+            const float fall = pondEnabled ? kPondDropFallSeconds : kDropFallSeconds;
+            const float expectedCover = pondEnabled ? .80f : .66f;
+            const float expectedTotal = pondEnabled ? 1.25f : 1.11f;
+            Check(std::abs(fall+kRipplePreviewSeconds+kRippleWipeSeconds-expectedCover) < epsilon);
+            Check(std::abs(expectedCover+kRippleRevealSeconds-expectedTotal) < epsilon);
+            Check(system.Begin({},TransitionTarget::SceneReplacement,
+                TransitionSoundTheme::Water,TransitionStyle::Ripple,pond));
+            float elapsed = 0;
+            unsigned drops = 0, sweeps = 0;
+            const float boundedStep = (std::min)(step,kTransitionMaximumDelta);
+            const float sweepAt = fall+(pondEnabled ? kPondSweepDelaySeconds : kRipplePreviewSeconds);
+            while (!system.CanSwap()) {
+                Check(elapsed < 2);
+                Check(!system.CanSwap() && !system.BeginReveal());
+                const float before = elapsed;
+                system.Update(step,false);
+                elapsed += boundedStep;
+                const auto cues = system.ConsumeSoundCues();
+                const bool drop = (cues & SoundBit(TransitionSoundCue::WaterDrop)) != 0;
+                const bool sweep = (cues & SoundBit(TransitionSoundCue::WaterSweep)) != 0;
+                Check(drop == (before < fall && elapsed >= fall));
+                Check(sweep == (before < sweepAt && elapsed >= sweepAt));
+                drops += drop ? 1u : 0u;
+                sweeps += sweep ? 1u : 0u;
+                Check(system.ConsumeSoundCues() == 0);
+                Check(!system.CanSwap() && !system.BeginReveal());
+                system.NotifyCoverPresented();
+            }
+            Check(elapsed >= expectedCover-epsilon && elapsed <= expectedCover+boundedStep+epsilon);
+            Check(drops == 1 && sweeps == 1 && system.CanSwap());
+            const float coveredTime = system.GetFrame().presentationTime;
+            Advance(system, 3, false);
+            Check(system.IsCovering() && system.CanSwap() && system.GetFrame().progress == 1);
+            Check(system.GetFrame().presentationTime > coveredTime+2.99f);
+            Check(system.ConsumeSoundCues() == 0);
+            Check(system.BeginReveal());
+            Check(system.ConsumeSoundCues() == SoundBit(TransitionSoundCue::WaterReveal));
+            float revealElapsed = 0;
+            while (system.GetFrame().phase == TransitionPhase::Revealing) {
+                Check(revealElapsed < 1);
+                system.Update(step,false);
+                revealElapsed += boundedStep;
+                Check(system.ConsumeSoundCues() == 0);
+            }
+            Check(revealElapsed >= .45f-epsilon && revealElapsed <= .45f+boundedStep+epsilon);
+            Check(elapsed+revealElapsed <= expectedTotal+2*boundedStep+epsilon);
+            Check(system.GetFrame().phase == TransitionPhase::WaitingForRelease);
+            Advance(system, 1, false);
+            Check(system.BlocksIncomingUpdate());
+            system.Update(0,true);
+            Check(!system.IsActive());
+        }
+    }
+    std::cout << "Ripple pacing: pond1.25s/screen1.11s, 30/60/144Hz and hitches, exact-once cues, loading/release gates PASS\n";
+}
+}
+int main() try {
+    VerifyRipplePacing();
     using scene::TransitionSoundCue;
     using scene::TransitionSoundTheme;
     const auto bit = scene::SoundBit;
@@ -165,14 +236,14 @@ int main() {
         system.Update(invalid,true);
         Check(system.GetFrame().progress == 0 && !system.CanSwap());
     }
-    system.Update(.2f,true);
+    Advance(system,scene::kDropFallSeconds+scene::kRipplePreviewSeconds*.5f);
     Check(system.GetFrame().progress == 0 && system.GetFrame().drops[0].age >= scene::kDropFallSeconds);
     system.NotifyCoverPresented();
     Check(!system.CanSwap());
-    for (int i=0; i<3; ++i) system.Update(.2f,true);
+    Advance(system,scene::kRipplePreviewSeconds*.5f+scene::kRippleWipeSeconds*.5f);
     Check(system.GetFrame().progress > 0 && system.GetFrame().progress < 1);
     system.NotifyCoverPresented(); Check(!system.CanSwap());
-    for (int i=0; i<2; ++i) system.Update(.2f,true);
+    Advance(system,scene::kRippleWipeSeconds*.5f+.001f);
     Check(system.GetFrame().progress == 1 && !system.CanSwap());
     system.NotifyCoverPresented();
     Check(!system.ConsumeScreenChange());
@@ -244,4 +315,7 @@ int main() {
     Check(system.Begin({-1,2}));
     Check(system.GetFrame().center.x == 0 && system.GetFrame().center.y == 1);
     std::cout << "Scene transition: scene/screen presented-cover, exact-once consume, held-release, 100 alternating repeats, click center, four-drop cap/lifetime PASS\n";
+} catch (const std::exception& error) {
+    std::cerr << error.what() << '\n';
+    return 1;
 }

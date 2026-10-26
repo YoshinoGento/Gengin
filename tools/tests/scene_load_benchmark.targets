@@ -1,0 +1,10 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'CG2_00_01'">
+    <TargetName>SceneLoadBenchmark</TargetName>
+    <TargetPath>$(OutDir)$(TargetName)$(TargetExt)</TargetPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'CG2_00_01'">
+    <ClCompile Remove="engine\base\main.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)scene_load_benchmark.cpp" />
+  </ItemGroup>
+</Project>

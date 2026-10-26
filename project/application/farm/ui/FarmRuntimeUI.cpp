@@ -141,17 +141,21 @@ void RuntimeUI::IconQuad(HUDIcon icon, Rect rect, Vector4 color) {
     sprite.SetColor(color); sprite.Update(); sprite.Draw();
 }
 void RuntimeUI::DrawRadar(const QualityRadar& radar) {
-    std::size_t count = 0;
+    const auto transform = [&](Vector2 point) {
+        return Vector2{QualityRadar::center.x + radar.offset.x + (point.x - QualityRadar::center.x)*radar.scale,
+            QualityRadar::center.y + radar.offset.y + (point.y - QualityRadar::center.y)*radar.scale};
+    };
     const auto line = [&](Vector2 a, Vector2 b, float thickness, Vector4 color) {
+        a = transform(a); b = transform(b);
         const float dx = b.x-a.x, dy = b.y-a.y;
         const float length = std::hypot(dx,dy);
-        if (!std::isfinite(length) || length < 0.01f || count >= radarLines_.size()) return;
-        auto& sprite = radarLines_[count++];
+        if (!std::isfinite(length) || length < 0.01f || radarLineCount_ >= radarLines_.size()) return;
+        auto& sprite = radarLines_[radarLineCount_++];
         sprite.SetAnchorPoint({0,0.5f}); sprite.SetPosition(a);
         sprite.SetRotation(std::atan2(dy,dx)); sprite.SetSize({length,thickness});
         sprite.SetColor(color); sprite.Update(); sprite.Draw();
     };
-    const Vector4 grid{0.35f,0.43f,0.46f,1}, gold{1,0.81f,0.25f,1};
+    const Vector4 grid{0.35f,0.43f,0.46f,1}, gold = radar.color;
     for (int ring=1; ring<=4; ++ring) for (std::size_t i=0; i<4; ++i)
         line(QualityRadar::Point(i,ring*0.25f), QualityRadar::Point((i+1)%4,ring*0.25f), 1.5f, grid);
     for (std::size_t i=0; i<4; ++i) {
@@ -167,12 +171,14 @@ void RuntimeUI::DrawRadar(const QualityRadar& radar) {
     }
     for (std::size_t i=0; i<QualityRadar::axisLabels.size(); ++i) {
         const auto& label = QualityRadar::axisLabels[i];
-        ValueText(std::to_string(i+1), {label.x, label.y}, label.x+label.width);
+        const auto position = transform({label.x, label.y});
+        ValueText(std::to_string(i+1), position, position.x+label.width);
     }
 }
 void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     if (!ready_) return;
     panelCount_ = labelCount_ = digitCount_ = iconCount_ = 0;
+    radarLineCount_ = 0;
     opacity_ = view.starting ? std::clamp(view.cinematicBars, 0.0f, 1.0f) : 1.0f;
     const Item* tooltip = nullptr;
     const Item* selectedTool = nullptr;
@@ -188,6 +194,29 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         Panel({24, 16, 1232, 60}, {0.035f, 0.055f, 0.06f, 0.94f});
         Panel(SeedShopLayout::receipt, {0.035f, 0.055f, 0.06f, 0.97f});
         Panel(SeedShopLayout::footer, {0.035f, 0.055f, 0.06f, 0.97f});
+    } else if (view.contestDetail) {
+        Panel({0,0,1280,78},{.025f,.03f,.035f,1});
+        Panel({48,124,1184,2},{.28f,.36f,.36f,1});
+        Panel({640,138,2,388},{.28f,.36f,.36f,1});
+        Panel({0,570,1280,150},{.025f,.03f,.035f,1});
+        Panel({48,570,1184*view.contestFrame.reveal,3},view.contestFrame.comparison.passed ?
+            Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1});
+    } else if (view.contestOutcome) {
+        const float reveal = std::clamp(view.outcomeReveal, 0.0f, 1.0f);
+        const Vector4 accent = view.outcomePositive ? Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
+        Panel({0,0,1280,720},{.015f,.022f,.02f,.82f+.14f*reveal});
+        Panel({80,184,1120*reveal,3},accent);
+        if (view.seasonOutcome) {
+            for (std::size_t i=0; i<view.outcomePoints.size(); ++i) {
+                const float y=270+static_cast<float>(i)*86;
+                Panel({80,y,1120,3},{.2f,.25f,.24f,1});
+                const Vector4 rowColor = view.outcomeTargets[i] <= 0 ? Vector4{.55f,.72f,.78f,1} :
+                    view.outcomePassed[i] ? Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
+                Panel({80,y,1120*std::clamp(view.outcomePoints[i],0.0f,1.0f)*reveal,3},rowColor);
+                if (view.outcomeTargets[i]>0)
+                    Panel({80+1120*std::clamp(view.outcomeTargets[i],0.0f,1.0f),y-4,2,11},{.85f,.89f,.87f,1});
+            }
+        }
     } else if (view.modal) {
         Panel({0, 0, 1280, 720}, {0.01f, 0.015f, 0.02f, 0.75f});
         Panel({130, 32, 1020, 656}, {0.055f, 0.075f, 0.072f, 0.99f});
@@ -203,6 +232,7 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     if (view.fieldActions) Panel(View::kFieldActionsPanel, {0.035f, 0.055f, 0.06f, 0.96f});
     if (view.waterGuidance) Panel(View::kWaterGuidancePanel, {0.035f, 0.055f, 0.06f, 0.96f});
     if (view.radar.visible) DrawRadar(view.radar);
+    if (view.referenceRadar.visible) DrawRadar(view.referenceRadar);
     if (view.harvestDisplay) {
         for (std::size_t i = 0; i < view.harvestFigures.size(); ++i) {
             const int crop = view.harvestFigures[i];

@@ -1,5 +1,6 @@
 ﻿#include "DirectXCommon.h"
 #include "Logger.h"
+#include "LoadTiming.h"
 #include "D3D12DeviceSelection.h"
 #include <cstdio>
 #include <algorithm>
@@ -174,9 +175,7 @@ void DirectXCommon::InitializeFence() {
 }
 
 void DirectXCommon::InitializeDXCCompiler() {
-    DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&dxcUtils_));
-    DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&dxcCompiler_));
-    dxcUtils_->CreateDefaultIncludeHandler(&includeHandler_);
+    RequireGraphics(shaderCompiler_.Initialize(), "ShaderCompiler::Initialize");
     InitializeFullscreenPostEffectParameter();
 }
 
@@ -560,49 +559,13 @@ void DirectXCommon::PostDraw() {
 // --- 繝ｪ繧ｽ繝ｼ繧ｹ邂｡逅・・繝ｫ繝代・ ---
 
 Microsoft::WRL::ComPtr<IDxcBlob> DirectXCommon::CompileShader(const std::wstring& filePath, const std::wstring& profile) {
-    std::wstring directory = filePath.substr(0, filePath.find_last_of(L"\\/"));
-    std::wstring includePath = L"-I" + directory;
-    ComPtr<IDxcBlobEncoding> shaderSource;
-    HRESULT hr = dxcUtils_->LoadFile(filePath.c_str(), nullptr, &shaderSource);
-    if (FAILED(hr) || shaderSource == nullptr || shaderSource->GetBufferSize() == 0) {
-        Logger::Log("CompileShader failed: shader file not found or empty.");
-        Logger::Log("Shader path: " + ConvertString(filePath));
-        assert(false);
-        return nullptr;
-    }
-
-    DxcBuffer shaderSourceBuffer{ shaderSource->GetBufferPointer(), shaderSource->GetBufferSize(), DXC_CP_UTF8 };
-    LPCWSTR arguments[] = { filePath.c_str(), L"-E", L"main", L"-T", profile.c_str(), L"-Zi", L"-Qembed_debug", L"-Od", L"-Zpr", includePath.c_str() };
-    ComPtr<IDxcResult> shaderResult;
-    hr = dxcCompiler_->Compile(&shaderSourceBuffer, arguments, _countof(arguments), includeHandler_.Get(), IID_PPV_ARGS(&shaderResult));
-    if (FAILED(hr) || shaderResult == nullptr) {
-        Logger::Log("CompileShader failed: DXC compile request failed.");
-        Logger::Log("Shader path: " + ConvertString(filePath));
-        assert(false);
-        return nullptr;
-    }
-
-    ComPtr<IDxcBlobEncoding> shaderError;
-    shaderResult->GetOutput(DXC_OUT_ERRORS, __uuidof(IDxcBlobEncoding), reinterpret_cast<void**>(shaderError.GetAddressOf()), nullptr);
-    if (shaderError != nullptr && shaderError->GetBufferSize() != 0) {
-        Logger::Log((char*)shaderError->GetBufferPointer());
-        assert(false);
-        return nullptr;
-    }
-
-    ComPtr<IDxcBlob> shaderBlob;
-    hr = shaderResult->GetOutput(DXC_OUT_OBJECT, __uuidof(IDxcBlob), reinterpret_cast<void**>(shaderBlob.GetAddressOf()), nullptr);
-    if (FAILED(hr) || shaderBlob == nullptr) {
-        Logger::Log("CompileShader failed: compiled shader object is null.");
-        Logger::Log("Shader path: " + ConvertString(filePath));
-        assert(false);
-        return nullptr;
-    }
-
-    return shaderBlob;
+    auto bytecode = shaderCompiler_.Compile(filePath, profile);
+    if (!bytecode) Logger::Error("Shader path: " + ConvertString(filePath));
+    return bytecode;
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> DirectXCommon::CreateBufferResource(size_t sizeInBytes) {
+    loading::Scope timing(loading::Stage::BufferAllocation);
     D3D12_HEAP_PROPERTIES heap{ D3D12_HEAP_TYPE_UPLOAD };
     D3D12_RESOURCE_DESC desc{};
     desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; desc.Width = sizeInBytes; desc.Height = 1; desc.DepthOrArraySize = 1;

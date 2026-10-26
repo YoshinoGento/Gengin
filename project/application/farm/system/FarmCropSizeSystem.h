@@ -35,6 +35,11 @@ public:
             tile.crop == farm::CropType::Pumpkin ? pumpkinMaximum_ : maximum_;
         return {std::clamp(minimum_ + (maximum - minimum_) * care, minimum_, maximum), true};
     }
+    [[nodiscard]] float MaximumFor(farm::CropType crop) const noexcept {
+        if (!farm::IsPlantableCrop(crop)) return 0;
+        return crop == farm::CropType::Tomato ? tomatoMaximum_ :
+            crop == farm::CropType::Pumpkin ? pumpkinMaximum_ : maximum_;
+    }
 private:
     static float Sanitize(float value, float fallback) noexcept {
         return std::isfinite(value) && value >= 0.01f && value <= FarmCropSizeResult::kMaximumMultiplier

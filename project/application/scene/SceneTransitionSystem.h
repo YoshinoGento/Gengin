@@ -8,10 +8,10 @@ namespace scene {
 inline constexpr float kDropFallSeconds = .18f;
 inline constexpr float kPondDropFallSeconds = .32f;
 inline constexpr float kPondSweepDelaySeconds = .12f;
-inline constexpr float kRipplePreviewSeconds = .55f;
-inline constexpr float kRippleWipeSeconds = .35f;
+inline constexpr float kRipplePreviewSeconds = .20f;
+inline constexpr float kRippleWipeSeconds = .28f;
 inline constexpr float kRippleCoverSeconds = kDropFallSeconds+kRipplePreviewSeconds+kRippleWipeSeconds;
-inline constexpr float kRippleRevealSeconds = .9f;
+inline constexpr float kRippleRevealSeconds = .45f;
 inline constexpr float kDropLifetimeSeconds = 2.4f;
 inline constexpr std::size_t kMaximumWaterDrops = 4;
 inline constexpr float kTransitionMaximumDelta = .25f;

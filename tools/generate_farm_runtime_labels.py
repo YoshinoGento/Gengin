@@ -278,6 +278,46 @@ labels.extend([
     ["StageDateUnlock", "入賞・欠場に関係なく、日付で次の段階へ進みます"],
     ["StageLegacy", "この農場は段階解放の対象外です"],
 ])
+labels.extend([
+    ["ContestDetailTitle", "品評会・審査結果"], ["ContestActual", "出品した野菜"],
+    ["ContestIdeal", "入賞の一例：品質１００点の場合"],
+    ["ContestNoReference", "この記録には比較基準がありません"],
+    ["ContestGameWeight", "ゲーム内換算重量"],
+    ["ContestIdealNote", "右は採点上の一例。唯一の正解ではありません"],
+    ["ContestWeightNote", "換算重量は大きさ倍率から算出した表示値です"],
+    ["ContestRadarLegend", "１ 成熟　２ 水分　３ 地形　４ 栄養（外周１００％）"],
+    ["ContestAxesNote", "各軸に合格条件はなく、品質と大きさの合計で審査"],
+    ["ContestJudging", "審査結果を確認中"],
+    ["ContestMoreGrams", "同じ品質での不足重量"],
+    ["ContestImproveQuality", "大きさだけでは届きません。品質の改善が必要"],
+    ["ContestTargetMet", "今回の入賞基準を満たしました"],
+    ["ContestDetailBack", "結果一覧へ"], ["ContestReveal", "結果を表示"],
+    ["ContestDetails", "詳しく見る"],
+    ["ContestEventDay", "開催日"],
+])
+labels.extend([
+    ["OutcomeMissed", "出品がないまま、大会が終了しました"],
+    ["OutcomeNoScore", "未出品のため、採点はありません"],
+    ["OutcomeReservation", "取り置きだけでは出品されません"],
+    ["OutcomeSubmitHint", "大会当日に出品を確定してください"],
+    ["OutcomeKeepFarm", "農場はそのまま、次の大会へ進めます"],
+    ["OutcomeContinue", "農場を続ける"],
+    ["OutcomeFinal", "３０日間の品評会を終えて"],
+    ["OutcomeFinalPassed", "最終大会：入賞"],
+    ["OutcomeFinalFailed", "最終大会：入賞ならず"],
+    ["OutcomeFinalMissed", "最終大会：未出品"],
+    ["OutcomeFinalLegacy", "最終大会：出品済み"],
+    ["OutcomeNoRank", "出品がないため、総合評価はありません"],
+    ["OutcomeRankNote", "総合ランクは３大会の合計点で決まります"],
+    ["OutcomeRetry", "結果を保存して再挑戦"],
+    ["OutcomeRetryTitle", "結果を残して、新しい農場を始めますか？"],
+    ["OutcomeRetryCopy", "今回の農場と結果を、別の記録に保存します"],
+    ["OutcomeRetryNew", "新しい農場は１日目から。元の記録は残ります"],
+    ["OutcomeSaveFailed", "保存・開始に失敗しました。農場は未変更です"],
+    ["OutcomeReviewHint", "詳しい審査結果から、次の育て方を確認できます"],
+    ["OutcomeBack", "シーズン結果へ"],
+    ["OutcomeRank", "総合ランク"], ["OutcomePoints", "得点／合格点"],
+])
 ascii_y = ((len(labels) + columns - 1) // columns) * cell_h
 height = ascii_y + 128
 assert height <= 4096, "Split the label atlas before adding more rows"

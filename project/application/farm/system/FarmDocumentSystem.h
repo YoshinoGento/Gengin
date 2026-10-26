@@ -47,6 +47,9 @@ public:
 		const std::string& documentId, farm::FarmGrid& grid,
 		FarmEconomySystem& economySystem,
 		FarmCropSelectionSystem& cropSelectionSystem);
+	bool ArchiveCompletedSeason(const farm::FarmGrid& grid, const FarmEconomySystem& economySystem,
+		const FarmCropSelectionSystem& cropSelectionSystem);
+	void BeginUnsavedSession();
 	bool Rename(const std::string& documentId, const std::string& displayName);
 	bool Delete(const std::string& documentId);
 	bool Reset(

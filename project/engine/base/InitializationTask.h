@@ -1,6 +1,7 @@
 #pragma once
 #include <coroutine>
 #include <exception>
+#include <source_location>
 #include <stdexcept>
 #include <utility>
 
@@ -14,6 +15,17 @@ public:
         Handle child{}; // Borrowed from the currently suspended Awaiter.
         std::exception_ptr error{};
         bool result = false;
+        std::source_location location{};
+        std::suspend_always await_transform(std::suspend_always value,
+            std::source_location at = std::source_location::current()) noexcept {
+            location = at;
+            return value;
+        }
+        InitializationTask&& await_transform(InitializationTask&& value,
+            std::source_location at = std::source_location::current()) noexcept {
+            location = at;
+            return std::move(value);
+        }
         InitializationTask get_return_object() noexcept { return InitializationTask{Handle::from_promise(*this)}; }
         std::suspend_always initial_suspend() const noexcept { return {}; }
         std::suspend_always final_suspend() const noexcept { return {}; }
@@ -33,8 +45,8 @@ public:
 
     void Reset() noexcept { if (handle_) handle_.destroy(); handle_ = {}; }
     [[nodiscard]] bool Done() const noexcept { return !handle_ || handle_.done(); }
-    void ResumeOne() {
-        if (Done()) return;
+    std::source_location ResumeOne() {
+        if (Done()) return {};
         auto leaf = handle_;
         while (leaf.promise().child) {
             const auto child = leaf.promise().child;
@@ -42,6 +54,7 @@ public:
             leaf = child;
         }
         leaf.resume();
+        return leaf.promise().location;
     }
     [[nodiscard]] bool Result() const {
         if (!handle_ || !handle_.done()) throw std::logic_error("Initialization result is not ready");

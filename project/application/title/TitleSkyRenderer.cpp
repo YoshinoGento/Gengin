@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include "base/LoadTiming.h"
 
 namespace title {
 namespace {
@@ -20,6 +21,7 @@ bool TitleSkyRenderer::Initialize(DirectXCommon* dx, TextureManager* textures) {
     textures_ = textures;
     texture_ = textures->LoadTexture2D("Resources/title/sky.png");
     if (!texture_.IsValid() || texture_ == textures->GetFallback2D()) return false;
+    loading::Scope geometryTiming(loading::Stage::SkyGeometry);
     constexpr UINT longitude = 48, latitude = 24;
     constexpr float pi = 3.14159265359f;
     std::array<Vector4, (longitude+1)*(latitude+1)> vertices{};
@@ -49,6 +51,7 @@ bool TitleSkyRenderer::Initialize(DirectXCommon* dx, TextureManager* textures) {
     vb_ = {vertices_->GetGPUVirtualAddress(), static_cast<UINT>(sizeof(vertices)), sizeof(Vector4)};
     ib_ = {indices_->GetGPUVirtualAddress(), static_cast<UINT>(sizeof(indices)), DXGI_FORMAT_R32_UINT};
     indexCount_ = static_cast<UINT>(indices.size());
+    geometryTiming.Stop();
     return CreatePipeline();
 }
 
@@ -60,9 +63,12 @@ void TitleSkyRenderer::Finalize() noexcept {
 }
 
 bool TitleSkyRenderer::CreatePipeline() {
+    loading::Scope shaderTiming(loading::Stage::SkyShaders);
     const auto vs = dx_->CompileShader(L"Resources/shader/TitleSky.VS.hlsl", L"vs_6_0");
     const auto ps = dx_->CompileShader(L"Resources/shader/TitleSky.PS.hlsl", L"ps_6_0");
     if (!vs || !ps) return false;
+    shaderTiming.Stop();
+    loading::Scope rootTiming(loading::Stage::SkyRootSignature);
     D3D12_DESCRIPTOR_RANGE range{};
     range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; range.NumDescriptors = 1;
     D3D12_ROOT_PARAMETER parameters[2]{};
@@ -84,6 +90,7 @@ bool TitleSkyRenderer::CreatePipeline() {
     Microsoft::WRL::ComPtr<ID3DBlob> blob, error;
     if (FAILED(D3D12SerializeRootSignature(&signature,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error))) return false;
     if (FAILED(dx_->GetDevice()->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root_)))) return false;
+    rootTiming.Stop();
     D3D12_INPUT_ELEMENT_DESC input{"POSITION",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,0,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0};
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso{};
     pso.pRootSignature = root_.Get();
@@ -103,6 +110,7 @@ bool TitleSkyRenderer::CreatePipeline() {
     pso.NumRenderTargets = 1;
     pso.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pso.SampleDesc.Count = 1; pso.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+    loading::Scope pipelineTiming(loading::Stage::SkyPipeline);
     return SUCCEEDED(dx_->GetDevice()->CreateGraphicsPipelineState(&pso,IID_PPV_ARGS(&pipeline_)));
 }
 

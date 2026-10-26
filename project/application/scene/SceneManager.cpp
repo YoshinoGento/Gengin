@@ -2,6 +2,9 @@
 #include "AbstractSceneFactory.h"
 #include "2d/TextureManager.h"
 #include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include "base/Framework.h"
 #include "base/FrameClock.h"
 #include "base/Logger.h"
@@ -32,13 +35,18 @@ void SceneManager::BeginFrame() {
     if (loading_.GetStatus() == scene::SceneLoadSystem::Status::Loading) {
         loading_.Advance();
         if (loading_.GetStatus() == scene::SceneLoadSystem::Status::Loading) return;
-        const auto& metrics = loading_.GetMetrics();
-        Logger::Log("SceneLoad: frames=" + std::to_string(metrics.frames) +
-            ", steps=" + std::to_string(metrics.steps) + ", workMs=" + std::to_string(metrics.workMs) +
-            ", longestStepMs=" + std::to_string(metrics.longestStepMs) + "\n");
-        for (const auto& sample : metrics.slowest) {
-            if (sample.index) Logger::Log("SceneLoad step=" + std::to_string(sample.index) +
-                ", ms=" + std::to_string(sample.milliseconds) + "\n");
+        std::ostringstream report;
+        loading_.WriteReport(report);
+        Logger::Info(report.str());
+        // Opt-in local profiling, bounded on disk; never writes beside normal save files.
+        std::error_code error;
+        if (std::filesystem::is_regular_file("scene_load_profile.enabled", error) && !error) {
+            constexpr std::uintmax_t kMaximumProfileBytes = 1024 * 1024;
+            const auto bytes = std::filesystem::file_size("scene_load_profile.log", error);
+            if (error || bytes < kMaximumProfileBytes) {
+                std::ofstream output("scene_load_profile.log", std::ios::app);
+                loading_.WriteReport(output);
+            }
         }
         if (loading_.GetStatus() == scene::SceneLoadSystem::Status::Failed) {
             Logger::Warning("Scene initialization failed; closing before exposing partial resources.");

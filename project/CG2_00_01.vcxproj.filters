@@ -172,6 +172,7 @@
     <ClCompile Include="engine\base\WinApp.cpp">
       <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ</Filter>
     </ClCompile>
+    <ClCompile Include="engine\base\ShaderCompiler.cpp" />
     <ClCompile Include="engine\base\DirectXCommon.cpp">
       <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ</Filter>
     </ClCompile>
@@ -470,6 +471,9 @@
     <ClInclude Include="engine\base\WinApp.h">
       <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ</Filter>
     </ClInclude>
+    <ClInclude Include="engine\base\ShaderCompiler.h" />
+    <ClInclude Include="engine\base\LoadTiming.h" />
+    <ClInclude Include="engine\3d\ObjectBufferLayout.h" />
     <ClInclude Include="engine\base\DirectXCommon.h">
       <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ</Filter>
     </ClInclude>
@@ -495,6 +499,7 @@
     <ClInclude Include="engine\2d\Sprite.h">
       <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ</Filter>
     </ClInclude>
+    <ClInclude Include="engine\2d\SpriteBufferLayout.h" />
     <ClInclude Include="engine\2d\SpriteText.h">
       <Filter>繝倥ャ繝繝ｼ 繝輔ぃ繧､繝ｫ</Filter>
     </ClInclude>
@@ -696,6 +701,13 @@
     <ClCompile Include="application\farm\render\FarmArrivalRenderer.cpp" />
     <ClCompile Include="application\farm\system\FarmArrivalAudioSystem.cpp" />
     <ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
+    <ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
+    <ClInclude Include="application\farm\render\FarmContestRenderer.h" />
+    <ClInclude Include="application\farm\render\FarmContestStageLayout.h" />
+    <ClInclude Include="application\farm\system\FarmContestPresentationSystem.h" />
+    <ClInclude Include="application\farm\system\FarmContestOutcomeSystem.h" />
+    <ClInclude Include="application\farm\ui\FarmContestOutcomeView.h" />
+    <ClInclude Include="application\farm\ui\FarmContestDetailView.h" />
     <ClInclude Include="application\farm\render\FarmSeedShopRenderer.h" />
     <ClInclude Include="application\farm\system\FarmStageAccessSystem.h" />
     <ClInclude Include="application\farm\system\FarmContestGoalSystem.h" />

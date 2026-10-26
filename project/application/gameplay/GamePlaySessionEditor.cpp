@@ -719,8 +719,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 		farmIrrigationPreviewSystem_.Cancel();
 		return true;
 	case GamePlayEditorCommandType::RestartFarmSession:
-		ResetFarmSession();
-		return true;
+		return ResetFarmSession();
 	case GamePlayEditorCommandType::MovePlayerToSelectedFarmTile:
 		return command.farmTileIndex == farmGrid_.GetSelectedIndex() && MovePlayerToFarmTile(command.farmTileIndex);
 	default:

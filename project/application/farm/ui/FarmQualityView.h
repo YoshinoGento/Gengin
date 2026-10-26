@@ -209,7 +209,8 @@ inline void BuildContestResultsView(View& view, const FarmEconomySystem::Contest
             std::snprintf(value,sizeof(value),"%d / %d / %d / %d",result.contestDay,
                 result.qualityPoints,result.sizePoints,result.qualityPoints+result.sizePoints);
             view.Metric(CropLabel(result.harvest.quality.crop),
-                {176,y,920,38},220,value);
+                {176,y,700,38},220,value);
+            view.Add(Label::ContestDetails,{896,y,200,38},{Action::ContestDetail,static_cast<int>(i)});
             std::snprintf(value,sizeof(value),"%d / %.2fx",result.harvest.harvestedDay,
                 static_cast<double>(result.harvest.quality.harvestSize.multiplier));
             if (goals[i].status == FarmContestGoalStatus::Unknown) {

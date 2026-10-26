@@ -1,11 +1,17 @@
 #pragma once
 #include "2d/SpriteCommon.h"
 #include "2d/TextureManager.h"
+#include "2d/SpriteBufferLayout.h"
 #include "math/Matrix.h"
 #include <string>
 
 class Sprite {
 public:
+    Sprite() = default;
+    Sprite(const Sprite&) = delete;
+    Sprite& operator=(const Sprite&) = delete;
+    Sprite(Sprite&&) noexcept = default;
+    Sprite& operator=(Sprite&&) noexcept = default;
     // The path-based entry point guarantees that every Sprite resolves assets through TextureManager.
     bool Initialize(SpriteCommon* spriteCommon, const std::string& texturePath);
     bool Initialize(SpriteCommon* spriteCommon, uint32_t textureHandle);
@@ -31,8 +37,8 @@ public:
     void SetSize(const Vector2& size) { size_ = size; }
 
     // 色
-    const Vector4& GetColor() const { return materialData_->color; }
-    void SetColor(const Vector4& color) { materialData_->color = color; }
+    const Vector4& GetColor() const { return color_; }
+    void SetColor(const Vector4& color) { color_ = color; if (bufferResource_ && materialData_) materialData_->color = color; }
 
     // テクスチャ変更
     void SetTexture(Texture2DHandle textureHandle);
@@ -56,37 +62,24 @@ private:
 private:
     SpriteCommon* spriteCommon_ = nullptr;
 
-    struct VertexData {
-        Vector4 position;
-        Vector4 texcoord;
-    };
-
-    struct Material {
-        Vector4 color;
-        int32_t enableLighting;
-        float padding[3];
-        Matrix4x4 uvTransform;
-    };
-
-    struct TransformationMatrix {
-        Matrix4x4 WVP;
-        Matrix4x4 World;
-    };
+    using VertexData = graphics::SpriteVertex;
+    using Material = graphics::SpriteMaterial;
+    using TransformationMatrix = graphics::SpriteTransform;
 
     // バッファリソース
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
+    // Mapped views are usable only while bufferResource_ is owned; a moved-from Sprite is inactive.
+    // Callers must wait for the existing frame fence before destruction or replacement.
+    Microsoft::WRL::ComPtr<ID3D12Resource> bufferResource_;
     D3D12_VERTEX_BUFFER_VIEW vertexBufferView_{};
     VertexData* vertexData_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_;
     D3D12_INDEX_BUFFER_VIEW indexBufferView_{};
     uint32_t* indexData_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> materialResource_;
     Material* materialData_ = nullptr;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> transformationMatrixResource_;
     TransformationMatrix* transformationMatrixData_ = nullptr;
+    Vector4 color_{1, 1, 1, 1};
 
     Transform uvTransform_{ {1,1,1}, {0,0,0}, {0,0,0} };
 

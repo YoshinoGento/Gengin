@@ -588,6 +588,8 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 	if (!co_await farmRuntimeController_.InitializeIncrementally(framework_->GetSpriteCommon())) {
 		AddLog("Farm runtime menu initialization failed.");
 	}
+    if (!co_await farmContestRenderer_.InitializeIncrementally(framework_->GetObject3dCommon(),
+        framework_->GetModelManager(), levelWhiteTextureHandle_)) co_return false;
     if (!co_await farmArrivalRenderer_.InitializeIncrementally(framework_->GetObject3dCommon(), framework_->GetModelManager(),
         TextureManager::GetInstance())) AddLog("Arrival scenery unavailable; using the safe farm overview.");
     farmRuntimeController_.InitializeArrivalAudio(framework_->GetAudio());
@@ -673,7 +675,10 @@ void GamePlaySessionSystem::Update() {
 	if (farmRuntimeController_.ConsumesInput()) levelReloadRequested = false;
 #endif
 	if (levelReloadRequested && farmProgressionSystem_.IsCleared()) {
-		ResetFarmSession();
+		if (farmProgressionSystem_.IsContestSeason()) {
+			farmRuntimeController_.RequestSeasonRetry(RuntimeContext());
+			levelReloadRequested = false;
+		} else if (!ResetFarmSession()) levelReloadRequested = false;
 	}
 	if (levelReloadRequested) {
 		LoadSceneLevel();
@@ -1601,6 +1606,13 @@ void GamePlaySessionSystem::Draw() {
 	auto objCommon = framework_->GetObject3dCommon();
 	auto spriteCommon = framework_->GetSpriteCommon();
 #ifndef USE_IMGUI
+    if (farmRuntimeController_.ShowsContestDetail()) {
+        objCommon->BeginObjectPass();
+        farmContestRenderer_.Draw(farmRuntimeController_.ContestFrame());
+        objCommon->EndObjectPass();
+        spriteCommon->PreDraw(); farmRuntimeController_.Draw();
+        return;
+    }
     if (farmRuntimeController_.ShowsSeedShop() || farmRuntimeController_.ShowsHarvestDisplay()) {
 		objCommon->BeginObjectPass();
         farmSeedShopRenderer_.Draw(farmRuntimeController_.ShowsSeedShop() ? farmRuntimeController_.SeedShopSelection() % 2 : farmRuntimeController_.HarvestDisplaySelection());
@@ -2072,15 +2084,31 @@ void GamePlaySessionSystem::RouteFarmSale(const FarmSaleResult& result)
 	}
 }
 
-void GamePlaySessionSystem::ResetFarmSession()
+bool GamePlaySessionSystem::RetryCompletedSeason()
+{
+	if (!farmDocumentSystem_.ArchiveCompletedSeason(farmGrid_, farmEconomySystem_, farmCropSelectionSystem_))
+		return false;
+	if (!ResetFarmSessionState()) return false;
+	farmDocumentSystem_.BeginUnsavedSession();
+	return true;
+}
+
+bool GamePlaySessionSystem::ResetFarmSession()
+{
+	const auto season = FarmContestSeasonSystem::Evaluate(farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults());
+	if (farmProgressionSystem_.IsContestSeason() && season.valid && season.finalized) return RetryCompletedSeason();
+	return ResetFarmSessionState();
+}
+
+bool GamePlaySessionSystem::ResetFarmSessionState()
 {
 	const auto mode = farmProgressionSystem_.GetMode();
 	const auto rules = FarmProgressionSystem::InitialRules(mode);
-	farmContestDaySystem_.Reset();
 	if (!farmGrid_.Initialize(5, 4)) {
 		AddLog("Farm restart failed: invalid grid dimensions.");
-		return;
+		return false;
 	}
+	farmContestDaySystem_.Reset();
 	farmDateSystem_.Initialize();
 	farmToolSystem_.Initialize();
 	farmEconomySystem_.Initialize(rules);
@@ -2098,6 +2126,7 @@ void GamePlaySessionSystem::ResetFarmSession()
 	}
 	farmFeedbackSystem_.ShowRestarted();
 	AddLog("Farm session restarted.");
+	return true;
 }
 
 bool GamePlaySessionSystem::TryBuildViewportRay(

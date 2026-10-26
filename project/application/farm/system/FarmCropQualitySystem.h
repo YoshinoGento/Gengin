@@ -33,6 +33,7 @@ struct FarmQualityAdvice {
 class FarmCropQualitySystem final {
 public:
 	void Initialize(const farm::FarmRules& rules = {}) noexcept;
+	[[nodiscard]] float MaximumHarvestSize(farm::CropType crop) const noexcept { return sizeSystem_.MaximumFor(crop); }
 	[[nodiscard]] FarmCropQualityResult Evaluate(
 		const farm::FarmTile& tile) const noexcept;
 	[[nodiscard]] static FarmQualityAdvice Analyze(const FarmCropQualityResult& quality) noexcept;
