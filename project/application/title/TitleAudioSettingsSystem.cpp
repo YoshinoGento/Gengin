@@ -20,7 +20,8 @@ void TitleAudioSettingsSystem::Initialize(const std::string& path) {
     nlohmann::json json;
     if (!JsonFile::Exists(path_) || !JsonFile::Load(path_,json) || !json.is_object() ||
         !json.contains("version") || json["version"] != 1) return;
-    frame_.volume = {ReadVolume(json,"environmentPercent"),ReadVolume(json,"waterPercent")};
+    frame_.volume = {ReadVolume(json,"environmentPercent"),ReadVolume(json,"waterPercent"),
+        ReadVolume(json,"contestPercent")};
 }
 void TitleAudioSettingsSystem::SetVolume(int index, int value) noexcept {
     if (index<0 || index>=static_cast<int>(frame_.volume.size())) return;
@@ -45,14 +46,15 @@ bool TitleAudioSettingsSystem::Update(const AudioSettingsInput& input) {
     if (input.back || input.confirm || (input.pointerValid && input.pressed && kAudioSettingsBack.Contains(input.pointer))) {
         Close(); return false;
     }
-    if (input.up || input.down) frame_.selected = 1-frame_.selected;
+    if (input.up != input.down) frame_.selected =
+        (frame_.selected + (input.down ? 1 : static_cast<int>(kAudioChannelCount)-1)) % static_cast<int>(kAudioChannelCount);
     if (input.left != input.right) SetVolume(frame_.selected,
         frame_.volume[static_cast<std::size_t>(frame_.selected)] + (input.right ? 5 : -5));
     if (input.pointerValid && input.pressed && kAudioSettingsReset.Contains(input.pointer)) {
-        SetVolume(0,kDefaultTitleVolume); SetVolume(1,kDefaultTitleVolume);
+        for (int i=0; i<static_cast<int>(kAudioChannelCount); ++i) SetVolume(i,kDefaultTitleVolume);
     }
     if (input.pointerValid && input.pressed) {
-        for (int i=0; i<2; ++i) if (kAudioSliderHits[static_cast<std::size_t>(i)].Contains(input.pointer)) {
+        for (int i=0; i<static_cast<int>(kAudioChannelCount); ++i) if (kAudioSliderHits[static_cast<std::size_t>(i)].Contains(input.pointer)) {
             dragging_ = i; frame_.selected = i;
         }
     }
@@ -75,7 +77,8 @@ bool TitleAudioSettingsSystem::Save() {
     std::error_code error;
     if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path(),error);
     const auto temporary = path.string()+".tmp";
-    const nlohmann::json json{{"version",1},{"environmentPercent",frame_.volume[0]},{"waterPercent",frame_.volume[1]}};
+    const nlohmann::json json{{"version",1},{"environmentPercent",frame_.volume[0]},
+        {"waterPercent",frame_.volume[1]},{"contestPercent",GetContestVolume()}};
     // Replace only after a complete JSON write; the prior settings survive failed writes.
     const bool success = !error && JsonFile::Save(temporary,json) &&
         MoveFileExW(std::filesystem::path(temporary).c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH);

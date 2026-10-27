@@ -7,6 +7,7 @@
 #include "io/InputGamepadButton.h"
 #include "io/InputKey.h"
 #include "io/InputMouseButton.h"
+#include "io/KeyboardState.h"
 #include "io/MouseButtonEdges.h"
 #include "math/Struct.h"
 
@@ -30,7 +31,7 @@ public:
 	/// </summary>
 	/// <param name="keyNumber">キー番号</param>
 	/// <returns>押されているか</returns>
-	bool PushKey(BYTE keyNumber) const; //キーが押された瞬間
+	bool PushKey(BYTE keyNumber) const;
 	bool PushKey(InputKey key) const;
 
 
@@ -63,6 +64,7 @@ public:
 
 private:
 	bool UpdateKeyboardState();
+	bool ResynchronizeKeyboard();
 	bool UpdateMouseState();
 	bool ResynchronizeMouse();
 	bool UpdateGamepadState();
@@ -78,11 +80,10 @@ private:
 	//DirectInputのインスタンスの生成
 	ComPtr<IDirectInput8> directInput = nullptr;
 
-	//全キーの状態
-	BYTE keyPre[256] = {};
-
-	BYTE key[256] = {};
-	bool consumedKeyTriggers_[256] = {};
+	static constexpr DWORD kKeyboardEventCapacity = 256;
+	KeyboardState keyboardState_;
+	bool keyboardBuffered_ = false;
+	bool keyboardSynchronized_ = false;
 
 	static constexpr int kMouseButtonCount = MouseButtonEdges::kCount;
 	static constexpr DWORD kMouseEventCapacity = 256;

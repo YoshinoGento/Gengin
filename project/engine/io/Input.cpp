@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <cassert>
-#include <cstring>
 #include <Xinput.h>
 
 #pragma comment(lib, "dinput8.lib")
@@ -137,6 +136,14 @@ void Input::Initialize(WinApp* winApp)
 
 	result = keyboard->SetCooperativeLevel(winApp->GetHwnd(), DISCL_FOREGROUND | DISCL_NONEXCLUSIVE | DISCL_NOWINKEY);
 	assert(SUCCEEDED(result));
+	DIPROPDWORD keyboardBuffer{};
+	keyboardBuffer.diph.dwSize = sizeof(keyboardBuffer);
+	keyboardBuffer.diph.dwHeaderSize = sizeof(keyboardBuffer.diph);
+	keyboardBuffer.diph.dwHow = DIPH_DEVICE;
+	keyboardBuffer.dwData = kKeyboardEventCapacity;
+	keyboardBuffered_ = SUCCEEDED(keyboard->SetProperty(DIPROP_BUFFERSIZE, &keyboardBuffer.diph));
+	if (!keyboardBuffered_) OutputDebugStringA("Keyboard event buffer unavailable; immediate input fallback.\n");
+	ClearKeyboardState();
 
 	result = directInput->CreateDevice(GUID_SysMouse, &mouse, NULL);
 	assert(SUCCEEDED(result));
@@ -158,8 +165,6 @@ void Input::Initialize(WinApp* winApp)
 
 void Input::Update()
 {
-	memset(consumedKeyTriggers_, 0, sizeof(consumedKeyTriggers_));
-	memcpy(keyPre, key, sizeof(key));
 	if (!UpdateKeyboardState()) {
 		ClearKeyboardState();
 	}
@@ -182,16 +187,50 @@ bool Input::UpdateKeyboardState()
 		return false;
 	}
 
-	TryAcquireDevice(keyboard.Get());
-
-	HRESULT result = keyboard->GetDeviceState(sizeof(key), key);
+	if (!winApp_ || GetForegroundWindow() != winApp_->GetHwnd()) {
+		keyboard->Unacquire();
+		return false;
+	}
+	keyboardState_.BeginFrame();
+	KeyboardState::Snapshot snapshot{};
+	HRESULT result = keyboard->GetDeviceState(sizeof(snapshot), snapshot.data());
 	if (FAILED(result) && IsRecoverableInputError(result)) {
+		keyboardSynchronized_ = false;
 		if (TryAcquireDevice(keyboard.Get())) {
-			result = keyboard->GetDeviceState(sizeof(key), key);
+			result = keyboard->GetDeviceState(sizeof(snapshot), snapshot.data());
 		}
 	}
+	if (FAILED(result)) return false;
+	if (!keyboardSynchronized_) return ResynchronizeKeyboard();
+	if (keyboardBuffered_) {
+		std::array<DIDEVICEOBJECTDATA, kKeyboardEventCapacity> events{};
+		DWORD count = kKeyboardEventCapacity;
+		result = keyboard->GetDeviceData(sizeof(DIDEVICEOBJECTDATA), events.data(), &count, 0);
+		if (FAILED(result)) return false;
+		// Discard incomplete history rather than inventing a retry/submit action.
+		if (result == DI_BUFFEROVERFLOW || count > events.size()) return ResynchronizeKeyboard();
+		for (DWORD i = 0; i < count; ++i) {
+			const auto& event = events[i];
+			if (event.dwOfs < KeyboardState::kKeyCount)
+				keyboardState_.Apply(static_cast<int>(event.dwOfs), (event.dwData & 0x80) != 0);
+		}
+	} else keyboardState_.ApplySnapshot(snapshot);
+	return true;
+}
 
-	return SUCCEEDED(result);
+bool Input::ResynchronizeKeyboard()
+{
+	keyboardSynchronized_ = false;
+	keyboardState_.Reset();
+	if (keyboardBuffered_) {
+		DWORD count = INFINITE;
+		if (FAILED(keyboard->GetDeviceData(sizeof(DIDEVICEOBJECTDATA), nullptr, &count, 0))) return false;
+	}
+	KeyboardState::Snapshot snapshot{};
+	if (FAILED(keyboard->GetDeviceState(sizeof(snapshot), snapshot.data()))) return false;
+	keyboardState_.Synchronize(snapshot);
+	keyboardSynchronized_ = true;
+	return true;
 }
 
 bool Input::UpdateMouseState()
@@ -300,8 +339,8 @@ void Input::UpdateMousePosition()
 
 void Input::ClearKeyboardState()
 {
-	memset(keyPre, 0, sizeof(keyPre));
-	memset(key, 0, sizeof(key));
+	keyboardState_.Reset();
+	keyboardSynchronized_ = false;
 }
 
 void Input::ClearMouseState()
@@ -325,11 +364,7 @@ void Input::ClearGamepadState()
 
 bool Input::PushKey(BYTE keyNumber) const
 {
-	if (key[keyNumber]) {
-		return true;
-	}
-
-	return false;
+	return keyboardState_.Held(keyNumber);
 }
 
 bool Input::PushKey(InputKey inputKey) const
@@ -340,11 +375,7 @@ bool Input::PushKey(InputKey inputKey) const
 
 bool Input::TriggerKey(BYTE keyNumber) const
 {
-	if (!consumedKeyTriggers_[keyNumber] && key[keyNumber] && !keyPre[keyNumber]) {
-		return true;
-	}
-
-	return false;
+	return keyboardState_.Pressed(keyNumber);
 }
 
 bool Input::TriggerKey(InputKey inputKey) const
@@ -355,11 +386,7 @@ bool Input::TriggerKey(InputKey inputKey) const
 
 bool Input::ConsumeTriggerKey(BYTE keyNumber)
 {
-	if (!TriggerKey(keyNumber)) {
-		return false;
-	}
-	consumedKeyTriggers_[keyNumber] = true;
-	return true;
+	return keyboardState_.Consume(keyNumber);
 }
 
 bool Input::ConsumeTriggerKey(InputKey inputKey)
@@ -371,11 +398,7 @@ bool Input::ConsumeTriggerKey(InputKey inputKey)
 
 bool Input::ReleaseKey(BYTE keyNumber) const
 {
-	if (!key[keyNumber] && keyPre[keyNumber]) {
-		return true;
-	}
-
-	return false;
+	return keyboardState_.Released(keyNumber);
 }
 
 bool Input::ReleaseKey(InputKey inputKey) const

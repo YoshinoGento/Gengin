@@ -7,6 +7,7 @@
 #include "farm/system/FarmSeedShopSystem.h"
 #include "farm/system/FarmHarvestDisplaySystem.h"
 #include "farm/system/FarmContestOutcomeSystem.h"
+#include "farm/system/FarmContestAudioSystem.h"
 
 struct FarmRuntimeContext;
 class Input;
@@ -20,8 +21,10 @@ public:
         co_return ready_;
     }
     bool Update(const FarmRuntimeContext& context, const Input& input);
-    void InitializeArrivalAudio(Audio* audio) { (void)arrivalAudio_.Initialize(audio); }
-    void FinalizeArrivalAudio() { arrivalAudio_.Finalize(); }
+    void InitializePresentationAudio(Audio* audio) {
+        (void)arrivalAudio_.Initialize(audio); (void)contestAudio_.Initialize(audio);
+    }
+    void FinalizePresentationAudio() { arrivalAudio_.Finalize(); contestAudio_.Finalize(); }
     FarmStartPresentationSystem::Frame StartFrame() const noexcept {
         return flow_.GetPhase()==FarmPlayFlow::Phase::Starting ? startPresentation_.GetFrame() : FarmStartPresentationSystem::Frame{};
     }
@@ -70,6 +73,7 @@ private:
     FarmSeedShopSystem shop_;
     FarmHarvestDisplaySystem harvestDisplay_;
     FarmContestPresentationSystem contestPresentation_;
+    FarmContestAudioSystem contestAudio_;
     FarmContestOutcomeSystem contestOutcome_;
     bool seasonRetryFailed_ = false;
     farmui::View view_;

@@ -23,7 +23,15 @@ int main() {
     std::filesystem::remove(path);
     title::TitleAudioSettingsSystem system;
     system.Initialize(path);
-    Check(system.GetFrame().volume == std::array<int,2>{40,40});
+    Check(system.GetFrame().volume == std::array<int,3>{40,40,40});
+    Check(system.GetContestVolume()==40);
+    for (std::size_t i=0;i<title::kAudioChannelCount;++i) {
+        const auto& hit=title::kAudioSliderHits[i];
+        Check(title::kAudioSettingsPanel.Contains(hit.position));
+        Check(title::kAudioSettingsPanel.Contains({hit.position.x+hit.size.x,hit.position.y+hit.size.y}));
+        Check(hit.position.y+hit.size.y<title::kAudioSettingsReset.position.y);
+        if(i>0) Check(title::kAudioSliderHits[i-1].position.y+title::kAudioSliderHits[i-1].size.y<hit.position.y);
+    }
     const auto mix = system.Apply(title::MakeAudioMix(0,0));
     Check(std::abs(mix.ambience[0]-.18f)<.00001f && std::abs(mix.water-.12f)<.00001f);
     for (int i=0; i<4000; ++i) {
@@ -62,31 +70,52 @@ int main() {
     system.Update(right); Check(system.GetFrame().volume[1]==30);
     title::AudioSettingsInput up; up.up = true;
     system.Update(up); Check(system.GetFrame().selected==0);
-    system.Update(Click(816,500));
+    system.Update(up); Check(system.GetFrame().selected==2);
+    system.Update(right); Check(system.GetContestVolume()==45);
+    system.Update(title::AudioSettingsInput{.down=true}); Check(system.GetFrame().selected==0);
+    system.Update(title::AudioSettingsInput{.up=true,.down=true}); Check(system.GetFrame().selected==0);
+    system.Update(Click(816,588));
     Check(!system.GetFrame().open && JsonFile::Exists(path));
     title::TitleAudioSettingsSystem restored; restored.Initialize(path);
-    Check(restored.GetFrame().volume == std::array<int,2>{100,30});
+    Check(restored.GetFrame().volume == std::array<int,3>{100,30,45});
     Check(!restored.Update(Click(1100,60)));
     Check(!restored.Update(title::AudioSettingsInput{.confirm=true}) && !restored.GetFrame().open);
     Check(restored.Update(title::AudioSettingsInput{.confirm=true}));
     Check(!restored.GetWaterClick()); // Keyboard starts use the transition system's default origin.
     Check(!restored.Update(title::AudioSettingsInput{.toggle=true,.confirm=true}));
-    restored.Update(Click(400,500));
-    Check(restored.GetFrame().volume==std::array<int,2>{40,40});
+    restored.Update(Click(400,588));
+    Check(restored.GetFrame().volume==std::array<int,3>{40,40,40});
     Check(restored.Save());
+    restored.Update(Click(title::kAudioSliderX,486));
+    Check(restored.GetContestVolume()==0);
+    const auto stillAudible=restored.Apply(title::MakeAudioMix(0,0));
+    Check(stillAudible.ambience==mix.ambience && stillAudible.water==mix.water);
+    auto contestDrag=Click(2000,486); contestDrag.pressed=false;
+    restored.Update(contestDrag); Check(restored.GetContestVolume()==100);
+    restored.Update({});
+    restored.Update(Click(title::kAudioSliderX+title::kAudioSliderWidth*.35f,486));
+    Check(restored.GetContestVolume()==35);
     restored.Update(Click(title::kAudioSliderX,310));
     restored.Update(Click(title::kAudioSliderX,398));
     const auto muted = restored.Apply(title::MakeAudioMix(9,0));
     for (auto gain : muted.ambience) Check(gain==0);
     Check(muted.water==0);
+    Check(restored.GetContestVolume()==35); // Background muting does not mute judgments.
+    Check(restored.Save());
+    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,3>{0,0,35});
     Check(JsonFile::Save(path,{{"version",1},{"environmentPercent",-300},{"waterPercent",1e100}}));
-    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,2>{0,100});
+    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,3>{0,100,40});
     Check(JsonFile::Save(path,{{"version",1},{"environmentPercent","loud"},{"waterPercent",nullptr}}));
-    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,2>{40,40});
+    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,3>{40,40,40});
+    for (const auto& value : {nlohmann::json(-5),nlohmann::json(999),nlohmann::json("loud"),nlohmann::json(nullptr)}) {
+        Check(JsonFile::Save(path,{{"version",1},{"contestPercent",value}}));
+        restored.Initialize(path);
+        Check(restored.GetContestVolume()==(value.is_number() ? (value.get<int>()<0 ? 0 : 100) : 40));
+    }
     Check(JsonFile::Save(path,{{"version",2},{"environmentPercent",100}}));
-    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,2>{40,40});
+    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,3>{40,40,40});
     { std::ofstream file(path); file << "broken JSON"; }
-    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,2>{40,40});
+    restored.Initialize(path); Check(restored.GetFrame().volume==std::array<int,3>{40,40,40});
     const auto blocker = dir/"not_a_directory";
     { std::ofstream file(blocker); file << "fixture"; }
     restored.Initialize((blocker/"settings.json").string());

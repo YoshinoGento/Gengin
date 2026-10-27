@@ -1,0 +1,26 @@
+{
+  "provenance": "Original, deterministic short wooden/plucked judging cues. No external samples.",
+  "rate": 24000,
+  "channels": 1,
+  "bits": 16,
+  "clips": [
+    {
+      "file": "assess.wav",
+      "frames": 5280,
+      "pcm_bytes": 10560,
+      "sha256": "b64fda90d50232518d5237e87fc41e728daec200ccf4201ca7deba5c63172bab"
+    },
+    {
+      "file": "passed.wav",
+      "frames": 15600,
+      "pcm_bytes": 31200,
+      "sha256": "3f87e279d4d99087f45755d6e5f0c8655dfcb288646b81da268bcfe17512be9d"
+    },
+    {
+      "file": "failed.wav",
+      "frames": 15600,
+      "pcm_bytes": 31200,
+      "sha256": "675ec9780339c308f5e5a0e4c06302790bef4717d65d5eb1d9b8092afac8771d"
+    }
+  ]
+}

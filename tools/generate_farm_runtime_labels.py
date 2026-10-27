@@ -318,6 +318,34 @@ labels.extend([
     ["OutcomeBack", "シーズン結果へ"],
     ["OutcomeRank", "総合ランク"], ["OutcomePoints", "得点／合格点"],
 ])
+labels.extend([
+    ["ContestTabResult", "結果"], ["ContestTabQuality", "品質"], ["ContestTabSize", "大きさ"],
+    ["ContestExplanation", "採点のしくみ"], ["ContestSummaryBack", "結果に戻る"],
+    ["ContestScoreShort", "得点"], ["ContestTargetShort", "入賞ライン"],
+    ["ContestGapShort", "入賞まであと"], ["ContestPassedShort", "入賞ラインを達成しました"],
+    ["ContestLegacyShort", "この記録は合否判定なし"],
+    ["ContestHintTitle", "次の育成のヒント"], ["ContestQualityNeeded", "重さだけでなく品質も改善する"],
+    ["ContestReviewMaturity", "見直す項目：成熟"], ["ContestReviewWater", "見直す項目：水分"],
+    ["ContestReviewTerrain", "見直す項目：地形"], ["ContestReviewNutrients", "見直す項目：養分"],
+    ["ContestHintMaturity", "十分に育ってから収穫する"],
+    ["ContestHintWater", "給水を調整して適量を保つ"],
+    ["ContestHintTerrain", "作物に合う土地の高さを選ぶ"],
+    ["ContestHintNutrients", "植付け前に堆肥を混ぜる"],
+    ["ContestHintBalanced", "今回の育て方を次にも生かす"],
+    ["ContestHintUnknown", "育成記録がなく、助言できません"],
+    ["ContestPartialShort", "記録のある項目だけで評価"],
+    ["ContestQualityScoreShort", "品質の得点"], ["ContestSizeScoreShort", "大きさの得点"],
+    ["ContestAxisMaturity", "成熟"], ["ContestAxisWater", "水分"],
+    ["ContestAxisTerrain", "地形"], ["ContestAxisNutrients", "養分"],
+    ["ContestRadarScaleShort", "外周は１００％"],
+    ["ContestAxesShort", "各項目に合格ラインはありません"],
+    ["ContestExampleShort", "入賞する大きさの一例"],
+    ["ContestExampleCondition", "品質が満点の場合"],
+    ["ContestWeightShort", "換算重量"],
+    ["ContestMoreShort", "今の品質なら入賞まで"],
+    ["ContestRuleShort", "品質６０点＋大きさ４０点で採点"],
+    ["ContestWeightRuleShort", "重さはゲーム内の換算値です"],
+])
 ascii_y = ((len(labels) + columns - 1) // columns) * cell_h
 height = ascii_y + 128
 assert height <= 4096, "Split the label atlas before adding more rows"

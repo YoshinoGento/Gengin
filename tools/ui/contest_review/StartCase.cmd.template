@@ -1,0 +1,17 @@
+@echo off
+setlocal
+pushd "%~dp0"
+powershell -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -Command "try { $games=Get-Process -ErrorAction Stop; if ($games.ProcessName -contains 'SuiroNogyoReview') { exit 1 }; exit 0 } catch { exit 2 }"
+if errorlevel 1 (
+    echo Could not switch. Close SuiroNogyoReview and try again.
+    pause
+    popd
+    exit /b 1
+)
+copy /Y "ReviewCases\@CASE@.json" "Settings\farm\farm_documents.json" >nul
+if errorlevel 1 (
+    popd
+    exit /b 1
+)
+start "" "SuiroNogyoReview.exe"
+popd

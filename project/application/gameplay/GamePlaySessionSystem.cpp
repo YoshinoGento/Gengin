@@ -592,7 +592,7 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
         framework_->GetModelManager(), levelWhiteTextureHandle_)) co_return false;
     if (!co_await farmArrivalRenderer_.InitializeIncrementally(framework_->GetObject3dCommon(), framework_->GetModelManager(),
         TextureManager::GetInstance())) AddLog("Arrival scenery unavailable; using the safe farm overview.");
-    farmRuntimeController_.InitializeArrivalAudio(framework_->GetAudio());
+    farmRuntimeController_.InitializePresentationAudio(framework_->GetAudio());
     co_await std::suspend_always{};
 	// Build the initial view before reveal; no input or simulation update is needed.
 	farmRuntimeController_.Refresh(RuntimeContext());
@@ -2861,7 +2861,7 @@ void GamePlaySessionSystem::AddLog(const std::string& message) {
 
 void GamePlaySessionSystem::Finalize()
 {
-    farmRuntimeController_.FinalizeArrivalAudio();
+    farmRuntimeController_.FinalizePresentationAudio();
 	gamePlayEditorBridge_.Unbind();
 	if (framework_ && framework_->GetParticleManager()) {
 		// The shared manager must not retain this scene-owned camera after destruction.

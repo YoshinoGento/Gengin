@@ -184,6 +184,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
 	<ClCompile Include="application\farm\render\FarmRenderer.cpp" />
     <ClCompile Include="application\farm\render\FarmArrivalRenderer.cpp" />
     <ClCompile Include="application\farm\system\FarmArrivalAudioSystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmContestAudioSystem.cpp" />
 	<ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
 	<ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
 	<ClCompile Include="engine\command\CommandHistory.cpp" />
@@ -550,10 +551,12 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\ui\FarmCameraView.h" />
     <ClInclude Include="application\farm\system\FarmOverviewCamera.h" />
     <ClInclude Include="engine\io\MouseButtonEdges.h" />
+    <ClInclude Include="engine\io\KeyboardState.h" />
     <ClInclude Include="application\farm\system\FarmPlayFlow.h" />
     <ClInclude Include="application\farm\system\FarmStartPresentationSystem.h" />
     <ClInclude Include="application\farm\system\FarmArrivalPresentation.h" />
     <ClInclude Include="application\farm\system\FarmArrivalAudioSystem.h" />
+    <ClInclude Include="application\farm\system\FarmContestAudioSystem.h" />
     <ClInclude Include="application\farm\render\FarmArrivalRenderer.h" />
     <ClInclude Include="application\farm\ui\FarmRuntimeLabels.h" />
     <ClInclude Include="application\farm\system\FarmRuntimeController.h" />

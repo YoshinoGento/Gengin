@@ -2,52 +2,114 @@
 #include "farm/ui/FarmQualityView.h"
 
 namespace farmui {
-inline void BuildContestDetailView(View& view, const FarmContestPresentationSystem::Frame& frame) {
+namespace contestdetail {
+using Page = FarmContestPresentationSystem::Page;
+inline constexpr std::array<Rect,3> kTabs{{{48,100,160,48},{220,100,160,48},{392,100,160,48}}};
+inline constexpr Rect kExplanation{988,100,244,48}, kBack{888,654,344,46};
+
+inline Label Hint(FarmQualityFocus focus) noexcept {
+    switch (focus) {
+    case FarmQualityFocus::Maturity: return Label::ContestHintMaturity;
+    case FarmQualityFocus::Water: return Label::ContestHintWater;
+    case FarmQualityFocus::Terrain: return Label::ContestHintTerrain;
+    case FarmQualityFocus::Nutrients: return Label::ContestHintNutrients;
+    case FarmQualityFocus::Balanced: return Label::ContestHintBalanced;
+    default: return Label::ContestHintUnknown;
+    }
+}
+inline void Advice(View& view, const FarmQualityAdvice& advice, float y) {
+    Label label = Label::ContestHintTitle;
+    switch (advice.focus) {
+    case FarmQualityFocus::Maturity: label = Label::ContestReviewMaturity; break;
+    case FarmQualityFocus::Water: label = Label::ContestReviewWater; break;
+    case FarmQualityFocus::Terrain: label = Label::ContestReviewTerrain; break;
+    case FarmQualityFocus::Nutrients: label = Label::ContestReviewNutrients; break;
+    default: break;
+    }
+    if (label != Label::ContestHintTitle && advice.lowestPercent >= 0)
+        view.Metric(label, {680,y,552,38}, 350, std::to_string(advice.lowestPercent)+"%");
+    else view.Add(Label::ContestHintTitle, {680,y,552,38});
+    view.Add(Hint(advice.focus), {680,y+48,552,38});
+}
+inline void Summary(View& view, const FarmContestPresentationSystem::Frame& frame) {
     const auto& data = frame.comparison;
-    view.modal = true; view.contestDetail = true; view.contestFrame = frame;
-    view.Add(Label::ContestDetailTitle, {48,20,460,42});
-    view.Metric(Label::ContestEventDay, {520,20,270,42}, 148, std::to_string(data.day));
-    view.Metric(Label::StageThreshold, {850,20,382,42}, 178, data.staged ? std::to_string(data.target)+" pt" : "--");
-    view.Add(Label::ContestActual, {64,82,500,38});
-    view.Add(data.referenceAvailable ? Label::ContestIdeal : Label::ContestNoReference, {688,82,544,38});
-    view.Add(CropLabel(data.quality.crop), {64,134,250,38});
-    if (data.referenceAvailable) view.Add(CropLabel(data.quality.crop), {688,134,250,38});
-    view.radar.visible = true; view.radar.offset = {104,-48}; view.radar.scale = .78f;
-    const auto& quality = data.quality;
-    const std::array<float,4> values{{quality.maturity,quality.waterBalance,quality.terrainFit,quality.nutrientBalance}};
+    view.Add(CropLabel(data.quality.crop), {80,260,480,38});
+    const auto first = view.count;
+    if (data.staged && !data.passed)
+        view.Metric(Label::ContestGapShort, {680,270,552,44}, 260, std::to_string(data.shortfall)+" pt");
+    else view.Add(data.staged ? Label::ContestPassedShort : Label::ContestLegacyShort, {680,270,552,44});
+    Advice(view,data.qualityAdvice,344);
+    if (data.sizeAdvice == FarmContestSizeAdvice::ImproveQuality)
+        view.Add(Label::ContestQualityNeeded, {680,444,552,38});
+    else if (data.sizeAdvice == FarmContestSizeAdvice::MoreSize)
+        view.Metric(Label::ContestMoreShort, {680,444,552,38}, 350, "+"+std::to_string(data.additionalGrams)+" g");
+    if (data.qualityAdvice.partial) view.Add(Label::ContestPartialShort, {680,496,552,38});
+    for (std::size_t i=first; i<view.count; ++i) view.items[i].opacity = frame.adviceReveal;
+}
+inline void Quality(View& view, const FarmContestComparison& data) {
+    const auto& q = data.quality;
+    view.radar.visible = true; view.radar.numberedAxes = false;
+    view.radar.offset = {-46,68}; view.radar.scale = 1.1f;
+    const std::array<float,4> values{{q.maturity,q.waterBalance,q.terrainFit,q.nutrientBalance}};
+    constexpr std::array<Label,4> names{{Label::ContestAxisMaturity,Label::ContestAxisWater,
+        Label::ContestAxisTerrain,Label::ContestAxisNutrients}};
+    constexpr std::array<Rect,4> axes{{{232,232,200,38},{446,362,200,38},{232,496,200,38},{24,362,188,38}}};
     for (std::size_t i=0; i<values.size(); ++i) {
-        view.radar.known[i] = std::isfinite(values[i]) && (i!=3 || quality.nutrientKnown);
-        view.radar.values[i] = view.radar.known[i] ? std::clamp(values[i],0.0f,1.0f)*frame.reveal : 0;
+        const bool known = std::isfinite(values[i]) && (i!=3 || q.nutrientKnown);
+        view.radar.known[i] = known;
+        view.radar.values[i] = known ? std::clamp(values[i],0.f,1.f) : 0;
+        view.Metric(names[i], axes[i], 86, known ?
+            std::to_string(static_cast<int>(std::lround(view.radar.values[i]*100)))+"%" : "--");
     }
-    view.referenceRadar.visible = data.referenceAvailable;
-    view.referenceRadar.offset = {728,-48}; view.referenceRadar.scale = .78f;
-    view.referenceRadar.color = {.36f,.83f,.83f,1};
-    view.referenceRadar.known.fill(true); view.referenceRadar.values.fill(frame.reveal);
-    view.Metric(Label::ContestGameWeight, {64,370,540,38}, 240, std::to_string(data.grams)+" g");
-    view.Metric(Label::ContestGameWeight, {688,370,544,38}, 240,
+    view.Add(Label::ContestRadarScaleShort, {220,548,240,32});
+    view.Metric(Label::ContestQualityScoreShort, {680,260,552,42}, 300, std::to_string(data.qualityPoints)+" / 60");
+    Advice(view,data.qualityAdvice,332);
+    view.Add(Label::ContestAxesShort, {680,440,552,38});
+    if (data.qualityAdvice.partial) view.Add(Label::ContestPartialShort, {680,496,552,38});
+}
+inline void Size(View& view, const FarmContestComparison& data) {
+    view.Add(Label::ContestActual, {80,248,500,38});
+    view.Add(CropLabel(data.quality.crop), {80,292,500,38});
+    view.Add(data.referenceAvailable ? Label::ContestExampleShort : Label::ContestNoReference, {720,248,512,38});
+    if (data.referenceAvailable) view.Add(Label::ContestExampleCondition, {720,292,512,38});
+    view.Metric(Label::ContestWeightShort, {80,500,500,38}, 220, std::to_string(data.grams)+" g");
+    view.Metric(Label::ContestWeightShort, {720,500,512,38}, 220,
         data.referenceAvailable ? std::to_string(data.referenceGrams)+" g" : "--");
-    view.Metric(Label::ContestQualityPoints, {64,414,540,36}, 280, std::to_string(data.qualityPoints)+" / 60");
-    view.Metric(Label::ContestSizePoints, {64,456,540,36}, 280, std::to_string(data.sizePoints)+" / 40");
-    view.Add(Label::ContestIdealNote, {688,414,544,36});
-    view.Add(Label::ContestWeightNote, {688,456,544,36});
-    view.Add(Label::ContestRadarLegend, {64,500,1152,32});
-    view.Add(!quality.nutrientKnown ? Label::HintPartialRecord : Label::ContestAxesNote, {64,538,1152,28});
-    const Label verdict = !frame.verdictVisible ? Label::ContestJudging : !data.staged ? Label::ContestEntered :
+    if (data.sizeAdvice == FarmContestSizeAdvice::MoreSize)
+        view.Metric(Label::ContestMoreShort, {48,550,720,38}, 400, "+"+std::to_string(data.additionalGrams)+" g");
+    else view.Add(data.sizeAdvice == FarmContestSizeAdvice::ImproveQuality ? Label::ContestQualityNeeded :
+        data.staged ? Label::ContestPassedShort : Label::ContestLegacyShort, {48,550,720,38});
+    view.Metric(Label::ContestSizeScoreShort, {800,550,432,38}, 240, std::to_string(data.sizePoints)+" / 40");
+}
+}
+
+inline void BuildContestDetailView(View& view, const FarmContestPresentationSystem::Frame& frame) {
+    using namespace contestdetail;
+    const auto& data = frame.comparison;
+    const bool complete = frame.complete;
+    view.modal = true; view.contestDetail = true; view.contestFrame = frame;
+    view.Add(Label::ContestDetailTitle, {48,20,500,42});
+    view.Metric(Label::ContestEventDay, {680,20,220,42}, 128, std::to_string(data.day));
+    view.Metric(Label::ContestTargetShort, {944,20,288,42}, 166, data.staged ? std::to_string(data.target)+" pt" : "--");
+    constexpr std::array<Label,3> tabs{{Label::ContestTabResult,Label::ContestTabQuality,Label::ContestTabSize}};
+    for (std::size_t i=0; i<tabs.size(); ++i)
+        view.Add(tabs[i], kTabs[i], {Action::ContestTab,static_cast<int>(i)}, complete, static_cast<int>(frame.page)==static_cast<int>(i));
+    view.Add(Label::ContestExplanation, kExplanation, {Action::ContestExplanation}, complete, frame.explanation);
+    const auto verdict = !frame.verdictVisible ? Label::ContestJudging : !data.staged ? Label::ContestEntered :
         data.passed ? Label::StagePassed : Label::StageFailed;
-    view.Metric(verdict, {64,584,540,40}, 280,
-        frame.verdictVisible ? std::to_string(data.total)+" / 100" : "--");
-    if (frame.verdictVisible) {
-        if (!data.staged) view.Add(Label::StageLegacy, {688,584,544,40});
-        else if (data.sizeAdvice == FarmContestSizeAdvice::MoreSize)
-            view.Metric(Label::ContestMoreGrams, {688,584,544,40}, 350, "+"+std::to_string(data.additionalGrams)+" g");
-        else if (data.sizeAdvice == FarmContestSizeAdvice::ImproveQuality)
-            view.Add(Label::ContestImproveQuality, {688,584,544,40});
-        else view.Add(Label::ContestTargetMet, {688,584,544,40});
-        view.Add(QualityHintLabel(data.qualityAdvice.focus, true), {64,626,740,30});
-        if (data.staged && !data.passed)
-            view.Metric(Label::StageShortfall, {64,662,740,36}, 340, std::to_string(data.shortfall)+" pt");
+    view.Add(verdict, {48,174,540,46});
+    view.Metric(Label::ContestScoreShort, {680,174,552,46}, 210,
+        frame.totalReveal > 0 ? std::to_string(frame.displayedTotal)+" / 100" : "--");
+    switch (frame.page) {
+    case Page::Result: Summary(view,frame); break;
+    case Page::Quality: Quality(view,data); break;
+    case Page::Size: Size(view,data); break;
     }
-    view.Add(frame.verdictVisible ? Label::ContestDetailBack : Label::ContestReveal,
-        {888,654,344,46}, {frame.verdictVisible ? Action::ContestDetailClose : Action::ContestReveal});
+    if (frame.explanation) {
+        view.Add(Label::ContestRuleShort, {48,606,600,32});
+        view.Add(Label::ContestWeightRuleShort, {680,606,552,32});
+    }
+    view.Add(!complete ? Label::ContestReveal : frame.page==Page::Result ? Label::ContestDetailBack : Label::ContestSummaryBack,
+        kBack, {!complete ? Action::ContestReveal : frame.page==Page::Result ? Action::ContestDetailClose : Action::ContestTab,0});
 }
 }

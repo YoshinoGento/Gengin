@@ -12,13 +12,16 @@ struct AudioSettingsRect {
     }
 };
 inline constexpr AudioSettingsRect kAudioSettingsButton{{1068,44},{176,48}};
-inline constexpr AudioSettingsRect kAudioSettingsPanel{{320,208},{640,352}};
-inline constexpr AudioSettingsRect kAudioSettingsReset{{356,484},{176,48}};
-inline constexpr AudioSettingsRect kAudioSettingsBack{{780,484},{144,48}};
+inline constexpr std::size_t kAudioChannelCount = 3;
+inline constexpr std::size_t kContestAudioChannel = 2;
+inline constexpr AudioSettingsRect kAudioSettingsPanel{{320,208},{640,440}};
+inline constexpr AudioSettingsRect kAudioSettingsReset{{356,572},{176,48}};
+inline constexpr AudioSettingsRect kAudioSettingsBack{{780,572},{144,48}};
 inline constexpr float kAudioSliderX = 544, kAudioSliderWidth = 340;
-inline constexpr std::array<float,2> kAudioSliderY{310,398};
-inline constexpr std::array<AudioSettingsRect,2> kAudioSliderHits{{
+inline constexpr std::array<float,kAudioChannelCount> kAudioSliderY{310,398,486};
+inline constexpr std::array<AudioSettingsRect,kAudioChannelCount> kAudioSliderHits{{
     {{kAudioSliderX-16,kAudioSliderY[0]-24},{kAudioSliderWidth+32,48}},
-    {{kAudioSliderX-16,kAudioSliderY[1]-24},{kAudioSliderWidth+32,48}}
+    {{kAudioSliderX-16,kAudioSliderY[1]-24},{kAudioSliderWidth+32,48}},
+    {{kAudioSliderX-16,kAudioSliderY[2]-24},{kAudioSliderWidth+32,48}}
 }};
 }

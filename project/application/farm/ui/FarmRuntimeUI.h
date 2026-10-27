@@ -23,7 +23,8 @@ enum class Action {
     ContestPreview, SubmitContest, ContestResults, ContestDayReview, ContestDayPrepare, ContestDayResume, ChangePlayMode,
     ShopSelect, ShopQuantity, ShopReview, ShopConfirm, ShopCancel, ShopClose,
     HarvestDisplay, HarvestDisplaySelect, HarvestDisplayPage, StartSkip, StageGuide,
-    ContestDetail, ContestDetailClose, ContestReveal, ContestMissedContinue, ContestOutcome, SeasonRetry
+    ContestDetail, ContestDetailClose, ContestReveal, ContestMissedContinue, ContestOutcome, SeasonRetry, ContestOutcomeReveal,
+    ContestTab, ContestExplanation
 };
 struct Request { Action action = Action::None; int argument = 0; std::uint64_t inventoryGeneration = 0; };
 struct Item {
@@ -38,6 +39,7 @@ struct Item {
     bool darkInk = false;
     bool warning = false;
     HUDIcon icon = HUDIcon::None;
+    float opacity = 1;
 };
 [[nodiscard]] inline Rect IconCaptionRect(const Item& item) noexcept {
     const auto index = static_cast<std::size_t>(item.label);
@@ -48,6 +50,8 @@ struct Item {
 }
 struct QualityRadar {
     bool visible = false;
+    bool numberedAxes = true;
+    float opacity = 1;
     Vector2 offset{};
     float scale = 1;
     Vector4 color{1, .81f, .25f, 1};
@@ -99,6 +103,8 @@ struct View {
     bool seasonOutcome = false;
     bool outcomePositive = false;
     float outcomeReveal = 0;
+    float outcomeVerdictReveal = 1;
+    std::array<float, 3> outcomeRowReveal{{1,1,1}};
     std::array<float, 3> outcomePoints{};
     std::array<float, 3> outcomeTargets{};
     std::array<bool, 3> outcomePassed{};

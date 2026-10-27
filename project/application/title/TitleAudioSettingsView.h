@@ -15,8 +15,8 @@ private:
     void Label(std::size_t index, int row, Vector2 position, float width);
     void Percent(std::size_t index, int value, Vector2 position);
     SpriteCommon* common_ = nullptr;
-    std::array<Sprite,11> shapes_;
-    std::array<Sprite,7> labels_;
-    std::array<Sprite,8> digits_;
+    std::array<Sprite,5+kAudioChannelCount*3> shapes_;
+    std::array<Sprite,5+kAudioChannelCount> labels_;
+    std::array<Sprite,kAudioChannelCount*4> digits_;
 };
 }

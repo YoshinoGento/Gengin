@@ -35,6 +35,8 @@ InitializationTask FarmContestRenderer::InitializeIncrementally(Object3dCommon* 
 
 void FarmContestRenderer::Draw(const FarmContestPresentationSystem::Frame& frame) {
     if (!ready_ || !frame.comparison.valid) return;
+    camera_.SetTranslate({0,0,-FarmContestStageLayout::CameraDistance(frame.specimenReveal)});
+    camera_.Update();
     const auto& comparison = frame.comparison;
     const int crop = farm::ToCropSlot(comparison.quality.crop);
     if (crop < 0 || crop >= farm::kFarmCropTypeCount) return;
@@ -43,11 +45,12 @@ void FarmContestRenderer::Draw(const FarmContestPresentationSystem::Frame& frame
         object.SetColor(color); object.Update(&camera_,0); object.Draw();
     };
     draw(stage_[0],{0,0,4},{18,11,.1f},{.075f,.09f,.10f,1});
+    if (frame.page == FarmContestPresentationSystem::Page::Quality) return;
     const float largest = (std::max)({1.0f, comparison.quality.harvestSize.multiplier, comparison.referenceSize});
     for (int side=0; side<2; ++side) {
-        if (side==1 && !comparison.referenceAvailable) continue;
+        if (side==1 && (frame.page != FarmContestPresentationSystem::Page::Size || !comparison.referenceAvailable)) continue;
         const float multiplier = side==0 ? comparison.quality.harvestSize.multiplier : comparison.referenceSize;
-        const auto pose = FarmContestStageLayout::Specimen(comparison.quality.crop,multiplier,largest,side);
+        const auto pose = FarmContestStageLayout::Specimen(comparison.quality.crop,multiplier,largest,side,frame.page);
         draw(stage_[side+1],{pose.position.x,pose.position.y-.12f,0},{1.35f,.09f,.65f},side==0 ?
             Vector4{.55f,.42f,.19f,1} : Vector4{.19f,.44f,.46f,1});
         auto& body = crops_[side*2]; auto& leaves = crops_[side*2+1];

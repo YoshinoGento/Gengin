@@ -27,15 +27,23 @@ inline void BuildContestOutcomeView(View& view, const FarmContestOutcomeSystem::
         return;
     }
     view.seasonOutcome = true;
+    view.outcomeVerdictReveal = frame.verdictReveal;
+    view.outcomeRowReveal = frame.rowReveal;
+    const bool controlsReady = frame.controlsReveal >= 1;
     view.outcomePositive = frame.goals.back().status == FarmContestGoalStatus::Passed;
     view.Add(Label::OutcomeFinal, {80,48,1120,40});
+    view.items[view.count-1].opacity = frame.reveal;
     const bool missed = frame.season.events.back() == FarmContestEventStatus::Missed;
     const Label verdict = missed ? Label::OutcomeFinalMissed : view.outcomePositive ? Label::OutcomeFinalPassed :
         frame.goals.back().status == FarmContestGoalStatus::Failed ? Label::OutcomeFinalFailed : Label::OutcomeFinalLegacy;
     view.Add(verdict, {80,110,750,56});
-    if (frame.season.submitted > 0)
+    view.items[view.count-1].opacity = frame.verdictReveal;
+    if (frame.season.submitted > 0) {
         view.Metric(Label::OutcomeRank, {860,116,340,44}, 250, FarmContestRatingText(frame.season.rating));
+        view.items[view.count-1].opacity = frame.summaryReveal;
+    }
     for (std::size_t i = 0; i < results.size(); ++i) {
+        const auto firstItem = view.count;
         const float y = 218 + static_cast<float>(i)*86;
         const auto status = frame.season.events[i];
         view.Metric(Label::ContestEventDay, {80,y,224,36}, 150, std::to_string(FarmContestEntrySystem::kContestDays[i]));
@@ -46,19 +54,26 @@ inline void BuildContestOutcomeView(View& view, const FarmContestOutcomeSystem::
         view.Add(state, {316,y,224,36});
         view.Metric(Label::OutcomePoints, {540,y,420,36}, 220, submitted ?
             std::to_string(results[i].qualityPoints+results[i].sizePoints)+" / "+(goal.target ? std::to_string(goal.target) : "--") : "--");
-        view.Add(Label::ContestDetails, {980,y,220,38}, {Action::ContestDetail,static_cast<int>(i)}, submitted);
+        view.Add(Label::ContestDetails, {980,y,220,38}, {Action::ContestDetail,static_cast<int>(i)}, submitted && controlsReady);
+        for (std::size_t j = firstItem; j < view.count; ++j) view.items[j].opacity = frame.rowReveal[i];
         view.outcomePoints[i] = submitted ? static_cast<float>(results[i].qualityPoints+results[i].sizePoints)/100 : 0;
         view.outcomeTargets[i] = submitted ? static_cast<float>(goal.target)/100 : 0;
         view.outcomePassed[i] = goal.status == FarmContestGoalStatus::Passed;
     }
+    const auto firstSummaryItem = view.count;
     if (frame.season.submitted) {
         view.Metric(Label::ContestAggregate, {80,476,1120,32}, 620, std::to_string(frame.season.submitted)+" / "+
             std::to_string(frame.season.missed)+" / "+std::to_string(frame.season.totalPoints));
         view.Add(Label::OutcomeRankNote, {80,516,1120,32});
     } else view.Add(Label::OutcomeNoRank, {80,476,1120,32});
     view.Add(missed ? Label::OutcomeSubmitHint : Label::OutcomeReviewHint, {80,556,1120,32});
-    view.Add(Label::SeasonReview, {80,600,350,52}, {Action::FlowContinue});
-    view.Add(Label::ReturnTitle, {450,600,270,52}, {Action::ReturnTitle});
-    view.Add(Label::OutcomeRetry, {740,600,460,52}, {Action::SeasonRetry});
+    for (std::size_t i = firstSummaryItem; i < view.count; ++i) view.items[i].opacity = frame.summaryReveal;
+    if (controlsReady) {
+        view.Add(Label::SeasonReview, {80,600,350,52}, {Action::FlowContinue});
+        view.Add(Label::ReturnTitle, {450,600,270,52}, {Action::ReturnTitle});
+        view.Add(Label::OutcomeRetry, {740,600,460,52}, {Action::SeasonRetry});
+    } else {
+        view.Add(Label::ContestReveal, {740,600,460,52}, {Action::ContestOutcomeReveal});
+    }
 }
 }

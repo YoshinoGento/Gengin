@@ -61,16 +61,18 @@ void TitleAudioSettingsView::Draw(const AudioSettingsFrame& frame) {
     if (!frame.open) return;
     Box(1,{0,0},{kWidth,kHeight},{0,0,0,.55f});
     Box(2,kAudioSettingsPanel.position,kAudioSettingsPanel.size,panel); Label(1,0,{356,230},280);
-    Label(2,1,{356,290},176); Label(3,2,{356,378},176);
-    for (std::size_t i=0; i<2; ++i) {
+    constexpr std::array<int,kAudioChannelCount> labelRows{1,2,8};
+    for (std::size_t i=0; i<kAudioChannelCount; ++i) {
         const float y = kAudioSliderY[i], width = kAudioSliderWidth*frame.volume[i]*.01f;
+        Label(2+i,labelRows[i],{356,y-20},176);
         Box(3+i*3,{kAudioSliderX,y-4},{kAudioSliderWidth,8},control);
         if (width>0) Box(4+i*3,{kAudioSliderX,y-4},{width,8},accent);
         Box(5+i*3,{kAudioSliderX+width-8,y-16},{16,32},frame.selected==static_cast<int>(i) ? Vector4{1,.9f,.48f,1}:accent);
         Percent(i*4,frame.volume[i],{800,y+26});
     }
-    Box(9,kAudioSettingsReset.position,kAudioSettingsReset.size,control); Label(4,6,{376,488},140);
-    Box(10,kAudioSettingsBack.position,kAudioSettingsBack.size,control); Label(5,3,{816,488},92);
-    if (frame.saveFailed) Label(6,5,{660,230},280);
+    constexpr auto buttons = 3+kAudioChannelCount*3, labels = 2+kAudioChannelCount;
+    Box(buttons,kAudioSettingsReset.position,kAudioSettingsReset.size,control); Label(labels,6,{376,576},140);
+    Box(buttons+1,kAudioSettingsBack.position,kAudioSettingsBack.size,control); Label(labels+1,3,{816,576},92);
+    if (frame.saveFailed) Label(labels+2,5,{660,230},280);
 }
 }

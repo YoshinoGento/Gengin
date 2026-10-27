@@ -1,5 +1,8 @@
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmContestDaySystem.h"
+#include "farm/system/FarmContestOutcomeSystem.h"
+#include "farm/system/FarmContestPresentationSystem.h"
+#include "farm/system/FarmDocumentSystem.h"
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmIrrigationSystem.h"
 #include "farm/system/FarmProgressionSystem.h"
@@ -7,9 +10,12 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 void Require(bool condition, const char* message) {
@@ -67,12 +73,21 @@ struct Outcome {
 // Scripted inputs only. Never assign growth, moisture, date, quality, size or inventory directly.
 class SeasonRun {
 public:
-    SeasonRun(farm::CropType crop, Care care, float speed, bool staged=false, int sampleSeconds=0)
+    SeasonRun(farm::CropType crop, Care care, float speed, bool staged=false, int sampleSeconds=0,
+        const std::filesystem::path& exportDirectory={})
         : crop_(crop), care_(care), staged_(staged), sampleSeconds_(sampleSeconds) {
         Require(grid_.Initialize(5, 4), "grid init");
         economy_.Initialize(); tools_.Initialize(); growth_.Initialize(); water_.Initialize(); date_.Initialize();
         outcome_.minimumMoney = economy_.GetMoney();
         progression_.Initialize({}, FarmProgressionMode::ContestSeason);
+        if (!exportDirectory.empty()) {
+            Require(!std::filesystem::exists(exportDirectory), "review destination already exists");
+            reviewLabel_ = exportDirectory.parent_path().parent_path().filename().string();
+            selection_.Initialize();
+            Require(documents_.Initialize(exportDirectory.string(), grid_, economy_, selection_, &date_, &progression_),
+                "review documents init");
+            exportReview_ = true;
+        }
         if (staged_) {
             access_.Bind(date_,progression_.StagePolicy());
             economy_.BindStageAccess(access_); tools_.BindStageAccess(access_);
@@ -91,6 +106,8 @@ public:
         Apply(FarmTool::Hoe);
         if (ControlsIntake()) SetIntake(false);
     }
+    SeasonRun(const SeasonRun&) = delete;
+    SeasonRun& operator=(const SeasonRun&) = delete;
 
     Outcome Run(bool skipLast) {
         for (int period = 0; period < 3; ++period) {
@@ -128,12 +145,17 @@ public:
                 Require(progression_.IsCleared(), "deadline did not end season");
                 break;
             }
+            if (exportReview_ && period == 2) {
+                Require(documents_.SaveAs(reviewLabel_+" / Judging Ready",grid_,economy_,selection_), "save pending judgement");
+                readyDocumentId_ = documents_.GetActiveDocumentId();
+            }
             const int moneyBefore = economy_.GetMoney();
             const auto generation = economy_.GetInventoryGeneration();
             Require(!tools_.CommitContestSubmission(economy_, contestDay, candidate, generation - 1), "stale submit accepted");
             Require(tools_.CommitContestSubmission(economy_, contestDay, candidate, generation), "submit");
             const auto& entry=economy_.GetContestResults()[period];
             outcome_.eventPoints[period]=entry.qualityPoints+entry.sizePoints;
+            VerifyPresentation(period);
             Require(!tools_.CommitContestSubmission(economy_, contestDay, candidate, economy_.GetInventoryGeneration()), "duplicate submit");
             Require(economy_.GetTotalCropCount() == 0 && economy_.GetMoney() == moneyBefore, "submission ledger");
             Observe();
@@ -159,9 +181,75 @@ public:
         }
         Require(outcome_.qualityPoints + outcome_.sizePoints == outcome_.points, "score breakdown");
         Require(outcome_.minimumMoney >= 0 && outcome_.minimumMoney <= outcome_.money, "minimum funds");
+        VerifyEnding(skipLast);
+        if (exportReview_) ExportAndReload(skipLast);
         return outcome_;
     }
 private:
+    void VerifyPresentation(int index) const {
+        const auto& entry=economy_.GetContestResults()[index];
+        const auto comparison=FarmContestComparisonSystem::Build(index,date_.GetDay(),economy_.GetContestResults(),
+            staged_,tools_.MaximumHarvestSize(entry.harvest.quality.crop));
+        Require(comparison.valid && comparison.total==entry.qualityPoints+entry.sizePoints, "grown score/display mismatch");
+        Require(comparison.quality.score==entry.harvest.quality.score &&
+            comparison.quality.harvestSize.multiplier==entry.harvest.quality.harvestSize.multiplier,
+            "presentation changed grown crop");
+        if (staged_) Require(comparison.passed==(comparison.total>=kFarmStageRulesV1[index].passingPoints),
+            "grown verdict mismatch");
+        using Cue=FarmContestPresentationSystem::Cue;
+        const Cue expected=!staged_ ? Cue::Recorded : comparison.passed ? Cue::Passed : Cue::Failed;
+        FarmContestPresentationSystem presentation;
+        presentation.Begin(comparison,false);
+        int assessments=0, verdicts=0;
+        for (int tick=0;tick<180;++tick) {
+            presentation.Update(kTickSeconds);
+            const auto cue=presentation.ConsumeCue();
+            if (cue==Cue::Assess) ++assessments;
+            else if (cue!=Cue::None) { Require(cue==expected,"wrong grown verdict sound"); ++verdicts; }
+            Require(presentation.ConsumeCue()==Cue::None,"duplicate grown sound");
+        }
+        Require(assessments==1 && verdicts==1,"grown judging cue sequence");
+        const auto frame=presentation.GetFrame();
+        Require(frame.verdictVisible && frame.adviceReveal==1 && frame.displayedTotal==comparison.total,
+            "grown judging did not complete");
+        presentation.Close();
+        presentation.Begin(comparison,true);
+        presentation.Update(kTickSeconds);
+        Require(presentation.GetFrame().adviceReveal==1 && presentation.ConsumeCue()==Cue::None,
+            "grown detail replay repeated judging");
+    }
+    void VerifyEnding(bool skipLast) const {
+        FarmContestOutcomeSystem ending;
+        ending.Observe(date_.GetDay(),economy_.GetContestResults(),true,staged_);
+        Require(ending.GetFrame().season.finalized && !ending.GetFrame().missedDay,
+            "grown ending blocked by missed popup");
+        Require(ending.ConsumeOpening() && !ending.ConsumeOpening(),"grown ending duplicate cue");
+        for (int tick=0;tick<120;++tick) {
+            ending.Update(kTickSeconds);
+            ending.Observe(date_.GetDay(),economy_.GetContestResults(),true,staged_);
+        }
+        const auto& frame=ending.GetFrame();
+        Require(frame.controlsReveal==1 && frame.season.totalPoints==outcome_.points,"grown ending total/timeline");
+        Require((frame.season.events.back()==FarmContestEventStatus::Missed)==skipLast,"grown missing-entry state");
+        if (staged_ && !skipLast) Require((frame.goals.back().status==FarmContestGoalStatus::Passed)==
+            (outcome_.eventPoints.back()>=kFarmStageRulesV1.back().passingPoints),"grown final verdict");
+    }
+    void ExportAndReload(bool skipLast) {
+        const int finalDay=date_.GetDay();
+        Require(documents_.SaveAs(reviewLabel_+" / Season Result",grid_,economy_,selection_),"save grown result");
+        const auto finalId=documents_.GetActiveDocumentId();
+        Require(documents_.Load(finalId,grid_,economy_,selection_),"reload grown result");
+        Require(date_.GetDay()==finalDay && progression_.StagePolicy().enabled,"result reload mode/day");
+        const auto summary=FarmContestSeasonSystem::Evaluate(date_.GetDay(),economy_.GetContestResults());
+        Require(summary.finalized && summary.totalPoints==outcome_.points,"result reload score");
+        for (int index=0;index<(skipLast ? 2 : 3);++index) VerifyPresentation(index);
+        if (!readyDocumentId_.empty()) {
+            Require(documents_.Load(readyDocumentId_,grid_,economy_,selection_),"reload pending judgement");
+            Require(date_.GetDay()==30 && !progression_.IsCleared(),"pending reload ended season");
+            Require(economy_.GetContestResults().back().contestDay==0 && economy_.GetTotalCropCount()==1,
+                "pending reload lost entry");
+        }
+    }
     void RaiseToIdeal() {
         for (int height = 0; height < IdealHeight(crop_); ++height)
             Require(tools_.RaiseSelectedTile(grid_), "ideal height command");
@@ -311,13 +399,38 @@ private:
     FarmContestDaySystem notice_;
     FarmProgressionSystem progression_;
     FarmStageAccessSystem access_;
+    FarmCropSelectionSystem selection_;
+    FarmDocumentSystem documents_;
+    bool exportReview_ = false;
+    std::string reviewLabel_;
+    std::string readyDocumentId_;
     Outcome outcome_;
     int spent_ = 0, earned_ = 0, ticks_ = 0;
 };
+
+void ExportReview() {
+    const auto root=std::filesystem::path("generated/codex_checks") / ("contest_cultivated_"+
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    Require(std::filesystem::create_directories(root),"review root collision");
+    constexpr std::array<const char*,3> names{{"01_passed","02_failed","03_missed"}};
+    for (std::size_t i=0;i<names.size();++i) {
+        SeasonRun run(farm::CropType::Carrot,i==1 ? Care::Canal : Care::IntakeOneSecond,1,true,2,
+            root/names[i]/"Settings/farm");
+        const auto result=run.Run(i==2);
+        const int finalTarget=kFarmStageRulesV1.back().passingPoints;
+        if (i==0) Require(result.eventPoints.back()>=finalTarget,"passed review is not passed");
+        if (i==1) Require(result.eventPoints.back()<finalTarget,"failed review is not failed");
+        std::cout << names[i] << ": " << result.eventPoints[0] << ',' << result.eventPoints[1] << ','
+            << (i==2 ? "not submitted" : std::to_string(result.eventPoints[2])) << " points; money=" << result.money << '\n';
+    }
+    std::cout << "PASS: grown review saves and production-loader roundtrip\nREVIEW_ROOT=" << root.string() << '\n';
+}
 }
 
-int main() {
+int main(int argc,char* argv[]) {
     try {
+        if (argc==2 && std::string_view(argv[1])=="--export-review") { ExportReview(); return 0; }
+        Require(argc==1,"usage: farm_season_balance_test [--export-review]");
         int cases = 0;
         std::cout << "crop,care,speed,end,money,points,rating,watering,harvests,growing_seconds,excess_seconds,running_seconds,"
             "intake_changes,observations,low_dry_seconds,growing_real_seconds,idle_real_seconds,irrigation_received,"

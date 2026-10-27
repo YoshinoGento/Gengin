@@ -13,7 +13,7 @@ struct AudioSettingsInput {
     bool up = false, down = false, left = false, right = false;
 };
 struct AudioSettingsFrame {
-    std::array<int,2> volume{kDefaultTitleVolume,kDefaultTitleVolume};
+    std::array<int,kAudioChannelCount> volume{kDefaultTitleVolume,kDefaultTitleVolume,kDefaultTitleVolume};
     bool open = false, saveFailed = false;
     int selected = 0;
 };
@@ -24,6 +24,7 @@ public:
     bool Update(const AudioSettingsInput& input);
     bool Save();
     [[nodiscard]] const AudioSettingsFrame& GetFrame() const noexcept { return frame_; }
+    [[nodiscard]] int GetContestVolume() const noexcept { return frame_.volume[kContestAudioChannel]; }
     [[nodiscard]] AudioMix Apply(const AudioMix& mix) const noexcept;
     [[nodiscard]] const std::optional<Vector2>& GetWaterClick() const noexcept { return waterClick_; }
 private:

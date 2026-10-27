@@ -141,6 +141,9 @@ void RuntimeUI::IconQuad(HUDIcon icon, Rect rect, Vector4 color) {
     sprite.SetColor(color); sprite.Update(); sprite.Draw();
 }
 void RuntimeUI::DrawRadar(const QualityRadar& radar) {
+    if (radar.opacity <= 0) return;
+    const float savedOpacity = opacity_;
+    opacity_ *= std::clamp(radar.opacity, 0.0f, 1.0f);
     const auto transform = [&](Vector2 point) {
         return Vector2{QualityRadar::center.x + radar.offset.x + (point.x - QualityRadar::center.x)*radar.scale,
             QualityRadar::center.y + radar.offset.y + (point.y - QualityRadar::center.y)*radar.scale};
@@ -153,6 +156,7 @@ void RuntimeUI::DrawRadar(const QualityRadar& radar) {
         auto& sprite = radarLines_[radarLineCount_++];
         sprite.SetAnchorPoint({0,0.5f}); sprite.SetPosition(a);
         sprite.SetRotation(std::atan2(dy,dx)); sprite.SetSize({length,thickness});
+        color.w *= opacity_;
         sprite.SetColor(color); sprite.Update(); sprite.Draw();
     };
     const Vector4 grid{0.35f,0.43f,0.46f,1}, gold = radar.color;
@@ -169,11 +173,12 @@ void RuntimeUI::DrawRadar(const QualityRadar& radar) {
             line({point.x-4,point.y}, {point.x+4,point.y}, 8, gold);
         }
     }
-    for (std::size_t i=0; i<QualityRadar::axisLabels.size(); ++i) {
+    for (std::size_t i=0; radar.numberedAxes && i<QualityRadar::axisLabels.size(); ++i) {
         const auto& label = QualityRadar::axisLabels[i];
         const auto position = transform({label.x, label.y});
         ValueText(std::to_string(i+1), position, position.x+label.width);
     }
+    opacity_ = savedOpacity;
 }
 void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     if (!ready_) return;
@@ -196,25 +201,37 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         Panel(SeedShopLayout::footer, {0.035f, 0.055f, 0.06f, 0.97f});
     } else if (view.contestDetail) {
         Panel({0,0,1280,78},{.025f,.03f,.035f,1});
-        Panel({48,124,1184,2},{.28f,.36f,.36f,1});
-        Panel({640,138,2,388},{.28f,.36f,.36f,1});
-        Panel({0,570,1280,150},{.025f,.03f,.035f,1});
-        Panel({48,570,1184*view.contestFrame.reveal,3},view.contestFrame.comparison.passed ?
-            Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1});
+        Panel({0,648,1280,72},{.025f,.03f,.035f,1});
+        const auto& frame = view.contestFrame;
+        const auto& result = frame.comparison;
+        const Vector4 neutral{.55f,.72f,.78f,1};
+        const Vector4 finalColor = !result.staged ? neutral : result.passed ?
+            Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
+        const float blend = frame.verdictReveal;
+        const Vector4 accent{neutral.x+(finalColor.x-neutral.x)*blend,
+            neutral.y+(finalColor.y-neutral.y)*blend, neutral.z+(finalColor.z-neutral.z)*blend,1};
+        Panel({680,224,552,4},{.20f,.25f,.24f,1});
+        Panel({680,224,552*frame.totalReveal*result.total*.01f,4},accent);
+        if (result.staged) Panel({680+552*result.target*.01f,220,2,12},{.85f,.89f,.87f,1});
     } else if (view.contestOutcome) {
         const float reveal = std::clamp(view.outcomeReveal, 0.0f, 1.0f);
-        const Vector4 accent = view.outcomePositive ? Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
+        const Vector4 finalAccent = view.outcomePositive ? Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
+        const float verdict = std::clamp(view.outcomeVerdictReveal, 0.0f, 1.0f);
+        const Vector4 accent{.55f+(finalAccent.x-.55f)*verdict,
+            .72f+(finalAccent.y-.72f)*verdict, .78f+(finalAccent.z-.78f)*verdict, 1};
         Panel({0,0,1280,720},{.015f,.022f,.02f,.82f+.14f*reveal});
         Panel({80,184,1120*reveal,3},accent);
         if (view.seasonOutcome) {
             for (std::size_t i=0; i<view.outcomePoints.size(); ++i) {
                 const float y=270+static_cast<float>(i)*86;
-                Panel({80,y,1120,3},{.2f,.25f,.24f,1});
+                const float rowReveal=std::clamp(view.outcomeRowReveal[i],0.0f,1.0f);
+                Panel({80,y,1120,3},{.2f,.25f,.24f,rowReveal});
                 const Vector4 rowColor = view.outcomeTargets[i] <= 0 ? Vector4{.55f,.72f,.78f,1} :
                     view.outcomePassed[i] ? Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
-                Panel({80,y,1120*std::clamp(view.outcomePoints[i],0.0f,1.0f)*reveal,3},rowColor);
+                Panel({80,y,1120*std::clamp(view.outcomePoints[i],0.0f,1.0f)*rowReveal,3},
+                    {rowColor.x,rowColor.y,rowColor.z,rowReveal});
                 if (view.outcomeTargets[i]>0)
-                    Panel({80+1120*std::clamp(view.outcomeTargets[i],0.0f,1.0f),y-4,2,11},{.85f,.89f,.87f,1});
+                    Panel({80+1120*std::clamp(view.outcomeTargets[i],0.0f,1.0f),y-4,2,11},{.85f,.89f,.87f,rowReveal});
             }
         }
     } else if (view.modal) {
@@ -244,8 +261,11 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             figure.SetSize({210, 280}); figure.SetColor({1,1,1,1}); figure.Update(); figure.Draw();
         }
     }
+    const float viewOpacity = opacity_;
     for (std::size_t i = 0; i < (std::min)(view.count, view.items.size()); ++i) {
         const auto& item = view.items[i];
+        opacity_ = viewOpacity * std::clamp(item.opacity, 0.0f, 1.0f);
+        if (opacity_ <= 0) continue;
         if (item.request.action == Action::HarvestDisplaySelect) continue;
         // The physical packet is the button. Do not paint a menu rectangle over it.
         if (item.request.action == Action::ShopSelect && item.rect.y < 544) {
@@ -302,6 +322,7 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         if (!item.value.empty()) ValueText(item.value, {item.rect.x + item.valueOffset, item.rect.y + 1}, item.rect.x + item.rect.width,
             item.darkInk ? darkInk : Vector4{1.0f, 0.87f, 0.50f, 1});
     }
+    opacity_ = viewOpacity;
     const Item* caption = tooltip ? tooltip : selectedTool;
     if (caption) {
         const auto index = static_cast<std::size_t>(caption->label);

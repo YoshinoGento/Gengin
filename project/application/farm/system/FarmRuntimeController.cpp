@@ -20,6 +20,7 @@
 #include "farm/ui/FarmCameraView.h"
 #include "farm/ui/FarmQualityView.h"
 #include "farm/ui/FarmContestDetailView.h"
+#include "title/TitleAudioSettingsSystem.h"
 #include "farm/ui/FarmContestOutcomeView.h"
 #include "farm/ui/FarmTerrainView.h"
 #include "farm/ui/FarmSeedShopView.h"
@@ -65,6 +66,9 @@ void FarmRuntimeController::OpenContestDetail(const FarmRuntimeContext& s, int i
         s.farmProgressionSystem.StagePolicy().enabled, s.farmToolActionSystem.MaximumHarvestSize(crop));
     if (!comparison.valid) { status_ = Label::ContestInvalid; return; }
     contestPresentation_.Begin(comparison, replay);
+    title::TitleAudioSettingsSystem settings;
+    settings.Initialize();
+    contestAudio_.Begin(settings.GetContestVolume());
     shop_.Close(); open_ = true; page_ = kContestResultsPage; focusedItem_ = -1;
 }
 
@@ -82,6 +86,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
     if (contestPresentation_.Active()) {
         open_ = true;
         farmui::BuildContestDetailView(view_, contestPresentation_.GetFrame());
+        if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
     const auto& outcome = contestOutcome_.GetFrame();
@@ -445,7 +450,12 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     };
     bool success = false;
     switch (request.action) {
-    case Action::ContestReveal: contestPresentation_.Reveal(); return;
+    case Action::ContestReveal: contestPresentation_.Reveal(); focusedItem_ = -1; return;
+    case Action::ContestTab:
+        if (contestPresentation_.SelectPage(request.argument)) focusedItem_ = -1;
+        return;
+    case Action::ContestExplanation: contestPresentation_.ToggleExplanation(); return;
+    case Action::ContestOutcomeReveal: contestOutcome_.Reveal(); focusedItem_ = -1; return;
     case Action::ContestDetailClose:
         contestPresentation_.Close();
         page_ = contestOutcome_.GetFrame().season.finalized ? kContestOutcomePage : kContestResultsPage;
@@ -1034,6 +1044,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     if (!ready_) return false;
     if (!s.host.IsViewportFocused()) {
         arrivalAudio_.Update(StartFrame(),flow_.GetPhase()==FarmPlayFlow::Phase::Starting,false);
+        contestAudio_.Update(contestPresentation_.ConsumeCue(),contestPresentation_.Active(),false);
         s.farmIrrigationPreviewSystem.EndTerrainStroke();
         frameCaptured_ = true; return true;
     }
@@ -1046,19 +1057,47 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         const auto* framework = Framework::GetInstance();
         const auto* clock = framework ? framework->GetFrameClock() : nullptr;
         contestPresentation_.Update(clock ? clock->GetRealDeltaSeconds() : 0);
-        if (click && hit.action != Action::None) Execute(s, hit);
-        else if (input.TriggerKey(InputKey::Enter) || input.TriggerKey(InputKey::Space) ||
-            input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::A) ||
-            input.TriggerGamepadButton(InputGamepadButton::B)) {
-            Execute(s, {view_.contestFrame.verdictVisible ? Action::ContestDetailClose : Action::ContestReveal});
+        const bool accept = input.TriggerKey(InputKey::Enter) || input.TriggerKey(InputKey::Space) ||
+            input.TriggerGamepadButton(InputGamepadButton::A);
+        const bool back = input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::B);
+        // Use the displayed snapshot so a skip never activates newly enabled navigation.
+        if (click && hit.action != Action::None) { Execute(s, hit); focusedItem_ = -1; }
+        else if (!view_.contestFrame.complete) {
+            if (accept || back) Execute(s, {Action::ContestReveal});
+        } else if (back) {
+            if (!contestPresentation_.Back()) Execute(s, {Action::ContestDetailClose});
+            focusedItem_ = -1;
+        } else {
+            const int step = (input.TriggerKey(InputKey::ArrowDown) || input.TriggerKey(InputKey::ArrowRight) ||
+                input.TriggerGamepadButton(InputGamepadButton::DPadDown) || input.TriggerGamepadButton(InputGamepadButton::DPadRight)) ? 1 :
+                (input.TriggerKey(InputKey::ArrowUp) || input.TriggerKey(InputKey::ArrowLeft) ||
+                input.TriggerGamepadButton(InputGamepadButton::DPadUp) || input.TriggerGamepadButton(InputGamepadButton::DPadLeft)) ? -1 : 0;
+            if (step) focusedItem_ = view_.NextActionable(focusedItem_, step);
+            if (accept) {
+                if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count))
+                    Execute(s, view_.items[focusedItem_].request);
+                else if (!contestPresentation_.Back()) Execute(s, {Action::ContestDetailClose});
+            }
         }
+        contestAudio_.Update(contestPresentation_.ConsumeCue(),contestPresentation_.Active(),true);
         BuildView(s); frameCaptured_ = true; return true;
     }
     if (view_.contestOutcome) {
         const auto* framework = Framework::GetInstance();
         const auto* clock = framework ? framework->GetFrameClock() : nullptr;
+        const bool opening = contestOutcome_.ConsumeOpening();
+        if (opening) {
+            title::TitleAudioSettingsSystem settings;
+            settings.Initialize();
+            contestAudio_.Begin(settings.GetContestVolume());
+        }
+        // Input uses the displayed snapshot: a skip cannot activate a newly revealed retry button.
+        const bool revealing = view_.seasonOutcome && contestOutcome_.GetFrame().controlsReveal < 1;
         contestOutcome_.Update(clock ? clock->GetRealDeltaSeconds() : 0);
-        if (click && hit.action != Action::None) { Execute(s, hit); focusedItem_ = -1; }
+        if (revealing && (input.TriggerKey(InputKey::Enter) || input.TriggerKey(InputKey::Space) ||
+            input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::A) ||
+            input.TriggerGamepadButton(InputGamepadButton::B))) Execute(s, {Action::ContestOutcomeReveal});
+        else if (click && hit.action != Action::None) { Execute(s, hit); focusedItem_ = -1; }
         else if (input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::B)) {
             if (pending_ == Action::SeasonRetry) Execute(s, {Action::Cancel});
         } else {
@@ -1071,8 +1110,12 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
                 (input.TriggerKey(InputKey::Enter) || input.TriggerGamepadButton(InputGamepadButton::A)))
                 Execute(s, view_.items[focusedItem_].request);
         }
-        BuildView(s); frameCaptured_ = true; return true;
+        BuildView(s);
+        contestAudio_.Update(opening ? FarmContestPresentationSystem::Cue::Recorded : FarmContestPresentationSystem::Cue::None,
+            view_.contestOutcome, true);
+        frameCaptured_ = true; return true;
     }
+    contestAudio_.Update(contestPresentation_.ConsumeCue(),false,true);
     if (flow_.GetPhase() == FarmPlayFlow::Phase::Starting) {
         const bool held = input.PushKey(InputKey::Enter) || input.PushKey(InputKey::Space) ||
             input.PushKey(InputKey::Escape) || input.PushMouseButton(InputMouseButton::Left) ||
