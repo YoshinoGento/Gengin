@@ -31,6 +31,9 @@ struct FarmDocumentEntry {
 // Owns Farm document persistence and validation. UI code only requests operations.
 class FarmDocumentSystem final {
 public:
+    // Read-only extraction: never selects a document or writes the player's catalog.
+    static bool ReadExhibitionResults(const std::string& path,
+        FarmEconomySystem::ContestResults& results, int& day);
 	bool Initialize(
 		const std::string& directoryPath, farm::FarmGrid& grid,
 		FarmEconomySystem& economySystem,

@@ -1,0 +1,27 @@
+水路農業 / ゲームオーバー・審査演出 展示版
+
+畑・水路・作物・簡易プレイヤー・導入用の草と水滴はプロジェクト内の形状生成コードを使用。
+学校配布の人物モデル・アニメーション、旧サンプルモデル・画像は同梱していません。
+種袋・展示画像・背景の制作には画像生成AIによる制作・調整を含みます。
+コードや素材生成にはAIの支援を使用しています。他作品の画像・ロゴは転用していません。
+作物アイコンはゲーム内の作物モデル、種アイコンは既存の種袋画像から作成しています。
+
+文字: Noto Sans JP / Noto Serif JP (SIL Open Font License 1.1)。
+Noto Sans JPは実行時の文字生成に必要なため同梱。
+Noto Serif JPは生成済みタイトル画像のみ使用し、ライセンスを保持。
+詳細: Resources/fonts/OFL.txt、NotoSerifJP-OFL.txt、Resources/title/ASSET_CREDITS.txt。
+
+朝昼夕夜の環境音: 効果音ラボ https://soundeffect-lab.info/
+水音: On-Jin ～音人～ https://on-jin.com/
+ゲームへの組込み用途のみ。音源単体の再配布・無断利用を禁止します。
+音源名・加工・取得元・利用条件URL: Resources/title/audio/AUDIO_CREDITS.txt。
+開始演出の朝の環境音は上記音源の一部を使用しています。
+開始時の水滴音と画面遷移音はプロジェクト内の音声合成で生成。
+詳細: Resources/farm/arrival/CREDITS.txt、Resources/transition/audio/AUDIO_CREDITS.txt。
+審査音もプロジェクト内で合成。Resources/farm/contest/audio/manifest.jsonに生成情報があります。
+
+DirectXTex / Dear ImGui / nlohmann JSON: MIT。
+Assimp 5.3.0: 公式ソースからRelease用にビルド、BSD-3-Clauseおよび関連個別条件。
+DirectX Shader Compiler 1.8.2502: 公式配布のx64 DLL。
+ライセンス本文・出典・ハッシュはLicensesにあります。
+授業由来のエンジン基盤を使用しています。配布モデルは除外しています。

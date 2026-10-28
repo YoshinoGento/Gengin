@@ -110,7 +110,7 @@ labels.extend([
     ["HarvestLegacyNotice", "旧記録の個別品質・サイズは不明です"],
     ["HarvestPageNumber", "ページ"],
 ])
-columns = 5
+columns = 6
 labels.extend([
     ["HarvestProtection", "売却保護"],
     ["HarvestProtect", "保護する"],
@@ -345,6 +345,14 @@ labels.extend([
     ["ContestMoreShort", "今の品質なら入賞まで"],
     ["ContestRuleShort", "品質６０点＋大きさ４０点で採点"],
     ["ContestWeightRuleShort", "重さはゲーム内の換算値です"],
+])
+labels.extend([
+    ["ExhibitionTitle", "展示：品評会"], ["ExhibitionEntry", "審査体験（展示）"],
+    ["ExhibitionGoal", "３０日目の大会で、育てた野菜を審査"],
+    ["ExhibitionRecorded", "育成済みの記録を使った展示です"],
+    ["ExhibitionWatch", "審査を見る"], ["ExhibitionAgain", "もう一度見る"],
+    ["ExhibitionHome", "展示メニューへ"],
+    ["ExhibitionMissing", "展示データを読み込めません"],
 ])
 ascii_y = ((len(labels) + columns - 1) // columns) * cell_h
 height = ascii_y + 128

@@ -995,6 +995,29 @@ void FarmDocumentSystem::BeginUnsavedSession() {
 	SetStatus(FarmDocumentStatus::Modified, "New unsaved farm; the previous season is archived.");
 }
 
+bool FarmDocumentSystem::ReadExhibitionResults(const std::string& path,
+    FarmEconomySystem::ContestResults& results, int& day) {
+    std::error_code errorCode;
+    constexpr std::uintmax_t kMaximumBytes = 1024 * 1024;
+    const auto bytes = std::filesystem::file_size(path, errorCode);
+    if (errorCode || bytes > kMaximumBytes) return false;
+    nlohmann::json document;
+    if (!JsonFile::Load(path, document) || !document.is_object() ||
+        !document.contains("schemaVersion") || document["schemaVersion"] != 18 ||
+        !document.contains("playMode") || document["playMode"] != "ContestSeason" ||
+        !document.contains("stagedUnlocks") || document["stagedUnlocks"] != true) return false;
+    FarmEconomySystem::Snapshot economy;
+    FarmCropSelectionSystem::Snapshot selection;
+    FarmDateSystem::Snapshot date;
+    std::string error;
+    if (!ParsePersistentState(document, economy, selection, error) ||
+        !ParseDate(document, date, economy) ||
+        !FarmContestSeasonSystem::Evaluate(date.day, economy.contestResults).finalized) return false;
+    results = economy.contestResults;
+    day = date.day;
+    return true;
+}
+
 bool FarmDocumentSystem::Load(
 	const std::string& documentId, farm::FarmGrid& grid,
 	FarmEconomySystem& economySystem,

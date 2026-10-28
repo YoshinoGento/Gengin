@@ -22,6 +22,7 @@
 #include "farm/ui/FarmContestDetailView.h"
 #include "title/TitleAudioSettingsSystem.h"
 #include "farm/ui/FarmContestOutcomeView.h"
+#include "farm/ui/FarmExhibitionView.h"
 #include "farm/ui/FarmTerrainView.h"
 #include "farm/ui/FarmSeedShopView.h"
 #include "farm/ui/FarmHarvestDisplayView.h"
@@ -75,6 +76,11 @@ void FarmRuntimeController::OpenContestDetail(const FarmRuntimeContext& s, int i
 void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
     view_ = {};
     contestNotice_ = false;
+    if (exhibition_.Active()) {
+        farmui::BuildExhibitionView(view_, exhibition_);
+        if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
+        return;
+    }
     contestOutcome_.Observe(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
         s.farmProgressionSystem.IsContestSeason(), s.farmProgressionSystem.StagePolicy().enabled);
     const auto previousPhase = flow_.GetPhase();
@@ -120,6 +126,8 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 FarmContestGoalSystem::Evaluate(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
                     s.farmProgressionSystem.StagePolicy().enabled));
         else farmui::BuildPlayFlowView(view_, flow_.GetPhase(), s.host.BuildFarmHUDViewData(), s.farmProgressionSystem.StagePolicy().enabled);
+        if (flow_.GetPhase() == FarmPlayFlow::Phase::Briefing)
+            view_.Add(Label::ExhibitionEntry, {40,428,440,52}, {Action::ExhibitionOpen});
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
@@ -450,6 +458,8 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     };
     bool success = false;
     switch (request.action) {
+    case Action::ExhibitionOpen:
+        exhibition_.Open(); focusedItem_ = -1; return;
     case Action::ContestReveal: contestPresentation_.Reveal(); focusedItem_ = -1; return;
     case Action::ContestTab:
         if (contestPresentation_.SelectPage(request.argument)) focusedItem_ = -1;
@@ -1042,6 +1052,7 @@ void FarmRuntimeController::OpenLayoutLibrary(const FarmRuntimeContext& s) {
 bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& input) {
     frameCaptured_ = false;
     if (!ready_) return false;
+    if (exhibition_.Active()) return UpdateExhibition(s, input);
     if (!s.host.IsViewportFocused()) {
         arrivalAudio_.Update(StartFrame(),flow_.GetPhase()==FarmPlayFlow::Phase::Starting,false);
         contestAudio_.Update(contestPresentation_.ConsumeCue(),contestPresentation_.Active(),false);

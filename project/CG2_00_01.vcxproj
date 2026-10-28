@@ -195,6 +195,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\ui\FarmHUD.cpp" />
     <ClCompile Include="application\farm\ui\FarmRuntimeUI.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeController.cpp" />
+    <ClCompile Include="application\farm\system\FarmRuntimeExhibition.cpp" />
+    <ClCompile Include="application\farm\system\FarmExhibitionSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmLayoutSystem.cpp" />
     <ClCompile Include="application\farm\ui\FarmRecordDialog.cpp" />
     <ClCompile Include="application\level\LevelLoader.cpp" />
@@ -560,6 +562,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\render\FarmArrivalRenderer.h" />
     <ClInclude Include="application\farm\ui\FarmRuntimeLabels.h" />
     <ClInclude Include="application\farm\system\FarmRuntimeController.h" />
+    <ClInclude Include="application\farm\system\FarmExhibitionSystem.h" />
+    <ClInclude Include="application\farm\ui\FarmExhibitionView.h" />
     <ClInclude Include="application\farm\system\FarmLayoutSystem.h" />
     <ClInclude Include="application\farm\ui\FarmRecordDialog.h" />
     <ClInclude Include="application\level\LevelLoader.h" />

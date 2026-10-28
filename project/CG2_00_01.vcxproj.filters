@@ -853,4 +853,10 @@
     <ClInclude Include="application\editor\GamePlayEditorScene.h" />
     <ClInclude Include="application\scene\SceneViewportInput.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="application\farm\system\FarmRuntimeExhibition.cpp" />
+    <ClCompile Include="application\farm\system\FarmExhibitionSystem.cpp" />
+    <ClInclude Include="application\farm\system\FarmExhibitionSystem.h" />
+    <ClInclude Include="application\farm\ui\FarmExhibitionView.h" />
+  </ItemGroup>
 </Project>
