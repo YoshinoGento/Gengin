@@ -1,4 +1,4 @@
-param([string]$OutputDirectory = 'generated/exhibitions/contest_20261027')
+param([string]$OutputDirectory = 'generated/exhibitions/gameover_demo_20261028')
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $output = [IO.Path]::GetFullPath((Join-Path $root $OutputDirectory))
@@ -26,8 +26,9 @@ foreach ($file in Get-ChildItem -LiteralPath (Join-Path $output 'Resources') -Fi
     }
 }
 Copy-Item -LiteralPath (Join-Path $root 'project/Resources/exhibition') -Destination (Join-Path $output 'Resources') -Recurse
-Copy-Item -LiteralPath $exe -Destination (Join-Path $output 'SuiroNogyoExhibition.exe')
-foreach ($name in @('README.txt','StartExhibition.cmd','CREDITS.txt')) {
+Copy-Item -LiteralPath (Join-Path $root 'project/Resources/farm/contest/ceremony') -Destination (Join-Path $output 'Resources/farm/contest') -Recurse
+Copy-Item -LiteralPath $exe -Destination (Join-Path $output 'SuiroNogyoGameOverDemo.exe')
+foreach ($name in @('README.txt','StartGameOverDemo.cmd','CREDITS.txt')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "exhibition/$name") -Destination $output
 }
 $settings = Join-Path $output 'Settings/runtime'

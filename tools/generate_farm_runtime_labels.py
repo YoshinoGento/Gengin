@@ -347,12 +347,12 @@ labels.extend([
     ["ContestWeightRuleShort", "重さはゲーム内の換算値です"],
 ])
 labels.extend([
-    ["ExhibitionTitle", "展示：品評会"], ["ExhibitionEntry", "審査体験（展示）"],
-    ["ExhibitionGoal", "３０日目の大会で、育てた野菜を審査"],
-    ["ExhibitionRecorded", "育成済みの記録を使った展示です"],
-    ["ExhibitionWatch", "審査を見る"], ["ExhibitionAgain", "もう一度見る"],
-    ["ExhibitionHome", "展示メニューへ"],
-    ["ExhibitionMissing", "展示データを読み込めません"],
+    ["ExhibitionTitle", "ゲームオーバー演出デモ版"], ["ExhibitionEntry", "ゲームオーバー演出デモ版"],
+    ["ExhibitionGoal", "品評会の結果で、ゲームオーバー演出を確認"],
+    ["ExhibitionRecorded", "育成操作なしで、３種類の結果を再生できます"],
+    ["ExhibitionWatch", "演出を見る"], ["ExhibitionAgain", "もう一度見る"],
+    ["ExhibitionHome", "デモメニューへ"],
+    ["ExhibitionMissing", "デモ用データを読み込めません"],
 ])
 ascii_y = ((len(labels) + columns - 1) // columns) * cell_h
 height = ascii_y + 128

@@ -23,7 +23,7 @@ public:
     inline static constexpr float kFirstRowStart = .45f, kRowInterval = .18f, kRowDuration = .42f;
     inline static constexpr float kSummaryStart = 1.15f, kSummaryEnd = 1.5f;
     void Reset() noexcept {
-        frame_ = {}; acknowledged_.fill(false); lastDay_ = 0; elapsed_ = 0; openingConsumed_ = false;
+        frame_ = {}; acknowledged_.fill(false); presented_.fill(false); lastDay_ = 0; elapsed_ = 0; openingConsumed_ = false;
     }
     void Observe(int day, const FarmEconomySystem::ContestResults& results, bool enabled, bool staged) noexcept {
         if (!enabled || day < lastDay_) Reset();
@@ -77,6 +77,16 @@ public:
         frame_.missedDay = 0;
         return true;
     }
+    // Called only when the corresponding notice/final result is about to be displayed.
+    [[nodiscard]] int ConsumeUnsubmittedCeremony() noexcept {
+        const int day=frame_.season.finalized && frame_.goals.back().status==FarmContestGoalStatus::Missed ?
+            FarmContestEntrySystem::kContestDays.back() : frame_.missedDay;
+        for (std::size_t i=0;i<presented_.size();++i)
+            if (day==FarmContestEntrySystem::kContestDays[i] && !presented_[i]) {
+                presented_[i]=true; return day;
+            }
+        return 0;
+    }
     [[nodiscard]] const Frame& GetFrame() const noexcept { return frame_; }
 private:
     [[nodiscard]] float Phase(float start, float end) const noexcept {
@@ -85,6 +95,7 @@ private:
     }
     Frame frame_{};
     std::array<bool, 3> acknowledged_{};
+    std::array<bool, 3> presented_{};
     int lastDay_ = 0;
     float elapsed_ = 0;
     bool openingConsumed_ = false;

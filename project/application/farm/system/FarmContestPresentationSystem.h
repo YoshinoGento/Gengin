@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/system/FarmContestGoalSystem.h"
+#include "title/TitleCloudMotionSystem.h"
 
 enum class FarmContestSizeAdvice { None, Sufficient, MoreSize, ImproveQuality };
 struct FarmContestComparison {
@@ -86,9 +87,9 @@ class FarmContestPresentationSystem final {
 public:
     enum class Cue { None, Assess, Passed, Failed, Recorded };
     enum class Page { Result, Quality, Size };
-    static constexpr float kSpecimenEnd = .30f;
-    static constexpr float kTotalStart = kSpecimenEnd, kVerdictTime = .90f;
-    static constexpr float kAdviceStart = 1.15f, kRevealSeconds = 1.50f;
+    static constexpr float kSpecimenEnd = 1.15f;
+    static constexpr float kTotalStart = kSpecimenEnd, kVerdictTime = 2.10f;
+    static constexpr float kAdviceStart = 3.10f, kRevealSeconds = 4.0f;
     static_assert(0 < kSpecimenEnd && kTotalStart < kVerdictTime &&
         kVerdictTime < kAdviceStart && kAdviceStart < kRevealSeconds);
     struct Frame {
@@ -96,22 +97,32 @@ public:
         Page page = Page::Result;
         bool explanation = false, complete = false;
         bool verdictVisible = false;
+        bool active = false, unsubmitted = false;
+        float ceremonyTime = 0;
+        Vector2 cloudOffset{};
         float specimenReveal = 0, totalReveal = 0;
         float verdictReveal = 0, adviceReveal = 0;
         int displayedTotal = 0;
     };
     void Begin(const FarmContestComparison& comparison, bool replay) noexcept {
         comparison_ = comparison; active_ = comparison.valid; elapsed_ = replay ? kRevealSeconds : 0;
+        unsubmitted_ = false;
+        cloudMotion_.Reset();
         page_ = Page::Result; explanation_ = false;
         pendingCue_ = Cue::None;
     }
-    void Close() noexcept { active_ = false; page_ = Page::Result; explanation_ = false; pendingCue_ = Cue::None; }
+    void BeginUnsubmitted(int day) noexcept {
+        Close(); comparison_ = {}; elapsed_ = 0;
+        for (const int contestDay : FarmContestEntrySystem::kContestDays)
+            if (day == contestDay) { active_ = true; unsubmitted_ = true; comparison_.day = day; }
+    }
+    void Close() noexcept { active_ = false; unsubmitted_ = false; elapsed_ = 0; page_ = Page::Result; explanation_ = false; pendingCue_ = Cue::None; cloudMotion_.Reset(); }
     [[nodiscard]] bool SelectPage(int page) noexcept {
-        if (!Complete() || page < 0 || page > static_cast<int>(Page::Size)) return false;
+        if (!Complete() || unsubmitted_ || page < 0 || page > static_cast<int>(Page::Size)) return false;
         page_ = static_cast<Page>(page); explanation_ = false;
         return true;
     }
-    void ToggleExplanation() noexcept { if (Complete()) explanation_ = !explanation_; }
+    void ToggleExplanation() noexcept { if (Complete() && !unsubmitted_) explanation_ = !explanation_; }
     // Back closes the local explanation/analysis before leaving the submitted result.
     [[nodiscard]] bool Back() noexcept {
         if (!Complete()) return false;
@@ -122,9 +133,10 @@ public:
     [[nodiscard]] bool Complete() const noexcept { return active_ && elapsed_ >= kRevealSeconds; }
     void Update(float dt) noexcept {
         if (!active_ || !std::isfinite(dt) || dt <= 0) return;
+        cloudMotion_.Update((std::min)(dt,.1f));
         const float previous = elapsed_;
         elapsed_ = (std::min)(kRevealSeconds, elapsed_ + (std::min)(dt, .1f));
-        if (previous < kTotalStart && elapsed_ >= kTotalStart) pendingCue_ = Cue::Assess;
+        if (!unsubmitted_ && previous < kTotalStart && elapsed_ >= kTotalStart) pendingCue_ = Cue::Assess;
         if (previous < kVerdictTime && elapsed_ >= kVerdictTime) pendingCue_ = VerdictCue();
     }
     void Reveal() noexcept {
@@ -138,9 +150,11 @@ public:
     [[nodiscard]] Frame GetFrame() const noexcept {
         Frame frame;
         frame.comparison = comparison_;
+        frame.active = active_; frame.unsubmitted = unsubmitted_; frame.ceremonyTime = elapsed_;
+        frame.cloudOffset = cloudMotion_.Offset();
         frame.page = page_; frame.explanation = explanation_; frame.complete = Complete();
         frame.specimenReveal = Progress(0, kSpecimenEnd);
-        frame.totalReveal = Progress(kTotalStart, kVerdictTime);
+        frame.totalReveal = unsubmitted_ ? 0 : Progress(kTotalStart, kVerdictTime);
         frame.verdictVisible = active_ && elapsed_ >= kVerdictTime;
         frame.verdictReveal = Progress(kVerdictTime, kAdviceStart);
         frame.adviceReveal = Progress(kAdviceStart, kRevealSeconds);
@@ -154,11 +168,13 @@ private:
         return t*t*(3-2*t);
     }
     [[nodiscard]] Cue VerdictCue() const noexcept {
-        return !comparison_.staged ? Cue::Recorded : comparison_.passed ? Cue::Passed : Cue::Failed;
+        return unsubmitted_ || !comparison_.staged ? Cue::Recorded : comparison_.passed ? Cue::Passed : Cue::Failed;
     }
     FarmContestComparison comparison_{};
+    title::TitleCloudMotionSystem cloudMotion_;
     float elapsed_ = 0;
     bool active_ = false;
+    bool unsubmitted_ = false;
     Page page_ = Page::Result;
     bool explanation_ = false;
     Cue pendingCue_ = Cue::None;

@@ -18,8 +18,45 @@ void Check(bool value, std::source_location location = std::source_location::cur
     throw std::runtime_error("title presentation assertion failed");
 }
 bool Near(float a, float b) { return std::abs(a-b) < 0.002f; }
+void CloudMotionRegression() {
+    for (const std::uint32_t seed : {0u,0x5A17u,12345u}) {
+        title::TitleCloudMotionSystem motion;
+        motion.Reset(seed);
+        Vector2 offset{},velocity{},target{};
+        float remaining=0;
+        auto rng=seed;
+        const auto next=[&] {
+            rng=rng*1664525u+1013904223u;
+            return static_cast<float>(rng >> 8)/16777216.f;
+        };
+        for (int step=0;step<12000;++step) {
+            const float dt=step%4==0 ? .25f : 1.f/60;
+            // Independent copy of the pre-extraction title rule guards the wind/grass contract.
+            remaining-=dt;
+            if (remaining<=0) {
+                remaining=8.f+next()*6.f;
+                target={(next()-.35f)*.003f,(next()-.5f)*.00035f};
+            }
+            const float response=1.f-std::exp(-dt*.45f);
+            velocity.x+=(target.x-velocity.x)*response;
+            velocity.y+=(target.y-velocity.y)*response;
+            offset.x=std::fmod(offset.x+velocity.x*dt+1.f,1.f);
+            offset.y=std::clamp(offset.y+velocity.y*dt,-.025f,.025f);
+            motion.Update(dt);
+            Check(motion.Offset().x==offset.x && motion.Offset().y==offset.y);
+            Check(motion.Velocity().x==velocity.x && motion.Velocity().y==velocity.y);
+        }
+        for (const float invalid : {0.f,-1.f,std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::infinity()})
+            motion.Update(invalid);
+        Check(motion.Offset().x==offset.x && motion.Offset().y==offset.y);
+        motion.Reset(seed);
+        Check(motion.Offset().x==0 && motion.Offset().y==0 && motion.Velocity().x==0);
+    }
+    std::cout<<"PASS shared cloud motion: 36000 legacy-rule frames, invalid delta and reset\n";
+}
 }
 int main() {
+    CloudMotionRegression();
     title::TitlePresentationSystem blink;
     Check(blink.Initialize(1,2));
     Check(blink.GetFrame().promptAlpha == 1);

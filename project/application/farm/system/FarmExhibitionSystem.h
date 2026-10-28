@@ -39,5 +39,5 @@ private:
     FarmContestOutcomeSystem outcome_;
     Phase phase_ = Phase::Closed;
     int selected_ = 0;
-    bool startup_ = false, beginning_ = false, missedCue_ = false;
+    bool startup_ = false, beginning_ = false;
 };

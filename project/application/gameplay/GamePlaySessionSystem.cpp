@@ -589,7 +589,7 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 		AddLog("Farm runtime menu initialization failed.");
 	}
     if (!co_await farmContestRenderer_.InitializeIncrementally(framework_->GetObject3dCommon(),
-        framework_->GetModelManager(), levelWhiteTextureHandle_)) co_return false;
+        framework_->GetModelManager(), levelWhiteTextureHandle_, TextureManager::GetInstance())) co_return false;
     if (!co_await farmArrivalRenderer_.InitializeIncrementally(framework_->GetObject3dCommon(), framework_->GetModelManager(),
         TextureManager::GetInstance())) AddLog("Arrival scenery unavailable; using the safe farm overview.");
     farmRuntimeController_.InitializePresentationAudio(framework_->GetAudio());
@@ -788,6 +788,18 @@ void GamePlaySessionSystem::PrepareRenderFrame(float presentationDeltaTime) {
 	spotLight.cosFalloffStart = std::cos(spotLightFalloff_);
 	lightingSystem->SetSpotLight(spotLight);
 	lightingSystem->SetCameraPosition(camera_->GetTranslate());
+#ifndef USE_IMGUI
+    if (farmRuntimeController_.ShowsContestDetail()) {
+        const auto frame=farmRuntimeController_.ContestFrame();
+        lightingSystem->SetDirectionalLight({FarmContestStageLayout::kCeremonyLightColor,
+            FarmContestStageLayout::kCeremonyLightDirection,FarmContestStageLayout::kCeremonyLightIntensity});
+        spotLight.intensity=0;
+        lightingSystem->SetSpotLight(spotLight);
+        const bool ceremony=frame.unsubmitted || frame.page==FarmContestPresentationSystem::Page::Result;
+        lightingSystem->SetCameraPosition(ceremony ? FarmContestStageLayout::CeremonyView(frame).position :
+            Vector3{0,0,-FarmContestStageLayout::CameraDistance(frame.specimenReveal)});
+    }
+#endif
 
 	// Apply shared render settings consistently before each Object3d update.
 	auto UpdateObjectState = [&](Object3d* obj, float envCoef) {
@@ -1607,9 +1619,7 @@ void GamePlaySessionSystem::Draw() {
 	auto spriteCommon = framework_->GetSpriteCommon();
 #ifndef USE_IMGUI
     if (farmRuntimeController_.ShowsContestDetail()) {
-        objCommon->BeginObjectPass();
         farmContestRenderer_.Draw(farmRuntimeController_.ContestFrame());
-        objCommon->EndObjectPass();
         spriteCommon->PreDraw(); farmRuntimeController_.Draw();
         return;
     }

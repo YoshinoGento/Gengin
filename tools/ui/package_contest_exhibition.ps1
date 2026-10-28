@@ -1,5 +1,5 @@
 param(
-    [string]$Destination = 'generated/exhibitions/contest_submission_20261027',
+    [string]$Destination = 'generated/exhibitions/gameover_demo_submission_20261028',
     [string]$PackageName = 'LE3C_28_ヨシノ_ゲント_水路農業'
 )
 $ErrorActionPreference = 'Stop'
@@ -32,15 +32,26 @@ $manifest = @($files | ForEach-Object {
     [pscustomobject]@{Path=$relative; Bytes=$_.Length; SHA256=(Get-FileHash -LiteralPath $_.FullName).Hash}
 })
 if (Get-ChildItem -LiteralPath $runtime -Recurse -Attributes ReparsePoint) { throw 'Runtime contains a reparse point' }
-foreach ($required in @('SuiroNogyoExhibition.exe','StartExhibition.cmd','README.txt','CREDITS.txt',
+foreach ($required in @('SuiroNogyoGameOverDemo.exe','StartGameOverDemo.cmd','README.txt','CREDITS.txt',
     'dxcompiler.dll','dxil.dll','Licenses/DXC/LICENSE-MS.txt','Resources/fonts/OFL.txt',
     'Resources/exhibition/failed.json','Resources/exhibition/passed.json','Resources/exhibition/missed.json',
+    'Resources/title/sky.png','Resources/shader/TitleSky.VS.hlsl','Resources/shader/TitleSky.PS.hlsl',
+    'Resources/shader/TitleSky.hlsli','Resources/ui/farm_runtime_menu.png',
+    'Resources/farm/contest/ceremony/manifest.json','Resources/farm/contest/ceremony/venue.obj',
+    'Resources/farm/contest/ceremony/palette.png',
     'Settings/runtime/contest_exhibition.json')) {
     if ($required -notin $manifest.Path) { throw "Missing runtime dependency: $required" }
 }
 $releaseHash = (Get-FileHash -LiteralPath (Join-Path $root 'generated/outputs/Release/CG2_00_01.exe')).Hash
-if (($manifest | Where-Object Path -eq 'SuiroNogyoExhibition.exe').SHA256 -ne $releaseHash) {
+if (($manifest | Where-Object Path -eq 'SuiroNogyoGameOverDemo.exe').SHA256 -ne $releaseHash) {
     throw 'Packaged EXE does not match current Release'
+}
+foreach ($file in $manifest | Where-Object { $_.Path.StartsWith('Resources/') }) {
+    $source = Join-Path $root ('project/' + $file.Path)
+    if ((Test-Path -LiteralPath $source -PathType Leaf) -and
+        (Get-FileHash -LiteralPath $source).Hash -ne $file.SHA256) {
+        throw "Resource does not match current source: $($file.Path)"
+    }
 }
 $config = Get-Content -LiteralPath (Join-Path $runtime 'Settings/runtime/contest_exhibition.json') -Raw | ConvertFrom-Json
 if ($config.enabled -ne $true) { throw 'Exhibition startup must be enabled' }

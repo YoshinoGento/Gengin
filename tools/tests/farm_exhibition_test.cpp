@@ -37,7 +37,8 @@ int main() {
     const std::string fixture="project/Resources/exhibition";
     const auto absent=(temp/"absent.json").string();
     System system; system.Initialize(fixture, absent);
-    Check(!system.Active() && !system.Startup(), "ordinary startup unchanged");
+    Check(!system.Active() && !system.Startup() && system.GetPhase()==System::Phase::Closed,
+        "ordinary startup unchanged");
     Check(!system.Available(-1) && !system.Available(3), "bounded cases");
     Check(!system.Begin(3), "closed cannot play");
     system.Open(); Layout(system);
@@ -53,7 +54,7 @@ int main() {
             system.Update(std::numeric_limits<float>::quiet_NaN()); system.Update(-1);
             Check(!system.Complete(), "invalid delta ignored");
             int assess=0,verdict=0;
-            for(int i=0; i<300; ++i) {
+            for(int i=0; i<720; ++i) {
                 Layout(system); ++frames; system.Update(dt);
                 const auto cue=system.ConsumeCue();
                 if(cue==Cue::Assess) ++assess;
@@ -82,7 +83,9 @@ int main() {
     {std::ofstream file(startup); file << R"({"enabled":true})";}
     system.Initialize(fixture,startup); Check(system.Active() && system.Startup(), "exhibition startup");
     {std::ofstream file(startup); file << R"({"enabled":false})";}
-    system.Initialize(fixture,startup); Check(!system.Active(), "opt out");
+    system.Initialize(fixture,startup);
+    Check(!system.Active() && !system.Startup() && system.GetPhase()==System::Phase::Closed,
+        "opt out clears previous demo startup");
     {std::ofstream file(startup); file << "invalid";}
     system.Initialize((temp/"missing").string(),startup);
     Check(system.Active() && !system.Available(0) && !system.Begin(3), "missing/corrupt safe menu"); Layout(system);

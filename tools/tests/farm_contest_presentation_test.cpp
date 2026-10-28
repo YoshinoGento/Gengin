@@ -151,7 +151,47 @@ void SpecimenFraming() {
 }
 }
 
+void CeremonyFraming() {
+    constexpr std::array<const char*,8> paths{{"crop_turnip","crop_turnip_leaves","crop_carrot","crop_carrot_leaves",
+        "crop_tomato","crop_tomato_stems","crop_pumpkin","crop_pumpkin_vines"}};
+    std::size_t checked=0;
+    float minX=1280,maxX=0,minY=720,maxY=0;
+    for (int slot=0;slot<farm::kFarmCropTypeCount;++slot) for (float size:{.1f,1.f,3.f,8.f})
+    for (float reveal:{0.f,.5f,1.f}) for (float settle:{0.f,.5f,1.f}) for (int part=0;part<2;++part) {
+        const auto crop=static_cast<farm::CropType>(slot+1);
+        Check(farm::ToCropSlot(crop)==slot,"fixture crop slot");
+        FarmContestPresentationSystem::Frame frame; frame.specimenReveal=reveal; frame.adviceReveal=settle;
+        const auto camera=FarmContestStageLayout::CeremonyView(frame);
+        const auto pose=FarmContestStageLayout::CeremonySpecimen(crop,size);
+        const auto scale=part==0?pose.bodyScale:pose.leafScale;
+        std::ifstream file(std::string("project/Resources/farm/contest/ceremony/")+paths[slot*2+part]+".obj");
+        Check(file.good(),"ceremony mesh present");
+        std::string line;
+        while (std::getline(file,line)) {
+            if (!line.starts_with("v ")) continue;
+            std::istringstream stream(line.substr(2)); float x=0,y=0,z=0; stream>>x>>y>>z;
+            x=-x*scale.x; y=y*scale.y+(part==0?pose.position.y:pose.leafY); z*=scale.z;
+            const float c=std::cos(FarmContestStageLayout::kYaw),s=std::sin(FarmContestStageLayout::kYaw);
+            const float worldX=x*c+z*s+pose.position.x;
+            const float worldZ=-x*s+z*c+pose.position.z;
+            const float dy=y-camera.position.y,dz=worldZ-camera.position.z;
+            const float viewY=dy*std::cos(camera.pitch)+dz*std::sin(camera.pitch);
+            const float depth=-dy*std::sin(camera.pitch)+dz*std::cos(camera.pitch);
+            Check(depth>.1f,"ceremony in front of near plane");
+            const float focal=360/std::tan(FarmContestStageLayout::kFovY*.5f);
+            const float px=640+(worldX-camera.position.x)*focal/depth,py=360-viewY*focal/depth;
+            minX=(std::min)(minX,px); maxX=(std::max)(maxX,px);
+            minY=(std::min)(minY,py); maxY=(std::max)(maxY,py);
+            ++checked;
+        }
+    }
+    std::cout<<"ceremony bounds "<<minX<<','<<minY<<" .. "<<maxX<<','<<maxY<<'\n';
+    Check(minX>25 && maxX<650 && minY>150 && maxY<555,"ceremony crop avoids UI and frame edges");
+    std::cout<<"PASS: "<<checked<<" ceremony vertices across camera/size variants\n";
+}
+
 int main() {
+    CeremonyFraming();
     SpecimenFraming();
     int cases=0;
     for (const auto crop : {farm::CropType::Carrot,farm::CropType::Tomato,farm::CropType::Pumpkin}) {
@@ -186,7 +226,7 @@ int main() {
                 presentation.ToggleExplanation(); Check(!presentation.GetFrame().explanation,"rules gated during reveal");
                 Check(view.Hit({250,120}).action==farmui::Action::None,"tab not clickable during reveal");
                 Check(view.Hit({1050,676}).action==farmui::Action::ContestReveal,"skip revealed through UI");
-                for (int step=0;step<180;++step) presentation.Update(1.f/60);
+                for (int step=0;step<300;++step) presentation.Update(1.f/60);
                 Check(presentation.GetFrame().verdictVisible,"time reveals once");
                 view={}; farmui::BuildContestDetailView(view,presentation.GetFrame()); Layout(view);
                 Check(view.Hit({1050,676}).action==farmui::Action::ContestDetailClose,"result back action");
@@ -234,7 +274,7 @@ int main() {
         p.Begin(comparison,false);
         float previous=0, previousTotal=0, previousAdvice=0;
         int assessments=0, verdicts=0;
-        for (int step=0;step<300;++step) {
+        for (int step=0;step<720;++step) {
             p.Update(dt);
             const auto frame=p.GetFrame();
             Check(frame.specimenReveal>=previous && frame.specimenReveal<=1,"monotonic bounded specimen");
@@ -252,13 +292,13 @@ int main() {
             Check(p.ConsumeCue()==Cue::None,"consume once");
             farmui::View frameView; farmui::BuildContestDetailView(frameView,frame); Layout(frameView);
             Check(frame.complete==p.Complete(),"UI and controller share exact complete state");
-            if ((step+1)*dt<1.49f) Check(!frame.complete,"no early controls");
-            if ((step+1)*dt>1.51f) Check(frame.complete,"complete without hidden waits");
+            if ((step+1)*dt<FarmContestPresentationSystem::kRevealSeconds-.01f) Check(!frame.complete,"no early controls");
+            if ((step+1)*dt>FarmContestPresentationSystem::kRevealSeconds+.01f) Check(frame.complete,"complete without hidden waits");
             previous=frame.specimenReveal;
             previousTotal=frame.totalReveal; previousAdvice=frame.adviceReveal;
         }
         Check(assessments==1 && verdicts==1,"one assessment one verdict");
-        for(int skipStep=0;skipStep<180;++skipStep) {
+        for(int skipStep=0;skipStep<260;++skipStep) {
             p.Begin(comparison,false);
             bool verdictHeard=false;
             for(int step=0;step<skipStep;++step) {
@@ -277,5 +317,37 @@ int main() {
         p.Update(100); Check(p.GetFrame().specimenReveal<1,"large dt bounded");
         p.Close(); p.Reveal(); Check(p.ConsumeCue()==Cue::None,"inactive skip silent");
     }
-    std::cout << "PASS: " << cases << " comparisons, integer boundaries, advice, legacy, layout, reveal\n";
+    for (const int day : {10,20,30}) {
+        p.BeginUnsubmitted(day);
+        Check(p.Active() && p.GetFrame().unsubmitted && !p.GetFrame().comparison.valid,"missing is not a zero-score comparison");
+        int sounds=0;
+        for (int step=0;step<650;++step) {
+            p.Update(1.f/144); v={}; farmui::BuildContestDetailView(v,p.GetFrame()); Layout(v);
+            const auto cue=p.ConsumeCue();
+            Check(cue==Cue::None || cue==Cue::Recorded,"missing has no assessment/failure sound");
+            sounds+=cue==Cue::Recorded;
+            Check(!Has(v,farmui::Label::ContestScoreShort) && !v.radar.visible,"missing has no score or radar");
+        }
+        Check(sounds==1 && p.Complete() && !p.SelectPage(1),"missing completes once without fake analysis");
+        p.Reveal(); Check(p.ConsumeCue()==Cue::None,"missing repeated skip silent");
+    }
+    p.BeginUnsubmitted(9); Check(!p.Active(),"invalid missing day rejected");
+    p.Begin(legacy,true);
+    const auto initialCloud=p.GetFrame().cloudOffset;
+    title::TitleCloudMotionSystem sharedCloud;
+    for (int step=0;step<600;++step) {
+        p.Update(1.f/60); sharedCloud.Update(1.f/60);
+        const auto frame=p.GetFrame();
+        Check(frame.complete && frame.ceremonyTime==FarmContestPresentationSystem::kRevealSeconds,"cloud motion never restarts ceremony");
+        Check(frame.cloudOffset.x==sharedCloud.Offset().x && frame.cloudOffset.y==sharedCloud.Offset().y,"ceremony uses title wind rule");
+        const auto sky=FarmContestStageLayout::CeremonySky(frame);
+        Check(sky.skyYaw==frame.cloudOffset.x && sky.cloudLift==frame.cloudOffset.y && sky.nightAmount==0,"daylight sky snapshot carries cloud motion");
+    }
+    Check(p.GetFrame().cloudOffset.x!=initialCloud.x,"clouds keep moving after verdict settles");
+    const auto beforeInvalid=p.GetFrame().cloudOffset;
+    p.Update(std::numeric_limits<float>::quiet_NaN());
+    Check(p.GetFrame().cloudOffset.x==beforeInvalid.x,"invalid delta leaves clouds unchanged");
+    p.Close(); p.Update(.1f);
+    Check(p.GetFrame().cloudOffset.x==0 && !p.Active(),"closed ceremony does not advance clouds");
+    std::cout << "PASS: " << cases << " comparisons, integer boundaries, advice, legacy, layout, reveal and missing ceremonies\n";
 }

@@ -1,0 +1,12 @@
+{
+  "audioGainDb": 16,
+  "sources": ["take01/capture.mp4", "passed/capture.mp4", "missed/capture.mp4"],
+  "segments": [
+    {"source": 0, "start": 0, "duration": 3, "title": "デモメニュー"},
+    {"source": 0, "start": 16.5, "duration": 20, "title": "入賞ならず・失敗理由"},
+    {"source": 0, "start": 64, "duration": 7, "title": "品質レーダー"},
+    {"source": 0, "start": 84, "duration": 7, "title": "大きさ比較"},
+    {"source": 1, "start": 8.5, "duration": 14, "title": "入賞時の表彰"},
+    {"source": 2, "start": 8.5, "duration": 14, "title": "未出品"}
+  ]
+}

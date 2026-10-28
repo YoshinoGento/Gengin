@@ -3,6 +3,7 @@
 #include "farm/core/FarmGrid.h"
 #include "title/TitlePresentationLayout.h"
 #include "title/TitleAudioMix.h"
+#include "title/TitleCloudMotionSystem.h"
 #include "math/Struct.h"
 
 #include <array>
@@ -99,13 +100,8 @@ private:
     float leavingTime_ = 0.0f;
     bool leaving_ = false;
     bool startConsumed_ = false;
-    Vector2 cloudOffset_{};
-    Vector2 windVelocity_{};
-    Vector2 windTarget_{};
-    float windRemaining_ = 0.0f;
+    TitleCloudMotionSystem cloudMotion_;
     float grassTime_ = 0;
-    std::uint32_t windSeed_ = 0x5A17u;
-    float NextWindValue() noexcept;
     struct RippleState {
         Vector2 center{};
         float age = kLogoRippleLifetime;

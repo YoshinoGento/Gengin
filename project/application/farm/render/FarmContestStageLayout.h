@@ -2,6 +2,7 @@
 #include "farm/core/FarmTypes.h"
 #include "farm/system/FarmContestPresentationSystem.h"
 #include "math/Struct.h"
+#include "title/TitlePresentationSystem.h"
 
 // Validated comparison values only; both specimens use one volume-to-linear scale.
 struct FarmContestStageLayout {
@@ -17,6 +18,38 @@ struct FarmContestStageLayout {
         Vector3 position{}, bodyScale{}, leafScale{};
         float leafY = 0;
     };
+    struct CeremonyCamera { Vector3 position; float pitch; };
+    static constexpr Vector3 kCeremonyLightDirection{.45f,-.82f,.35f};
+    static constexpr Vector4 kCeremonyLightColor{1.f,.96f,.88f,1.f};
+    static constexpr float kCeremonyLightIntensity=1.35f, kCeremonyShadowStrength=.82f;
+    static constexpr Vector3 kCeremonyFocus{-3.3f,1.2f,0};
+    static constexpr float kCeremonySpecimenHeight=2.40f, kCeremonyPitch=.205f;
+    [[nodiscard]] static title::Frame CeremonySky(const FarmContestPresentationSystem::Frame& frame) noexcept {
+        title::Frame sky;
+        sky.skyTop = {.10f,.43f,.75f,1};
+        sky.skyHorizon = {.60f,.79f,.86f,1};
+        sky.cloudColor = {.92f,.96f,1.f,1};
+        sky.skyYaw = frame.cloudOffset.x;
+        sky.cloudLift = frame.cloudOffset.y;
+        // The ceremony's daylight source is behind the camera, outside this authored sky view.
+        sky.sun.center = sky.moon.center = {.5f,-2.f};
+        return sky;
+    }
+    [[nodiscard]] static CeremonyCamera CeremonyView(const FarmContestPresentationSystem::Frame& frame) noexcept {
+        const float settle = frame.adviceReveal;
+        const float distance = 17.5f - 4.5f * frame.specimenReveal + .7f * settle;
+        return {{0,4.6f-.5f*frame.specimenReveal+.1f*settle,-distance}, kCeremonyPitch};
+    }
+    [[nodiscard]] static Pose CeremonySpecimen(farm::CropType crop, float multiplier) noexcept {
+        auto pose = Specimen(crop,multiplier,(std::max)(3.f,multiplier),0,Page::Result);
+        const float fit = kCeremonySpecimenHeight/kSummarySpecimenHeight;
+        pose.bodyScale = {pose.bodyScale.x*fit,pose.bodyScale.y*fit,pose.bodyScale.z*fit};
+        pose.leafScale = {pose.leafScale.x*fit,pose.leafScale.y*fit,pose.leafScale.z*fit};
+        pose.position = {-3.3f,.94f,0};
+        pose.leafY = crop==farm::CropType::Tomato || crop==farm::CropType::Pumpkin ?
+            pose.position.y : pose.position.y+pose.bodyScale.y*.96f;
+        return pose;
+    }
     [[nodiscard]] static float UnitsPerPixel() noexcept {
         return 2*kCameraDistance*std::tan(kFovY*.5f)/kHeight;
     }

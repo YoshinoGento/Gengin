@@ -27,7 +27,7 @@ bool FarmExhibitionSystem::Available(int index) const noexcept {
 }
 void FarmExhibitionSystem::Open() noexcept { Home(); }
 void FarmExhibitionSystem::Home() noexcept {
-    presentation_.Close(); outcome_.Reset(); beginning_ = missedCue_ = false; phase_ = Phase::Menu;
+    presentation_.Close(); outcome_.Reset(); beginning_ = false; phase_ = Phase::Menu;
 }
 void FarmExhibitionSystem::Close() noexcept { Home(); phase_ = Phase::Closed; }
 bool FarmExhibitionSystem::Select(int index) noexcept {
@@ -43,7 +43,8 @@ bool FarmExhibitionSystem::Begin(float maximumSize) noexcept {
     if (selected_ == static_cast<int>(Case::Missed)) {
         presentation_.Close(); outcome_.Reset();
         outcome_.Observe(record.day, record.results, true, true);
-        phase_ = Phase::Missed; missedCue_ = true;
+        presentation_.BeginUnsubmitted(FarmContestEntrySystem::kContestDays.back());
+        phase_ = Phase::Missed;
     } else {
         const auto comparison = FarmContestComparisonSystem::Build(2, record.day, record.results, true, maximumSize);
         if (!comparison.valid) return false;
@@ -52,16 +53,13 @@ bool FarmExhibitionSystem::Begin(float maximumSize) noexcept {
     beginning_ = true; return true;
 }
 void FarmExhibitionSystem::Update(float dt) noexcept {
-    if (phase_ == Phase::Result) presentation_.Update(dt);
-    else if (phase_ == Phase::Missed) outcome_.Update(dt);
+    if (phase_ == Phase::Result || phase_ == Phase::Missed) presentation_.Update(dt);
 }
 bool FarmExhibitionSystem::Complete() const noexcept {
-    return phase_ == Phase::Result ? presentation_.Complete() :
-        phase_ == Phase::Missed ? outcome_.GetFrame().controlsReveal >= 1 : true;
+    return phase_ == Phase::Result || phase_ == Phase::Missed ? presentation_.Complete() : true;
 }
 void FarmExhibitionSystem::Reveal() noexcept {
-    if (phase_ == Phase::Result) presentation_.Reveal();
-    else if (phase_ == Phase::Missed) outcome_.Reveal();
+    if (phase_ == Phase::Result || phase_ == Phase::Missed) presentation_.Reveal();
 }
 void FarmExhibitionSystem::Back() noexcept {
     if (!Complete()) { Reveal(); return; }
@@ -72,6 +70,5 @@ bool FarmExhibitionSystem::ConsumeBeginning() noexcept {
     const bool result = beginning_; beginning_ = false; return result;
 }
 FarmContestPresentationSystem::Cue FarmExhibitionSystem::ConsumeCue() noexcept {
-    if (missedCue_) { missedCue_ = false; return FarmContestPresentationSystem::Cue::Recorded; }
     return presentation_.ConsumeCue();
 }

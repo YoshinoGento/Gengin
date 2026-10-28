@@ -63,10 +63,8 @@ CelestialBodyFrame MakeCelestialBody(float angle) noexcept {
 bool TitlePresentationSystem::Initialize(std::uint32_t windSeed, std::uint32_t rippleSeed) {
     cycleTime_ = entryTime_ = leavingTime_ = 0.0f;
     leaving_ = startConsumed_ = false;
-    cloudOffset_ = windVelocity_ = windTarget_ = {};
-    windRemaining_ = 0;
+    cloudMotion_.Reset(windSeed);
     grassTime_ = 0;
-    windSeed_ = windSeed;
     ripples_ = {};
     rippleId_ = 0;
     previousRipplePoint_ = kLogoRipplePoints.size();
@@ -106,26 +104,12 @@ void TitlePresentationSystem::Update(float delta) noexcept {
     if (!std::isfinite(delta) || delta <= 0.0f) return;
     delta = (std::min)(delta, kMaximumDelta);
     UpdateRipples(delta);
-    windRemaining_ -= delta;
-    if (windRemaining_ <= 0) {
-        windRemaining_ = 8.0f + NextWindValue()*6.0f;
-        windTarget_ = {(NextWindValue()-.35f)*.003f, (NextWindValue()-.5f)*.00035f};
-    }
-    const float response = 1.0f - std::exp(-delta*.45f);
-    windVelocity_.x += (windTarget_.x-windVelocity_.x)*response;
-    windVelocity_.y += (windTarget_.y-windVelocity_.y)*response;
-    const float waveSpeed = std::clamp(windVelocity_.x/kGrassWaveWindReference,-1.0f,1.0f);
+    cloudMotion_.Update(delta);
+    const float waveSpeed = std::clamp(cloudMotion_.Velocity().x/kGrassWaveWindReference,-1.0f,1.0f);
     grassTime_ = std::fmod(grassTime_+delta*waveSpeed+kGrassFlutterPeriod,kGrassFlutterPeriod);
-    cloudOffset_.x = std::fmod(cloudOffset_.x + windVelocity_.x*delta + 1.0f,1.0f);
-    cloudOffset_.y = std::clamp(cloudOffset_.y + windVelocity_.y*delta,-.025f,.025f);
     cycleTime_ = std::fmod(cycleTime_ + delta, kCycleSeconds);
     entryTime_ = (std::min)(entryTime_ + delta, kFadeSeconds);
     if (leaving_) leavingTime_ = (std::min)(leavingTime_ + delta, scene::kRippleCoverSeconds);
-}
-
-float TitlePresentationSystem::NextWindValue() noexcept {
-    windSeed_ = windSeed_*1664525u + 1013904223u;
-    return static_cast<float>(windSeed_ >> 8) / 16777216.0f;
 }
 
 float TitlePresentationSystem::NextRippleValue() noexcept {
@@ -184,7 +168,7 @@ Frame TitlePresentationSystem::GetFrame() const noexcept {
     frame.groundExposure = Mix(kGroundExposure[from], kGroundExposure[to], blend);
     frame.waterPhase = std::fmod(cycleTime_ / 2.0f, 1.0f);
     frame.windAngle = std::sin(cycleTime_ * kTau / 5.0f) * 0.028f;
-    frame.grassWindXZ = GrassWindFromCloudVelocity(windVelocity_);
+    frame.grassWindXZ = GrassWindFromCloudVelocity(cloudMotion_.Velocity());
     frame.grassPhase = grassTime_*kTau/kGrassFlutterPeriod;
     frame.skyOffset = std::sin(cycleTime_ * kTau / kCycleSeconds) * 10.0f;
     constexpr float kDepartureUiSeconds = 0.25f;
@@ -228,8 +212,8 @@ Frame TitlePresentationSystem::GetFrame() const noexcept {
         output.alpha = Mix(kReflectionDayAlpha,kReflectionNightAlpha,night)*entry*exit*frame.uiAlpha;
     }
     const float orbit = cycleTime_ * kTau / kCycleSeconds;
-    frame.skyYaw = cloudOffset_.x;
-    frame.cloudLift = cloudOffset_.y;
+    frame.skyYaw = cloudMotion_.Offset().x;
+    frame.cloudLift = cloudMotion_.Offset().y;
     frame.celestialAngle = orbit;
     frame.sun = MakeCelestialBody(orbit);
     frame.moon = MakeCelestialBody(orbit + std::numbers::pi_v<float>);

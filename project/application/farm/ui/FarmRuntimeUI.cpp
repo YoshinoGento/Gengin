@@ -200,9 +200,14 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         Panel(SeedShopLayout::receipt, {0.035f, 0.055f, 0.06f, 0.97f});
         Panel(SeedShopLayout::footer, {0.035f, 0.055f, 0.06f, 0.97f});
     } else if (view.contestDetail) {
-        Panel({0,0,1280,78},{.025f,.03f,.035f,1});
-        Panel({0,648,1280,72},{.025f,.03f,.035f,1});
         const auto& frame = view.contestFrame;
+        const bool ceremony=frame.page==FarmContestPresentationSystem::Page::Result || frame.unsubmitted;
+        Panel({0,0,1280,78},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
+        Panel({0,648,1280,72},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
+        if (ceremony) {
+            Panel({658,160,590,440},{.035f,.065f,.055f,.92f});
+            Panel({658,160,4,440},{.70f,.64f,.40f,1});
+        }
         const auto& result = frame.comparison;
         const Vector4 neutral{.55f,.72f,.78f,1};
         const Vector4 finalColor = !result.staged ? neutral : result.passed ?
@@ -210,9 +215,12 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         const float blend = frame.verdictReveal;
         const Vector4 accent{neutral.x+(finalColor.x-neutral.x)*blend,
             neutral.y+(finalColor.y-neutral.y)*blend, neutral.z+(finalColor.z-neutral.z)*blend,1};
-        Panel({680,224,552,4},{.20f,.25f,.24f,1});
-        Panel({680,224,552*frame.totalReveal*result.total*.01f,4},accent);
-        if (result.staged) Panel({680+552*result.target*.01f,220,2,12},{.85f,.89f,.87f,1});
+        if (!frame.unsubmitted) {
+            const float y=ceremony ? 292.f : 224.f;
+            Panel({680,y,552,4},{.20f,.25f,.24f,1});
+            Panel({680,y,552*frame.totalReveal*result.total*.01f,4},accent);
+            if (result.staged) Panel({680+552*result.target*.01f,y-4,2,12},{.85f,.89f,.87f,1});
+        }
     } else if (view.contestOutcome) {
         const float reveal = std::clamp(view.outcomeReveal, 0.0f, 1.0f);
         const Vector4 finalAccent = view.outcomePositive ? Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};

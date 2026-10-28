@@ -1,0 +1,29 @@
+{
+  "original": true,
+  "triangles": {
+    "venue": 36440,
+    "water": 80,
+    "board": 12,
+    "sign": 2,
+    "award": 16,
+    "tails": 4,
+    "review": 2,
+    "glints": 32,
+    "contact": 24,
+    "crop_turnip": 2318,
+    "crop_turnip_leaves": 340,
+    "crop_carrot": 1644,
+    "crop_carrot_leaves": 460,
+    "crop_tomato": 1388,
+    "crop_tomato_stems": 144,
+    "crop_pumpkin": 2174,
+    "crop_pumpkin_vines": 64
+  },
+  "lighting": "runtime directional shadow map; albedo atlas",
+  "cropCell": 0.065,
+  "maxTriangles": 65000,
+  "paletteSize": [
+    1008,
+    384
+  ]
+}
