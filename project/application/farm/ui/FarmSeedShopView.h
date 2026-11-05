@@ -9,6 +9,8 @@ struct SeedShopLayout {
     inline static constexpr std::array<Rect, 2> products{{{190, 168, 240, 286}, {520, 168, 240, 286}}};
     inline static constexpr Rect receipt{866, 150, 382, 364};
     inline static constexpr Rect footer{32, 544, 1216, 152};
+    inline static constexpr Rect shopReceipt{866, 150, 382, 434};
+    inline static constexpr Rect shopFooter{32, 600, 1216, 96};
     inline static constexpr float cameraDistance = 12.0f;
     inline static constexpr float fovY = 0.75f;
     inline static constexpr float packetCenterY = 342.0f;
@@ -38,6 +40,9 @@ inline void BuildSeedShopView(View& view, const FarmSeedShopSystem& shop, const 
     view.Add(Label::ShopTitle, {32, 24, 280, 44});
     view.Add(Label::Paused, {350, 24, 240, 44});
     view.Metric(Label::ShopMoney, {866, 24, 382, 44}, 136, std::to_string(quote.money) + "G");
+    for (int product=0;product<FarmSeedShopSystem::kProductCount;++product)
+        view.Add(CropLabel(FarmSeedShopSystem::Product(product)), {182.0f+220*product,96,208,44},
+            {Action::ShopProduct,product}, !confirming, shop.Selection()==product);
     const int first = (shop.Selection() / 2) * 2;
     for (int i = 0; i < 2 && first+i < FarmSeedShopSystem::kProductCount; ++i) {
         const int product = first+i;
@@ -53,15 +58,15 @@ inline void BuildSeedShopView(View& view, const FarmSeedShopSystem& shop, const 
     }
     constexpr std::array<Label,3> titles{Label::ShopCarrot, Label::ShopTomato, Label::ShopPumpkin};
     view.Add(titles[shop.Selection()], {882, 164, 346, 42});
-    view.Add(Label::ShopPrevious, {380,620,250,52}, {Action::ShopSelect, (shop.Selection()+2)%3}, !confirming);
-    view.Add(Label::ShopNext, {652,620,250,52}, {Action::ShopSelect, (shop.Selection()+1)%3}, !confirming);
     view.Metric(Label::ShopOwned, {882, 218, 346, 38}, 174, std::to_string(quote.owned));
     view.Metric(Label::ShopUnitPrice, {882, 266, 346, 38}, 174, std::to_string(quote.price) + "G");
     view.Metric(Label::ShopQuantity, {882, 314, 346, 38}, 174, std::to_string(quote.quantity));
-    view.Metric(Label::ShopTotal, {882, 362, 346, 38}, 174,
+    view.Metric(Label::ShopTotal, {882, 414, 346, 38}, 174,
         quote.total > (std::numeric_limits<int>::max)() ? "--" : std::to_string(quote.total) + "G");
-    view.Add(Label::ShopMinus, {888, 430, 156, 50}, {Action::ShopQuantity, -1}, !confirming && shop.Quantity() > 1);
-    view.Add(Label::ShopPlus, {1060, 430, 156, 50}, {Action::ShopQuantity, 1}, !confirming && shop.Quantity() < FarmSeedShopSystem::kMaxQuantity);
+    view.Metric(Label::ShopRemaining, {882, 462, 346, 38}, 174,
+        quote.available ? std::to_string(quote.money-quote.total)+"G" : "--");
+    view.Add(Label::ShopMinus, {888, 356, 156, 44}, {Action::ShopQuantity, -1}, !confirming && shop.Quantity() > 1);
+    view.Add(Label::ShopPlus, {1060, 356, 156, 44}, {Action::ShopQuantity, 1}, !confirming && shop.Quantity() < FarmSeedShopSystem::kMaxQuantity);
     Label notice = confirming ? Label::ShopConfirm : Label::ShopChoose;
     if (!confirming) {
         if (shop.GetNotice() == FarmSeedShopSystem::Notice::Purchased) notice = Label::ShopPurchased;
@@ -69,9 +74,9 @@ inline void BuildSeedShopView(View& view, const FarmSeedShopSystem& shop, const 
         else if (shop.GetNotice() == FarmSeedShopSystem::Notice::Failed) notice = Label::Failure;
         else if (!quote.available) notice = quote.total > quote.money ? Label::ShopNoMoney : Label::ShopUnavailable;
     }
-    if (quote.unlockDay > 0) view.Metric(Label::StageUnlockDay, {48,554,1140,42}, 200, std::to_string(quote.unlockDay));
-    else view.Add(notice, {48, 554, 1140, 42});
-    view.Add(confirming ? Label::ShopPay : Label::ShopReview, {48, 620, 300, 52},
+    if (quote.unlockDay > 0) view.Metric(Label::StageUnlockDay, {48,620,810,42}, 200, std::to_string(quote.unlockDay));
+    else view.Add(notice, {48, 620, 810, 42});
+    view.Add(confirming ? Label::ShopPay : Label::ShopReview, {882, 518, 346, 50},
         {confirming ? Action::ShopConfirm : Action::ShopReview}, quote.available);
     view.Add(confirming ? Label::Cancel : Label::Resume, {928, 620, 300, 52},
         {confirming ? Action::ShopCancel : Action::ShopClose});

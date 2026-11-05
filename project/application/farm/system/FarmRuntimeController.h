@@ -5,6 +5,7 @@
 #include "farm/system/FarmStartPresentationSystem.h"
 #include "farm/system/FarmArrivalAudioSystem.h"
 #include "farm/system/FarmSeedShopSystem.h"
+#include "farm/system/FarmSaleReviewSystem.h"
 #include "farm/system/FarmHarvestDisplaySystem.h"
 #include "farm/system/FarmContestOutcomeSystem.h"
 #include "farm/system/FarmContestAudioSystem.h"
@@ -56,7 +57,12 @@ public:
     void OpenLayoutLibrary(const FarmRuntimeContext& context);
     void UpdateFollowCamera(const FarmRuntimeContext& context) { FrameFarm(context, true); }
 private:
+    static constexpr int kHarvestInventoryPage = 8;
+    void BuildSaleOverview(const FarmRuntimeContext& context);
+    bool HandleSaleRequest(const FarmRuntimeContext& context, farmui::Request request);
     bool UpdateExhibition(const FarmRuntimeContext& context, const Input& input);
+    void BuildMenuOverview(const FarmRuntimeContext& context);
+    bool UpdateMenuAudio(const FarmRuntimeContext& context, const Input& input);
     void ExecuteExhibition(const FarmRuntimeContext& context, farmui::Request request);
     void BuildView(const FarmRuntimeContext& context);
     void OpenContestDetail(const FarmRuntimeContext& context, int index, bool replay);
@@ -75,11 +81,15 @@ private:
     FarmStartPresentationSystem startPresentation_;
     FarmArrivalAudioSystem arrivalAudio_;
     FarmSeedShopSystem shop_;
+    FarmSaleReviewSystem saleReview_;
+    bool harvestDetails_ = false;
     FarmHarvestDisplaySystem harvestDisplay_;
     FarmContestPresentationSystem contestPresentation_;
     FarmContestAudioSystem contestAudio_;
     FarmContestOutcomeSystem contestOutcome_;
     FarmExhibitionSystem exhibition_;
+    title::TitleAudioSettingsSystem menuAudio_;
+    bool menuDetails_ = false;
     bool seasonRetryFailed_ = false;
     farmui::View view_;
     Vector2 pointer_{-1, -1};

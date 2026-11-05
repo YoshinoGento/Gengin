@@ -188,7 +188,29 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     const Item* tooltip = nullptr;
     const Item* selectedTool = nullptr;
     if (view.compactHUD && view.hotbarVisible) Panel(HUDLayout::tools, {0.025f, 0.035f, 0.032f, 0.93f});
-    if (view.starting) {
+    if (view.audioSettings) {
+        Panel({0,0,1280,720},{.01f,.015f,.02f,.75f});
+        const auto& box=title::kAudioSettingsPanel;
+        Panel({box.position.x,box.position.y,box.size.x,box.size.y},{.055f,.075f,.072f,.99f});
+        for (std::size_t i=0;i<title::kAudioChannelCount;++i) {
+            const float y=title::kAudioSliderY[i];
+            const int volume=std::clamp(view.audioFrame.volume[i],0,100);
+            const float width=title::kAudioSliderWidth*static_cast<float>(volume)*.01f;
+            const bool active=view.audioFrame.selected==static_cast<int>(i) || title::kAudioSliderHits[i].Contains(pointer);
+            Panel({title::kAudioSliderX,y-3,title::kAudioSliderWidth,6},{.22f,.28f,.27f,1});
+            if (width>0) Panel({title::kAudioSliderX,y-3,width,6},{.41f,.76f,.74f,1});
+            Panel({title::kAudioSliderX+width-7,y-16,14,32},active ? Vector4{1,.85f,.47f,1} : Vector4{.88f,.93f,.91f,1});
+            ValueText(std::to_string(volume)+"%",{800,y+24},924,{.96f,.98f,.96f,1});
+        }
+        const std::array buttons{title::kAudioSettingsReset,title::kAudioSettingsBack};
+        for (std::size_t i=0;i<buttons.size();++i) {
+            const auto& button=buttons[i];
+            const bool active=view.audioFrame.selected==static_cast<int>(title::kAudioChannelCount+i) || button.Contains(pointer);
+            Panel({button.position.x,button.position.y,button.size.x,button.size.y},
+                active ? Vector4{.25f,.4f,.36f,1} : Vector4{.16f,.23f,.22f,1});
+        }
+        if (view.audioFrame.saveFailed) Panel({320,648,640,56},{.15f,.06f,.035f,1});
+    } else if (view.starting) {
         const float height = 84.0f * std::clamp(view.cinematicBars, 0.0f, 1.0f);
         Panel({0, 0, 1280, height}, {0.015f, 0.025f, 0.026f, 0.90f});
         Panel({0, 720-height, 1280, height}, {0.015f, 0.025f, 0.026f, 0.90f});
@@ -197,8 +219,8 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         Panel({0, 496, 1280, 224}, {0.035f, 0.055f, 0.06f, 0.97f});
     } else if (view.seedShop || view.harvestDisplay) {
         Panel({24, 16, 1232, 60}, {0.035f, 0.055f, 0.06f, 0.94f});
-        Panel(SeedShopLayout::receipt, {0.035f, 0.055f, 0.06f, 0.97f});
-        Panel(SeedShopLayout::footer, {0.035f, 0.055f, 0.06f, 0.97f});
+        Panel(view.seedShop ? SeedShopLayout::shopReceipt : SeedShopLayout::receipt, {0.035f, 0.055f, 0.06f, 0.97f});
+        Panel(view.seedShop ? SeedShopLayout::shopFooter : SeedShopLayout::footer, {0.035f, 0.055f, 0.06f, 0.97f});
     } else if (view.contestDetail) {
         const auto& frame = view.contestFrame;
         const bool ceremony=frame.page==FarmContestPresentationSystem::Page::Result || frame.unsubmitted;
@@ -244,7 +266,11 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         }
     } else if (view.modal) {
         Panel({0, 0, 1280, 720}, {0.01f, 0.015f, 0.02f, 0.75f});
-        Panel({130, 32, 1020, 656}, {0.055f, 0.075f, 0.072f, 0.99f});
+        Panel(view.menuShell ? Rect{130,24,1020,688} : Rect{130,32,1020,656}, {0.055f, 0.075f, 0.072f, 0.99f});
+        if (view.menuShell) {
+            Panel({150,112,980,2},{.22f,.29f,.28f,1});
+            Panel({150,618,980,2},{.22f,.29f,.28f,1});
+        }
     }
     if (view.observation) {
         Panel(View::kObservationTop, {0.035f, 0.055f, 0.06f, 0.96f});
@@ -290,7 +316,7 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             continue;
         }
         const bool button = item.request.action != Action::None;
-        if (IsValidIcon(item.icon)) {
+        if (IsValidIcon(item.icon) && !item.leadingIcon) {
             const bool hover = item.rect.Contains(pointer) || item.focused;
             const Vector4 border = item.selected ? Vector4{0.96f, 0.78f, 0.35f, 1} :
                 hover ? Vector4{0.68f, 0.89f, 0.85f, 1} : Vector4{0.23f, 0.30f, 0.28f, 1};
@@ -315,19 +341,28 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         if (button) {
             Vector4 color = item.enabled ? Vector4{0.16f, 0.23f, 0.22f, 1} : Vector4{0.09f, 0.11f, 0.11f, 1};
             if (item.selected) color = {0.40f, 0.32f, 0.10f, 1};
-            if (item.enabled && (item.focused || item.rect.Contains(pointer))) color = {0.25f, 0.40f, 0.36f, 1};
+            if (item.enabled && !item.selected && (item.focused || item.rect.Contains(pointer))) color = {0.25f, 0.40f, 0.36f, 1};
             Panel(item.rect, color);
+            if (view.menuShell && item.enabled && (item.selected || item.focused))
+                Panel({item.rect.x,item.rect.y+item.rect.height-3,item.rect.width,3},{.97f,.81f,.40f,1});
         }
         Rect labelRect = item.rect;
+        if (item.leadingIcon && IsValidIcon(item.icon)) {
+            IconQuad(item.icon,{item.rect.x+10,item.rect.y+(item.rect.height-40)*.5f,40,40},
+                item.enabled ? Vector4{1,1,1,1} : Vector4{.4f,.43f,.42f,1});
+            labelRect.x+=54; labelRect.width-=54;
+            labelRect.y+=(item.rect.height-38)*.5f; labelRect.height=38;
+        }
         if (item.label == Label::ShopPlus || item.label == Label::ShopMinus) {
             const float width = kLabels[static_cast<std::size_t>(item.label)].width + 20.0f;
             labelRect.x += (labelRect.width - width) * 0.5f; labelRect.width = width;
         }
-        if (!item.value.empty()) labelRect.width = item.valueOffset - 10;
+        if (!item.value.empty()) labelRect.width = item.valueOffset - 10 - (labelRect.x-item.rect.x);
         const Vector4 darkInk{0.015f, 0.025f, 0.02f, 1};
         LabelQuad(item.label, labelRect, item.darkInk ? darkInk : !item.enabled ? Vector4{0.42f, 0.46f, 0.45f, 1} :
             item.warning ? Vector4{1.0f, 0.72f, 0.32f, 1} : Vector4{0.96f, 0.98f, 0.96f, 1});
-        if (!item.value.empty()) ValueText(item.value, {item.rect.x + item.valueOffset, item.rect.y + 1}, item.rect.x + item.rect.width,
+        if (!item.value.empty()) ValueText(item.value, {item.rect.x + item.valueOffset,
+            item.rect.y + (item.leadingIcon ? (item.rect.height-36)*.5f : 1)}, item.rect.x + item.rect.width,
             item.darkInk ? darkInk : Vector4{1.0f, 0.87f, 0.50f, 1});
     }
     opacity_ = viewOpacity;

@@ -354,6 +354,34 @@ labels.extend([
     ["ExhibitionHome", "デモメニューへ"],
     ["ExhibitionMissing", "デモ用データを読み込めません"],
 ])
+labels.extend([
+    ["MenuFarm", "農作業"], ["MenuTerrain", "水路・地形"], ["MenuRecords", "セーブ"],
+    ["MenuObserve", "育成比較"], ["MenuDetails", "詳しい操作"], ["MenuSummary", "一覧に戻る"],
+    ["MenuWork", "農場で行うこと"], ["MenuTerrainWork", "土地と水の流れを整える"],
+    ["MenuSaveHeading", "現在の農場を保存"], ["MenuLoadHeading", "保存データを選ぶ"],
+    ["MenuCompareHeading", "２つの畑の育ち方を比べる"],
+    ["MenuCompareA", "比較する畑Ａ"], ["MenuCompareB", "比較する畑Ｂ"],
+    ["MenuSoundHeading", "サウンド"], ["MenuCameraHeading", "カメラ"], ["MenuModeHeading", "ゲームモード"],
+    ["MenuAudioOpen", "音量を変更"], ["MenuAudioTitle", "音量設定"],
+    ["MenuEnvironment", "環境音"], ["MenuWaterAudio", "水音"], ["MenuContestAudio", "審査演出"],
+    ["MenuAudioReset", "初期値に戻す"], ["MenuAudioBack", "戻る"], ["MenuAudioFailed", "音量を保存できません"],
+    ["MenuSeedCount", "選択中の種の数"], ["MenuModeSeason", "３０日間の大会"],
+    ["MenuModeTrial", "目標金額に挑戦"], ["MenuModeFree", "フリー農業"],
+    ["MenuSettings", "設定"],
+])
+labels.extend([
+    ["TradeOpen", "収穫物・売却"], ["TradeTitle", "収穫物の売却"],
+    ["TradeDetails", "保管・大会の詳細"], ["TradeBack", "売却画面に戻る"],
+    ["TradeAll", "すべての作物"], ["TradeOwned", "所持数"],
+    ["TradeCount", "売る個数"], ["TradeValue", "受取額"],
+    ["TradeRemaining", "売却後の所持金"], ["ShopRemaining", "購入後の残金"],
+    ["TradeProtected", "保護して残す個数"], ["TradeReview", "売却内容を確認"],
+    ["TradeConfirm", "この内容で売却"], ["TradeQuestion", "選択した作物を売却しますか？"],
+    ["TradeProtectionNote", "保護中の作物は売却されません"],
+    ["TradeEmpty", "売却できる作物がありません"], ["TradeSold", "売却しました"],
+    ["TradeChanged", "所持品が変わりました。もう一度確認してください"],
+    ["TradeUnavailable", "現在は売却できません"],
+])
 ascii_y = ((len(labels) + columns - 1) // columns) * cell_h
 height = ascii_y + 128
 assert height <= 4096, "Split the label atlas before adding more rows"

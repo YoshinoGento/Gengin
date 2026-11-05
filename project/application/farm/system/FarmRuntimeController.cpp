@@ -1,5 +1,6 @@
 #include "farm/system/FarmRuntimeController.h"
 #include "farm/ui/FarmHotbarView.h"
+#include "farm/ui/FarmMenuView.h"
 #include "farm/system/FarmRuntimeContext.h"
 #include "editor/GamePlayEditorBridge.h"
 #include "farm/render/FarmArrivalRenderer.h"
@@ -45,7 +46,6 @@ using editor::GamePlayEditorCommandType;
 constexpr int kSoilCarePage = 5;
 constexpr int kQualityCurrentPage = 6;
 constexpr int kQualityHarvestPage = 7;
-constexpr int kHarvestInventoryPage = 8;
 constexpr int kContestPreviewPage = 9;
 constexpr int kContestEntryPage = 10;
 constexpr int kContestResultsPage = 11;
@@ -76,6 +76,10 @@ void FarmRuntimeController::OpenContestDetail(const FarmRuntimeContext& s, int i
 void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
     view_ = {};
     contestNotice_ = false;
+    if (menuAudio_.GetFrame().open) {
+        farmui::BuildMenuAudioView(view_, menuAudio_.GetFrame());
+        return;
+    }
     if (exhibition_.Active()) {
         farmui::BuildExhibitionView(view_, exhibition_);
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
@@ -248,14 +252,13 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
-    constexpr Label tabs[] = {Label::Farm, Label::Terrain, Label::Records, Label::Observe, Label::Settings};
-    for (int i = 0; i < 5; ++i) view_.Add(tabs[i], {150.0f + i * 196, 52, 188, 48}, {Action::Tab, i}, pending_ == Action::None,
-        page_ == i || ((page_ == kSoilCarePage || page_ == kQualityCurrentPage || page_ == kQualityHarvestPage || page_ == kHarvestInventoryPage || page_ == kContestPreviewPage || page_ == kContestEntryPage || page_ == kContestResultsPage) && i == 0));
-    view_.Add(Label::Resume, {916, 628, 214, 44}, {Action::Close});
-    view_.Add(status_, {166, 628, 492, 42});
     const bool showOutcomeLink = outcome.season.finalized && s.farmProgressionSystem.IsContestSeason() && pending_ == Action::None;
-    view_.Add(showOutcomeLink ? Label::OutcomeBack : Label::ReturnTitle, {678, 628, 224, 44},
-        {showOutcomeLink ? Action::ContestOutcome : Action::ReturnTitle}, pending_ == Action::None);
+    farmui::BuildMenuShell(view_, page_, menuDetails_, pending_ != Action::None || saleReview_.Confirming(), showOutcomeLink, status_);
+    if (page_ == kHarvestInventoryPage && pending_ == Action::None) {
+        if (!harvestDetails_) { BuildSaleOverview(s); return; }
+        for (std::size_t i=0;i<view_.count;++i)
+            if (view_.items[i].request.action==Action::MenuDetails) view_.items[i].label=Label::TradeBack;
+    }
     if (pending_ != Action::None) {
         view_.Add(pending_ == Action::ChangePlayMode ? Label::ModeConfirm :
             pending_ == Action::SubmitContest ? Label::ContestSubmitConfirm :
@@ -265,6 +268,10 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             pending_ == Action::ReturnTitle ? Label::ReturnTitle : Label::Accept, {256, 342, 360, 56}, {Action::Accept});
         view_.Add(Label::Cancel, {648, 342, 360, 56}, {Action::Cancel});
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
+        return;
+    }
+    if (!menuDetails_ && page_ >= 0 && page_ < farmui::kMenuPageCount) {
+        BuildMenuOverview(s);
         return;
     }
     int row = 0;
@@ -460,6 +467,7 @@ void FarmRuntimeController::CommitScreenTransition(const FarmRuntimeContext& s) 
 }
 
 void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request request, bool allowTransition) {
+    if (HandleSaleRequest(s,request)) return;
     using C = GamePlayEditorCommandType;
     const auto dispatch = [&](C type) {
         editor::GamePlayEditorCommand command{};
@@ -502,6 +510,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
             OpenContestDetail(s, request.argument, true);
         return;
     case Action::ShopSelect:
+    case Action::ShopProduct:
         shop_.Select(request.argument); return;
     case Action::ShopQuantity:
         shop_.ChangeQuantity(request.argument); return;
@@ -571,13 +580,30 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         else flow_.Continue();
         open_ = false; observation_ = false; pickingSlot_ = -1; focusedItem_ = -1;
         return;
-    case Action::FlowRecords: open_ = true; page_ = 2; focusedItem_ = -1; return;
+    case Action::FlowRecords: open_ = true; page_ = 2; menuDetails_ = false; focusedItem_ = -1; return;
     case Action::SoilCare: open_ = true; page_ = kSoilCarePage; focusedItem_ = -1; status_ = Label::SoilCare; return;
     case Action::Quality:
         if (request.argument < 0 || request.argument > 1) return;
         open_ = true; page_ = request.argument == 1 ? kQualityHarvestPage : kQualityCurrentPage;
         focusedItem_ = -1; status_ = Label::Paused; return;
-    case Action::Menu: open_ = true; if (observation_) page_ = 3; else if (terrain_) page_ = 1; focusedItem_ = -1; s.farmCropSelectionSystem.Cancel(); return;
+    case Action::Menu:
+        open_ = true; menuDetails_ = false;
+        if (observation_) page_ = 3; else if (terrain_) page_ = 1;
+        else if (page_ >= farmui::kMenuPageCount) page_ = 0;
+        focusedItem_ = -1; s.farmCropSelectionSystem.Cancel(); return;
+    case Action::MenuDetails:
+        if (!open_ || pending_ != Action::None) return;
+        if (page_ == kHarvestInventoryPage && harvestDetails_) {
+            harvestDetails_=false; focusedItem_=-1; status_=Label::Ready; return;
+        }
+        if (page_ >= farmui::kMenuPageCount) { page_ = 0; menuDetails_ = false; }
+        else menuDetails_ = !menuDetails_;
+        focusedItem_ = -1; status_ = Label::Ready; return;
+    case Action::AudioSettings:
+        if (!open_ || pending_ != Action::None || page_ != farmui::kMenuSettingsPage) return;
+        if (!menuAudio_.GetFrame().saveFailed) menuAudio_.Initialize();
+        { title::AudioSettingsInput toggle; toggle.toggle = true; (void)menuAudio_.Update(toggle); }
+        focusedItem_ = -1; return;
     case Action::ObserveField: EnterObservation(s); return;
     case Action::ObserveExit:
         observation_ = false; pickingSlot_ = -1; paused_ = pauseBeforeObservation_;
@@ -599,13 +625,15 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     case Action::Close:
         if (open_ && page_ == kHarvestDisplayPage && pending_ == Action::None &&
             allowTransition && DeferScreenTransition(s, request)) return;
-        open_ = false; pending_ = Action::None; return;
+        saleReview_.Cancel(); open_ = false; pending_ = Action::None; return;
     case Action::StageGuide:
         if (pending_ != Action::None) return;
         open_ = true; page_ = kStageGuidePage; focusedItem_ = -1; return;
     case Action::Tab:
         if (open_ && page_ == kHarvestDisplayPage && allowTransition && DeferScreenTransition(s, request)) return;
-        page_ = std::clamp(request.argument, 0, 4); focusedItem_ = -1; status_ = Label::Ready;
+        saleReview_.Cancel();
+        page_ = std::clamp(request.argument, 0, farmui::kMenuPageCount - 1);
+        menuDetails_ = false; focusedItem_ = -1; status_ = Label::Ready;
         if (terrain_ && page_ != 1) LeaveTerrain(s);
         if (page_ < 3 && observation_) {
             observation_ = false; pickingSlot_ = -1; paused_ = pauseBeforeObservation_;
@@ -723,7 +751,8 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         return;
     case Action::HarvestInventory:
         if (open_ && page_ == kHarvestDisplayPage && allowTransition && DeferScreenTransition(s, request)) return;
-        open_ = true; page_ = kHarvestInventoryPage; harvestPage_ = 0; focusedItem_ = -1; return;
+        saleReview_.Reset(); harvestDetails_=false;
+        open_ = true; page_ = kHarvestInventoryPage; harvestPage_ = 0; focusedItem_ = -1; status_=Label::Ready; return;
     case Action::ContestPreview:
         if (!open_ || (page_ != kHarvestDisplayPage && page_ != kHarvestInventoryPage && page_ != kContestPreviewPage && page_ != kContestEntryPage && page_ != kContestResultsPage)) return;
         if (request.argument != 0 && request.argument != 1) return;
@@ -833,8 +862,10 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
             break;
         }
         case Action::Sell: case Action::SellAll:
-            s.host.RouteFarmSale(request.action == Action::SellAll ? s.farmEconomySystem.SellAll() : s.farmEconomySystem.SellCrop(s.farmCropSelectionSystem.GetSelectedCrop()));
-            open_ = false; success = true; break;
+            saleReview_.Reset();
+            if (request.action==Action::Sell) (void)saleReview_.Select(s.farmCropSelectionSystem.GetSelectedCrop());
+            harvestDetails_=false; open_=true; page_=kHarvestInventoryPage; focusedItem_=-1; status_=Label::Ready;
+            return;
         case Action::Raise: success = dispatch(C::BeginFarmRaiseTerrainPreview); break;
         case Action::Lower: success = dispatch(C::BeginFarmLowerTerrainPreview); break;
         case Action::Canal: success = dispatch(C::BeginFarmCanalPreview); break;
@@ -1076,6 +1107,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         frameCaptured_ = true; return true;
     }
     s.host.ConvertMouseToVirtualScreen(input.GetMousePosition(), pointer_);
+    if (UpdateMenuAudio(s, input)) return true;
     BuildView(s);
     const bool click = input.TriggerMouseButton(InputMouseButton::Left);
     pointerTriggered_ = click || input.TriggerMouseButton(InputMouseButton::Right);
@@ -1162,16 +1194,16 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     arrivalAudio_.Update({},false,true);
     // Shop input never falls through to farm picking, quick purchases or player movement.
     if (view_.seedShop) {
-        if (input.TriggerKey(InputKey::Escape) || input.TriggerMouseButton(InputMouseButton::Right)) {
+        if (input.TriggerKey(InputKey::Escape) || input.TriggerMouseButton(InputMouseButton::Right) || input.TriggerGamepadButton(InputGamepadButton::B)) {
             if (shop_.GetPhase() == FarmSeedShopSystem::Phase::Confirming) shop_.CancelConfirmation();
             else Execute(s, {Action::ShopClose});
         } else if (click && hit.action != Action::None) Execute(s, hit);
         else {
-            if (input.TriggerKey(InputKey::ArrowLeft)) shop_.Select((shop_.Selection() + FarmSeedShopSystem::kProductCount - 1) % FarmSeedShopSystem::kProductCount);
-            else if (input.TriggerKey(InputKey::ArrowRight)) shop_.Select((shop_.Selection() + 1) % FarmSeedShopSystem::kProductCount);
-            if (input.TriggerKey(InputKey::ArrowUp)) shop_.ChangeQuantity(1);
-            else if (input.TriggerKey(InputKey::ArrowDown)) shop_.ChangeQuantity(-1);
-            if (input.TriggerKey(InputKey::Enter)) Execute(s, {shop_.GetPhase() == FarmSeedShopSystem::Phase::Confirming ? Action::ShopConfirm : Action::ShopReview});
+            if (input.TriggerKey(InputKey::ArrowLeft) || input.TriggerGamepadButton(InputGamepadButton::DPadLeft)) shop_.Select((shop_.Selection() + FarmSeedShopSystem::kProductCount - 1) % FarmSeedShopSystem::kProductCount);
+            else if (input.TriggerKey(InputKey::ArrowRight) || input.TriggerGamepadButton(InputGamepadButton::DPadRight)) shop_.Select((shop_.Selection() + 1) % FarmSeedShopSystem::kProductCount);
+            if (input.TriggerKey(InputKey::ArrowUp) || input.TriggerGamepadButton(InputGamepadButton::DPadUp)) shop_.ChangeQuantity(1);
+            else if (input.TriggerKey(InputKey::ArrowDown) || input.TriggerGamepadButton(InputGamepadButton::DPadDown)) shop_.ChangeQuantity(-1);
+            if (input.TriggerKey(InputKey::Enter) || input.TriggerGamepadButton(InputGamepadButton::A)) Execute(s, {shop_.GetPhase() == FarmSeedShopSystem::Phase::Confirming ? Action::ShopConfirm : Action::ShopReview});
         }
         BuildView(s); frameCaptured_ = true; return true;
     }
@@ -1180,30 +1212,35 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         focusedItem_ = -1;
         Execute(s, hit); BuildView(s); frameCaptured_ = true; return true;
     }
-    if (!contestNotice_ && input.TriggerKey(InputKey::Escape)) {
-        if (pending_ != Action::None) Execute(s, {Action::Cancel});
+    if (!contestNotice_ && (input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::B))) {
+        if (saleReview_.Confirming()) Execute(s,{Action::SaleCancel});
+        else if (pending_ != Action::None) Execute(s, {Action::Cancel});
+        else if (open_ && (menuDetails_ || (page_ >= farmui::kMenuPageCount && view_.menuShell))) Execute(s, {Action::MenuDetails});
         else if (open_) Execute(s, {Action::Close});
         else if (observation_ && pickingSlot_ >= 0) pickingSlot_ = -1;
         else if (s.farmIrrigationPreviewSystem.IsActive()) { s.farmIrrigationPreviewSystem.Cancel(); brush_ = 0; }
         else if (terrain_) LeaveTerrain(s);
         else if (s.farmCropSelectionSystem.IsOpen()) s.farmCropSelectionSystem.Cancel();
-        else open_ = true;
+        else Execute(s, {Action::Menu});
         BuildView(s); frameCaptured_ = true; return true;
     }
     if (contestNotice_ || open_ || flow_.BlocksSimulation()) {
         s.farmIrrigationPreviewSystem.EndTerrainStroke();
         if (!contestNotice_ && open_ && input.TriggerKey(InputKey::Tab) && pending_ == Action::None) {
-            Execute(s, {Action::Tab, (page_ + 1) % 5});
+            Execute(s, {Action::Tab, (page_ + 1) % farmui::kMenuPageCount});
+            BuildView(s); frameCaptured_ = true; return true;
         }
-        const int step = (input.TriggerKey(InputKey::ArrowDown) || input.TriggerKey(InputKey::ArrowRight)) ? 1
-            : (input.TriggerKey(InputKey::ArrowUp) || input.TriggerKey(InputKey::ArrowLeft)) ? -1 : 0;
+        const int step = (input.TriggerKey(InputKey::ArrowDown) || input.TriggerKey(InputKey::ArrowRight) ||
+            input.TriggerGamepadButton(InputGamepadButton::DPadDown) || input.TriggerGamepadButton(InputGamepadButton::DPadRight)) ? 1
+            : (input.TriggerKey(InputKey::ArrowUp) || input.TriggerKey(InputKey::ArrowLeft) ||
+            input.TriggerGamepadButton(InputGamepadButton::DPadUp) || input.TriggerGamepadButton(InputGamepadButton::DPadLeft)) ? -1 : 0;
         if (step != 0) {
             focusedItem_ = view_.NextActionable(focusedItem_, step);
         }
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) {
             const auto& item = view_.items[focusedItem_];
             if (step) pointer_ = {item.rect.x + item.rect.width * 0.5f, item.rect.y + item.rect.height * 0.5f};
-            if (input.TriggerKey(InputKey::Enter) && item.enabled) {
+            if ((input.TriggerKey(InputKey::Enter) || input.TriggerGamepadButton(InputGamepadButton::A)) && item.enabled) {
                 Execute(s, item.request); focusedItem_ = -1;
             }
         }

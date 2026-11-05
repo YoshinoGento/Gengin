@@ -6,6 +6,7 @@
 #include "farm/ui/FarmQualityView.h"
 #include "farm/ui/FarmTerrainView.h"
 #include "farm/ui/FarmHotbarView.h"
+#include "farm/ui/FarmMenuView.h"
 #include "farm/system/FarmOverviewCamera.h"
 #include <cassert>
 #include <cmath>
@@ -367,6 +368,71 @@ void TestCaptionLayout() {
 }
 
 int main() {
+    for (int page=0;page<kMenuPageCount;++page) {
+        for (int flags=0;flags<64;++flags) {
+            MenuOverviewState state;
+            state.page=page; state.unlocked=(flags&1)!=0;
+            state.canSave=state.canSaveCopy=state.unlocked;
+            state.dirty=(flags&2)!=0; state.documents=(flags&4) ? 3 : 0;
+            state.documentIndex=state.documents ? 1 : 0;
+            state.comparing=(flags&8)!=0; state.canCompare=state.unlocked&&!state.comparing;
+            state.following=(flags&16)!=0; state.contestSeason=(flags&32)!=0;
+            state.money=999999; state.seeds=9999; state.maximumHeight=5;
+            state.compareA=123; state.compareB=-1;
+            state.suppliedCanals=123; state.suppliedTiles=456;
+            View menu;
+            BuildMenuShell(menu,page,false,false,false,Label::Ready);
+            BuildMenuOverview(menu,state);
+            AssertItemsDoNotOverlap(menu);
+            assert(menu.menuShell && menu.modal && menu.count<View::kCapacity);
+            assert(menu.Covers({10,10}) && menu.Hit({10,10}).action==Action::None);
+            for (std::size_t i=0;i<menu.count;++i) {
+                AssertReadable(menu.items[i]);
+                AssertHalfOpenControl(menu.items[i]);
+            }
+            const int first=menu.NextActionable(-1,1);
+            int cursor=first, count=0;
+            do {
+                assert(cursor>=0 && menu.items[cursor].enabled && menu.items[cursor].request.action!=Action::None);
+                cursor=menu.NextActionable(cursor,1); ++count;
+                assert(count<=static_cast<int>(menu.count));
+            } while(cursor!=first);
+            assert(menu.NextActionable(menu.NextActionable(first,-1),1)==first);
+            if (page==2) assert((menu.Hit(Center(MenuLayout::Cell(1,308))).action==Action::Load)==(state.documents>0));
+        }
+    }
+    for (int page=0;page<15;++page) {
+        View confirmation;
+        BuildMenuShell(confirmation,page,true,true,false,Label::Failure);
+        assert(confirmation.NextActionable(-1,1)==-1);
+        AssertItemsDoNotOverlap(confirmation);
+        for (std::size_t i=0;i<confirmation.count;++i) AssertReadable(confirmation.items[i]);
+    }
+    for (const int volume : {0,40,100}) {
+        title::AudioSettingsFrame frame;
+        frame.open=true; frame.volume.fill(volume); frame.saveFailed=true;
+        View audio;
+        BuildMenuAudioView(audio,frame);
+        AssertItemsDoNotOverlap(audio);
+        assert(audio.modal && audio.audioSettings && audio.Covers({1,1}));
+        assert(audio.NextActionable(-1,1)==-1); // Shared settings System consumes these inputs.
+        assert(audio.audioFrame.volume==frame.volume);
+        for (std::size_t i=0;i<audio.count;++i) AssertReadable(audio.items[i]);
+    }
+    std::cout << "PASS: 320 menu layouts, modal shell, audio view, keyboard navigation\n";
+    for (int child=0;child<5;++child) {
+        View detail;
+        BuildMenuShell(detail,5+child,false,false,false,Label::Ready);
+        if (child==0) BuildStageGuideView(detail,{});
+        else if (child==1) BuildQualityView(detail,{}, {},0,false);
+        else if (child==2) BuildHarvestInventoryView(detail,{});
+        else if (child==3) BuildContestJudgeView(detail,{});
+        else BuildContestResultsView(detail,{},{});
+        AssertItemsDoNotOverlap(detail);
+        assert(detail.count<View::kCapacity);
+        for (std::size_t i=0;i<detail.count;++i) AssertReadable(detail.items[i]);
+    }
+    std::cout << "PASS: menu shell composed with 5 existing child views\n";
     std::cout << std::unitbuf;
 #ifdef _MSC_VER
     _set_error_mode(_OUT_TO_STDERR);

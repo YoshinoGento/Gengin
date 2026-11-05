@@ -195,6 +195,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\ui\FarmHUD.cpp" />
     <ClCompile Include="application\farm\ui\FarmRuntimeUI.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeController.cpp" />
+    <ClCompile Include="application\farm\system\FarmRuntimeMenu.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExhibition.cpp" />
     <ClCompile Include="application\farm\system\FarmExhibitionSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmLayoutSystem.cpp" />
@@ -543,6 +544,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\ui\FarmHUDLayout.h" />
     <ClInclude Include="application\farm\ui\FarmHUDIcons.h" />
     <ClInclude Include="application\farm\ui\FarmHotbarView.h" />
+    <ClInclude Include="application\farm\ui\FarmMenuView.h" />
+    <ClInclude Include="application\farm\ui\FarmSaleView.h" />
+    <ClInclude Include="application\farm\system\FarmSaleReviewSystem.h" />
     <ClInclude Include="application\farm\ui\FarmUIRect.h" />
     <ClInclude Include="application\farm\ui\FarmRuntimeUI.h" />
     <ClInclude Include="application\farm\ui\FarmQualityView.h" />

@@ -13,6 +13,11 @@ void ValidateView(const FarmSeedShopSystem& shop, const FarmEconomySystem& econo
     Check(view.modal && view.seedShop && view.count < view.kCapacity, "shop owns input and bounded view");
     Check(view.Covers({1, 400}), "background consumes clicks");
     const bool browsing = shop.GetPhase() == FarmSeedShopSystem::Phase::Browsing;
+    for (int i=0;i<FarmSeedShopSystem::kProductCount;++i) {
+        const auto hit=view.Hit({200.0f+220*i,112});
+        Check(hit.action==(browsing?farmui::Action::ShopProduct:farmui::Action::None),"direct product tabs and confirmation lock");
+        if (browsing) Check(hit.argument==i,"tab product identity");
+    }
     const int first=(shop.Selection()/2)*2;
     for (int index = 0; index < 2; ++index) {
         const auto& rect = farmui::SeedShopLayout::products[index];

@@ -4,6 +4,7 @@
 #include "farm/ui/FarmHUDLayout.h"
 #include "farm/ui/FarmHUDIcons.h"
 #include "farm/system/FarmContestPresentationSystem.h"
+#include "title/TitleAudioSettingsSystem.h"
 #include "2d/Sprite.h"
 #include <array>
 #include <algorithm>
@@ -25,7 +26,9 @@ enum class Action {
     HarvestDisplay, HarvestDisplaySelect, HarvestDisplayPage, StartSkip, StageGuide,
     ContestDetail, ContestDetailClose, ContestReveal, ContestMissedContinue, ContestOutcome, SeasonRetry, ContestOutcomeReveal,
     ContestTab, ContestExplanation,
-    ExhibitionOpen, ExhibitionSelect, ExhibitionWatch, ExhibitionHome, ExhibitionExit
+    ExhibitionOpen, ExhibitionSelect, ExhibitionWatch, ExhibitionHome, ExhibitionExit,
+    MenuDetails, AudioSettings, ShopProduct,
+    HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel
 };
 struct Request { Action action = Action::None; int argument = 0; std::uint64_t inventoryGeneration = 0; };
 struct Item {
@@ -41,6 +44,7 @@ struct Item {
     bool warning = false;
     HUDIcon icon = HUDIcon::None;
     float opacity = 1;
+    bool leadingIcon = false;
 };
 [[nodiscard]] inline Rect IconCaptionRect(const Item& item) noexcept {
     const auto index = static_cast<std::size_t>(item.label);
@@ -79,6 +83,9 @@ struct View {
     std::array<Item, kCapacity> items{};
     std::size_t count = 0;
     bool modal = false;
+    bool menuShell = false;
+    bool audioSettings = false;
+    title::AudioSettingsFrame audioFrame{};
     bool briefing = false;
     bool starting = false;
     float cinematicBars = 1.0f;
