@@ -1,6 +1,8 @@
 #include <cassert>
 #include "farm_test_edit.h"
 #include "farm/system/FarmTimeAdvanceSystem.h"
+#include "farm/system/FarmTimeAdvanceControlSystem.h"
+#include "editor/FarmTimeAdvancePlaytestSystem.h"
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -55,6 +57,169 @@ void CheckBlocked(Fixture& f, Reason reason, int index = -1) {
 }
 
 int main() try {
+    {
+        Fixture f;
+        FarmTimeAdvanceControlSystem control;
+        Require(!control.HoldsSimulation(), "initial transport held");
+        Require(control.Start(f.Context(), false, true), "live start");
+        Require(control.HoldsSimulation(), "live start did not hold fixed updates");
+        control.BeginFrame();
+        Require(control.Tick(f.Context(), false) == Advance::kStepsPerBatch, "live batch budget");
+        const auto clock = f.date.CaptureSnapshot();
+        Require(control.Tick(f.Context(), false) == 0, "duplicate batch in render frame");
+        control.Cancel();
+        Require(!control.Read().status.active && control.Read().held && control.Read().status.reason == Reason::Cancelled, "cancel must hold");
+        SameClock(clock, f.date.CaptureSnapshot());
+        control.Reset();
+        Require(control.HoldsSimulation(), "resume advanced twice in consumed frame");
+        control.BeginFrame();
+        Require(!control.HoldsSimulation(), "resume remained held next frame");
+        Require(control.Start(f.Context(), false, false), "manual start");
+        Require(control.Tick(f.Context(), false) == Advance::kStepsPerBatch, "manual batch");
+        control.BeginFrame();
+        Require(control.Tick(f.Context(), false) == 0 && control.Read().status.active, "manual continued without request");
+        Require(control.Start(f.Context(), false, false), "manual second request");
+        Require(control.Tick(f.Context(), false) == Advance::kStepsPerBatch, "manual second batch");
+        control.BeginFrame();
+        Require(control.Start(f.Context(), false, true) && control.Read().automatic, "manual to automatic");
+        Require(control.Tick(f.Context(), false) == Advance::kStepsPerBatch, "automatic after manual");
+        Require(!control.Start(f.Context(), false, true), "duplicate automatic accepted");
+        control.BeginFrame();
+        Require(control.Tick(f.Context(), true) == 0 && control.Read().status.reason == Reason::Blocked, "focus/menu stop");
+        Require(control.HoldsSimulation(), "blocked did not hold");
+        Require(control.Start(f.Context(), false, true), "restart after blocked");
+        control.Interrupt();
+        Require(control.Read().status.reason == Reason::ContextChanged && control.HoldsSimulation(), "edit invalidation");
+        control.Reset(); control.BeginFrame();
+        f.Crop(farm::CropType::Carrot, .01f);
+        Require(!control.Start(f.Context(), false, true), "unsafe live start");
+        Require(control.Read().status.reason == Reason::WaterLow && control.HoldsSimulation(), "unsafe hold reason");
+    }
+    {
+        Fixture f;
+        f.progression.Initialize({}, FarmProgressionMode::FreeFarming, true);
+        Require(f.date.RestoreSnapshot({(std::numeric_limits<int>::max)(), 59.9f, 1}), "max day fixture");
+        Require(!FarmSimulationStepSystem::Step(f.Context(), std::numeric_limits<float>::quiet_NaN()).advanced, "NaN step");
+        (void)FarmSimulationStepSystem::Step(f.Context(), .2f);
+        Require(f.date.GetDay() == (std::numeric_limits<int>::max)(), "day overflow");
+    }
+    {
+        Fixture f;
+        FarmTimeAdvanceControlSystem control;
+        Require(f.date.RestoreSnapshot({9, 59.99f, 1}), "live contest clock");
+        Require(control.Start(f.Context(), false, true), "live contest start");
+        control.BeginFrame();
+        Require(control.Tick(f.Context(), false) == 1 && control.Read().status.reason == Reason::ContestDay,
+            "live contest boundary");
+        Require(f.contest.Acknowledge(10), "live contest acknowledgement");
+        control.BeginFrame();
+        Require(control.HoldsSimulation(), "acknowledgement must not implicitly resume");
+        control.Reset();
+        Require(!control.HoldsSimulation(), "explicit contest resume remains held");
+        Require(FarmSimulationStepSystem::Step(f.Context(), Advance::kStepSeconds).advanced &&
+            f.date.GetElapsedSecondsInDay() > 0, "normal simulation after contest resume");
+    }
+    {
+        Fixture batch, ordinary;
+        FarmGrowthComparisonSystem batchComparison, normalComparison;
+        batchComparison.Initialize(); normalComparison.Initialize();
+        for (Fixture* fixture : {&batch, &ordinary}) {
+            fixture->Crop(farm::CropType::Carrot, .55f, .2f, 18);
+            fixture->Crop(farm::CropType::Carrot, .55f, .2f, 19);
+        }
+        Require(batchComparison.Pin(batch.grid, 0, 18) && batchComparison.Pin(batch.grid, 1, 19) &&
+            batchComparison.Start(batch.grid), "batch observer start");
+        Require(normalComparison.Pin(ordinary.grid, 0, 18) && normalComparison.Pin(ordinary.grid, 1, 19) &&
+            normalComparison.Start(ordinary.grid), "normal observer start");
+        auto batchContext = batch.Context(); batchContext.comparison = &batchComparison;
+        auto normalContext = ordinary.Context(); normalContext.comparison = &normalComparison;
+        Require(batch.advance.Start(batchContext, false), "observed batch start");
+        const int steps = batch.advance.AdvanceBatch(batchContext, false);
+        for (int i = 0; i < steps; ++i)
+            Require(FarmSimulationStepSystem::Step(normalContext, Advance::kStepSeconds).advanced, "shared normal step");
+        const auto observedBatch = batchComparison.GetView(batch.grid);
+        const auto observedNormal = normalComparison.GetView(ordinary.grid);
+        Require(observedBatch.status == FarmComparisonStatus::Running &&
+            observedBatch.elapsedSeconds > 0 && observedBatch.elapsedSeconds == observedNormal.elapsedSeconds,
+            "comparison observer parity");
+        SameClock(batch.date.CaptureSnapshot(), ordinary.date.CaptureSnapshot());
+        for (int i = 0; i < 2; ++i)
+            Require(observedBatch.rows[i].current.growth == observedNormal.rows[i].current.growth &&
+                observedBatch.rows[i].current.moisture == observedNormal.rows[i].current.moisture,
+                "comparison row parity");
+    }
+    for (const float speed : {1.0f, 2.0f, 4.0f}) {
+        for (const int warningDay : {6, 16, 26}) {
+            Fixture f, ordinary;
+            for (Fixture* sample : {&f, &ordinary}) {
+                sample->progression.Initialize({}, FarmProgressionMode::ContestSeason, true);
+                sample->Crop(farm::CropType::Carrot, .55f);
+                Require(sample->date.RestoreSnapshot({warningDay - 1, 59.99f, speed}), "pest clock");
+            }
+            Require(f.advance.Start(f.Context(), false), "pest-enabled start refused");
+            const float dt = (f.date.GetDayLengthSeconds() - f.date.GetElapsedSecondsInDay()) / speed;
+            ordinary.irrigation.UpdateWater(ordinary.grid, dt, speed);
+            ordinary.growth.Update(ordinary.grid, dt, speed);
+            ordinary.contest.Advance(ordinary.date, dt, ordinary.economy.GetContestResults(), warningDay);
+            static_cast<void>(FarmPestSystem::AdvanceDays(ordinary.grid, warningDay - 1, ordinary.date.GetDay(), true));
+            Require(f.advance.AdvanceBatch(f.Context(), false) == 1, "warning did not stop first step");
+            Require(f.advance.GetStatus().reason == Reason::PestWarning && f.advance.GetStatus().tileIndex == 19,
+                "pest stop reason");
+            SameClock(f.date.CaptureSnapshot(), ordinary.date.CaptureSnapshot());
+            const auto* a = f.grid.GetTile(19); const auto* b = ordinary.grid.GetTile(19);
+            Require(a && b && a->pests.warningDay == warningDay && a->pests.damageDays == 0 &&
+                a->growth == b->growth && a->moisture == b->moisture &&
+                a->careHistory.GetObservedSeconds() == b->careHistory.GetObservedSeconds(), "pest step parity");
+            CheckBlocked(f, Reason::PestWarning, 19);
+            Require(FarmPestSystem::Cure(f.grid, 19, warningDay), "cure sample");
+            Require(f.advance.Start(f.Context(), false), "resume after cure");
+            Require(f.advance.AdvanceBatch(f.Context(), false) > 0, "resume frozen");
+            Require(f.grid.GetTile(19)->pests.warningDay == 0, "same day re-warning");
+        }
+    }
+    {
+        Fixture f;
+        Require(f.advance.Start(f.Context(), false), "policy fixture start");
+        f.progression.Initialize({}, FarmProgressionMode::ContestSeason, true);
+        Require(f.advance.AdvanceBatch(f.Context(), false) == 0 &&
+            f.advance.GetStatus().reason == Reason::ContextChanged, "policy change not stopped");
+    }
+    {
+        using Test = editor::FarmTimeAdvancePlaytestSystem;
+        using Action = Test::Action;
+        using Scenario = Test::Scenario;
+        Test sample, untouched;
+        Require(!sample.Execute({Action::Start}), "uninitialized sample accepted");
+        Require(!sample.Execute({Action::Reset, Scenario::Count}), "invalid scenario accepted");
+        constexpr Reason expected[] = {Reason::PestWarning, Reason::HarvestReady, Reason::WaterLow,
+            Reason::WaterExcess, Reason::ContestDay};
+        for (int i = 0; i < 5; ++i) {
+            Require(sample.Execute({Action::Reset, static_cast<Scenario>(i)}), "sample reset");
+            Require(sample.Execute({Action::Start}), "sample start request");
+            sample.Tick(false);
+            const auto view = sample.Read();
+            Require(!view.running && !view.status.active && view.status.reason == expected[i], "sample stop");
+            Require(view.status.completedSteps <= Advance::kStepsPerBatch, "sample bound");
+            if (i == 0) Require(view.warningDay == 6 && view.damageDays == 0, "sample pest exposure");
+            const auto clock = view.clock;
+            sample.Tick(false);
+            SameClock(clock, sample.Read().clock);
+        }
+        Require(sample.Execute({Action::Reset, Scenario::Empty}), "empty sample");
+        Require(sample.Execute({Action::Step}), "single batch request");
+        Require(sample.Read().status.completedSteps == Advance::kStepsPerBatch && !sample.Read().running,
+            "manual batch result");
+        const auto clock = sample.Read().clock;
+        sample.Tick(false);
+        SameClock(clock, sample.Read().clock);
+        Require(sample.Execute({Action::Cancel}) && sample.Read().status.reason == Reason::Cancelled, "cancel request");
+        Require(sample.Execute({Action::Reset, Scenario::Empty}) && sample.Execute({Action::Start}), "auto start");
+        Require(!sample.Execute({Action::Start}) && !sample.Execute({Action::Step}), "double update enabled");
+        sample.Tick(true);
+        Require(sample.Read().status.reason == Reason::Blocked && sample.Read().status.completedSteps == 0, "hidden advance");
+        Require(!sample.Execute({static_cast<Action>(999)}), "invalid action accepted");
+        Require(!untouched.Read().ready && untouched.Read().clock.day == 1, "sample leakage");
+    }
     for (const float speed : {1.0f, 2.0f, 4.0f}) {
         for (const int day : {10, 20, 30}) {
             Fixture f;
@@ -195,7 +360,7 @@ int main() try {
         Require(f.date.GetDay() == 10 && f.advance.GetStatus().reason == Reason::ContestDay, "empty farm long run");
         Require(f.advance.GetStatus().completedSteps < Advance::kSessionStepLimit, "long run bounded");
     }
-    std::cout << "PASS: bounded time advance, all speeds/crops, event/crop stops, cancellation, invalidation and ordinary-step equivalence\n";
+    std::cout << "PASS: bounded time advance, all speeds/crops, pest boundaries/parity, Debug scenarios, cancellation and invalidation\n";
     return 0;
 } catch (const std::exception& error) {
     std::cerr << "FAIL: " << error.what() << '\n';

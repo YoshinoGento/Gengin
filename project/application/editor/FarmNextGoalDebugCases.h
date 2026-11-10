@@ -21,6 +21,10 @@ inline constexpr FarmNextGoalDebugCase kFarmNextGoalDebugCases[] = {
     {"Goal case: Contest deadline", {.contest = {FarmGoalContestStatus::Today, 10}, .field = FarmWaterAdvice::Till}, FarmNextGoalKind::Submit},
     {"Goal case: Unprotected entry", {.contest = {FarmGoalContestStatus::ProtectAndReserve, 20}}, FarmNextGoalKind::ProtectAndReserve},
     {"Goal case: Entry reserved", {.contest = {FarmGoalContestStatus::Reserved, 20}}, FarmNextGoalKind::Reserved},
+    {"Goal case: Reserved but dry", {.contest = {FarmGoalContestStatus::Reserved, 20}, .field = FarmWaterAdvice::Water}, FarmNextGoalKind::Water},
+    {"Goal case: Reserved but paused", {.contest = {FarmGoalContestStatus::Reserved, 20}, .field = FarmWaterAdvice::Monitor, .paused = true}, FarmNextGoalKind::ResumeGrowth},
+    {"Goal case: Excess automatic water", {.field = FarmWaterAdvice::CloseIntake}, FarmNextGoalKind::StopIrrigation},
+    {"Goal case: Excess manual water", {.field = FarmWaterAdvice::AvoidWater}, FarmNextGoalKind::ReduceWater},
     {"Goal case: Pest and deadline", {.pestTile = 2, .pestWarning = true, .contest = {FarmGoalContestStatus::Today, 10}}, FarmNextGoalKind::PestWarning},
     {"Goal case: Blocked", {.blocked = true, .pestTile = 2}, FarmNextGoalKind::None},
 };

@@ -29,9 +29,14 @@ enum class Action {
     ExhibitionOpen, ExhibitionSelect, ExhibitionWatch, ExhibitionHome, ExhibitionExit,
     MenuDetails, AudioSettings, ShopProduct,
     HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel,
-    PestFocus, PestCure
+    PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook
 };
-struct Request { Action action = Action::None; int argument = 0; std::uint64_t inventoryGeneration = 0; };
+struct Request {
+    Action action = Action::None;
+    int argument = 0;
+    std::uint64_t inventoryGeneration = 0;
+    std::uint64_t farmGeneration = 0;
+};
 struct Item {
     Label label = Label::Menu;
     Rect rect{};

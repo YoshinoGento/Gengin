@@ -140,4 +140,24 @@ bool FarmGrid::IsValid() const
 	return width_ > 0 && height_ > 0 && !tiles_.empty();
 }
 
+bool FarmGrid::ReplaceSnapshot(const Snapshot& snapshot)
+{
+	constexpr int kMaximumDimension = 128;
+	if (snapshot.width <= 0 || snapshot.height <= 0 ||
+		snapshot.width > kMaximumDimension || snapshot.height > kMaximumDimension ||
+		snapshot.tiles.size() != static_cast<std::size_t>(snapshot.width) * snapshot.height ||
+		snapshot.selectedX < 0 || snapshot.selectedX >= snapshot.width ||
+		snapshot.selectedY < 0 || snapshot.selectedY >= snapshot.height) return false;
+	for (const auto& tile : snapshot.tiles) if (!IsValidTile(tile)) return false;
+	// Allocate before committing dimensions so a failed allocation leaves the live grid intact.
+	auto tiles = snapshot.tiles;
+	tiles_.swap(tiles);
+	width_ = snapshot.width;
+	height_ = snapshot.height;
+	selectedX_ = snapshot.selectedX;
+	selectedY_ = snapshot.selectedY;
+	++generation_;
+	return true;
+}
+
 } // namespace farm

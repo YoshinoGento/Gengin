@@ -26,6 +26,7 @@ struct FarmGrowthForecast {
 	float growthPerSecond = 0.0f;
 	float moistureDecayPerSecond = 0.0f;
 	float irrigationRecoveryPerSecond = 0.0f;
+	float rainRecoveryPerSecond = 0.0f;
 	float irrigationStrength = 0.0f;
 	float netMoisturePerSecond = 0.0f;
 	float secondsUntilDry = -1.0f;
@@ -71,6 +72,7 @@ public:
 		const farm::FarmTile* tile, const FarmGrowthForecast& forecast,
 		farm::FarmWaterStatus supply) noexcept;
 	void Initialize(const farm::FarmRules& rules = {}) noexcept;
+    [[nodiscard]] float GetMaxUpdateDeltaTime() const noexcept { return rules_.maxUpdateDeltaTime; }
 	// Reports persistent tile changes, including repaired nonfinite values.
 	bool Update(
 		farm::FarmGrid& grid,
@@ -80,7 +82,7 @@ public:
 		const farm::FarmTile& tile,
 		farm::CropType previewCrop = farm::CropType::None,
 		float timeScale = 1.0f,
-		float irrigationStrength = 0.0f) const noexcept;
+		float irrigationStrength = 0.0f, float soilRainPerSecond = 0.0f) const noexcept;
 
 private:
 	farm::FarmRules rules_{};

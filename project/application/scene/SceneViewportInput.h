@@ -8,6 +8,7 @@ struct ViewportPointerInput {
     bool pressed = false;
     bool held = false;
     bool focused = false;
+    Vector2 sourceResolution{};
 };
 
 // Optional capability for scenes accepting virtual-screen pointer notifications from the editor.

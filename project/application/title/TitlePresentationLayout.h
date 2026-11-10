@@ -2,6 +2,7 @@
 
 #include "math/Struct.h"
 #include <cmath>
+#include <optional>
 
 namespace title {
 inline constexpr float kWidth = 1280.0f;
@@ -21,10 +22,17 @@ inline bool HitTestTitleCanvas(Vector2 position) noexcept {
         position.x >= 0 && position.x <= kWidth && position.y >= 0 && position.y <= kHeight;
 }
 
-inline bool HitTestTitleCanvasInViewport(Vector2 position, Vector2 virtualResolution) noexcept {
+inline std::optional<Vector2> MapTitleCanvasPointer(Vector2 position, Vector2 virtualResolution) noexcept {
     if (!std::isfinite(virtualResolution.x) || !std::isfinite(virtualResolution.y) ||
-        virtualResolution.x <= 0 || virtualResolution.y <= 0) return false;
-    return HitTestTitleCanvas({position.x*kWidth/virtualResolution.x,
-        position.y*kHeight/virtualResolution.y});
+        virtualResolution.x <= 0 || virtualResolution.y <= 0 ||
+        !std::isfinite(position.x) || !std::isfinite(position.y) ||
+        position.x < 0 || position.y < 0 || position.x > virtualResolution.x ||
+        position.y > virtualResolution.y) return std::nullopt;
+    return Vector2{(position.x / virtualResolution.x) * kWidth,
+        (position.y / virtualResolution.y) * kHeight};
+}
+
+inline bool HitTestTitleCanvasInViewport(Vector2 position, Vector2 virtualResolution) noexcept {
+    return MapTitleCanvasPointer(position, virtualResolution).has_value();
 }
 }

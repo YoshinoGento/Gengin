@@ -1,5 +1,6 @@
 #include "editor/GamePlayEditorBridge.h"
 #include "farm/system/FarmSoilSystem.h"
+#include "farm/system/FarmDevelopmentSystem.h"
 
 #include "3d/Object3d.h"
 #include "base/FrameClock.h"
@@ -159,6 +160,8 @@ void GamePlaySessionSystem::BuildViewModel(GamePlayEditorViewModel& output) cons
 	const auto irrigationFlows = displayedIrrigation->GetLastTileFlows(*displayedGrid);
 	output.farmGeneration = farmGrid_.GetGeneration();
 	output.farmGrowthComparison = farmGrowthComparisonSystem_.GetView(farmGrid_);
+    output.farmTimeAdvance = farmTimeAdvance_.Read();
+    output.farmTimeAdvanceBlocked = TimeAdvanceBlocked();
 	output.farmDocumentDirty = farmDocumentSystem_.IsDirty();
 	output.farmDocumentExists = farmDocumentSystem_.FileExists();
 	output.farmDocumentHasError = farmDocumentSystem_.HasError();
@@ -223,7 +226,8 @@ void GamePlaySessionSystem::BuildViewModel(GamePlayEditorViewModel& output) cons
 				*tile,
 				selectedCrop,
 				farmDateSystem_.GetTimeScale(),
-				displayedIrrigation->GetAvailableIrrigationStrength(*displayedGrid, index));
+				displayedIrrigation->GetAvailableIrrigationStrength(*displayedGrid, index),
+				FarmWeatherSystem::Inspect(farmDateSystem_.GetDay(), farmProgressionSystem_.WeatherVersion()).soilRainPerSecond);
 			destination.waterGuidance = FarmGrowthSystem::AnalyzeWater(
 				tile, destination.growthForecast, destination.waterStatus);
 			destination.quality = farmToolActionSystem_.EvaluateHarvestQuality(*tile);
@@ -440,12 +444,15 @@ bool GamePlaySessionSystem::Execute(const SimulationEditorCommand& command) {
 
 	switch (command.action) {
 	case SimulationEditorAction::Play:
+		farmTimeAdvance_.Reset();
 		frameClock->SetPaused(false);
 		return true;
 	case SimulationEditorAction::Pause:
+		farmTimeAdvance_.Interrupt();
 		frameClock->SetPaused(true);
 		return true;
 	case SimulationEditorAction::Step:
+		farmTimeAdvance_.Reset();
 		if (!frameClock->IsPaused()) {
 			return false;
 		}
@@ -460,6 +467,9 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 	if (!framework_ || command.farmGeneration != farmGrid_.GetGeneration()) {
 		return false;
 	}
+    if (command.type == GamePlayEditorCommandType::ControlFarmTimeAdvance)
+        return ControlTimeAdvance(command.timeAdvanceAction);
+    farmTimeAdvance_.Interrupt();
 	if (farmProgressionSystem_.IsCleared()) {
 		switch (command.type) {
 		case GamePlayEditorCommandType::SetFarmProgressionMode:
@@ -474,6 +484,17 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 	}
 
 	switch (command.type) {
+	case GamePlayEditorCommandType::ExpandFarm:
+		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() || layoutLibraryFrame_) return false;
+		if (!FarmDevelopmentSystem::Expand(farmGrid_, farmEconomySystem_, command.farmGeneration,
+			command.expectedFarmHeight)) return false;
+		farmToolActionSystem_.ClearHistory();
+		farmGrowthComparisonSystem_.Reset();
+		farmHarvestVisualSystem_.Clear();
+		farmIrrigationSystem_.Rebuild(farmGrid_);
+		farmDocumentSystem_.MarkDirty();
+		InitializeTimeline();
+		return true;
 	case GamePlayEditorCommandType::SetFarmProgressionMode:
 		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive()) return false;
 		if (!farmProgressionSystem_.SetMode(command.progressionMode, farmEconomySystem_.GetMoney(),
@@ -733,6 +754,7 @@ bool GamePlaySessionSystem::Execute(const FarmDocumentCommand& command) {
 	if (!framework_) {
 		return false;
 	}
+    farmTimeAdvance_.Interrupt();
 
 	bool executed = false;
 	switch (command.type) {
@@ -767,6 +789,9 @@ bool GamePlaySessionSystem::Execute(const FarmDocumentCommand& command) {
 		if (command.type == FarmDocumentCommandType::NewDocument ||
 			command.type == FarmDocumentCommandType::Load) {
 			farmContestDaySystem_.Reset();
+			farmIrrigationPreviewSystem_.Cancel();
+			farmGrowthComparisonSystem_.Reset();
+			farmHarvestVisualSystem_.Clear();
 			farmIrrigationSystem_.Rebuild(farmGrid_);
 			InitializeTimeline();
 			farmFeedbackSystem_.Clear();

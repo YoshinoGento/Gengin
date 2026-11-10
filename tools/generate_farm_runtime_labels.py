@@ -66,7 +66,7 @@ labels.extend([
     ["SoilApplied", "堆肥を混ぜました。養分１００"],
     ["SoilSelectedCrop", "選択マスの作物（未植付けは選択中の種）"],
 ])
-cell_w, cell_h = 640, 44
+cell_w, cell_h = 640, 42
 labels.extend([
     ["QualityOpen", "作物の品質を見る"],
     ["QualityCurrent", "選択マスの品質予測"], ["QualityHarvest", "直前の収穫結果"],
@@ -416,20 +416,74 @@ labels.extend([
     ["GoalWhyHarvest", "保管庫の空きを確認する"],
     ["GoalWhyFunds", "種の在庫と所持金を確認"],
     ["GoalResumeGrowth", "次：時間を進める"],
+    ["GoalStopIrrigation", "次：自動給水を切る"],
 ])
+labels.extend([
+    ["TimeAdvance", "変化があるまで時間送り"],
+    ["TimeRunning", "時間送り中"], ["TimeCancel", "時間送りを取り消す"],
+    ["TimeHold", "停止中：再開は再生ボタン"],
+    ["TimeHarvest", "停止：収穫できる畑あり"],
+    ["TimeDry", "停止：水分が不足"], ["TimeExcess", "停止：水分が過剰"],
+    ["TimePest", "停止：害虫の予兆・被害"], ["TimeContest", "停止：大会の開催日"],
+    ["TimeFinished", "停止：シーズン終了"], ["TimeNoTarget", "停止：待つ目標がありません"],
+    ["TimeBlocked", "停止：画面・操作状態の変更"],
+    ["TimeBudget", "停止：時間送りの上限"], ["TimeInvalid", "停止：農場の状態を確認"],
+])
+labels.extend([
+    ["TimeWeather", "停止：天気予報・天候の変化"],
+    ["WeatherForecast", "明日は雨：畑の水分と取水を確認"],
+    ["WeatherRain", "雨：土に給水中。取水の重複に注意"],
+    ["WeatherClear", "晴れ：雨からの給水なし"],
+])
+labels.extend([
+    ["Development", "農場ランク・土地拡張"],
+    ["DevelopmentRank", "農場ランク"],
+    ["DevelopmentArea", "農地マス数"],
+    ["DevelopmentSales", "累計売上"],
+    ["DevelopmentNext", "次のランクまで"],
+    ["DevelopmentMax", "最高ランクに到達"],
+    ["DevelopmentRule", "売上500G・1500Gで拡張を解放"],
+    ["DevelopmentExpand", "５マス広げる（無料）"],
+    ["DevelopmentCustom", "この形の農場は拡張対象外"],
+    ["DevelopmentFull", "農地は最大まで拡張済み"],
+    ["DevelopmentLocked", "未解放、または現在は操作できません"],
+    ["DevelopmentDone", "農地が５マス広がりました"],
+])
+labels.extend([
+    ["CropBook", "この農場の収穫記録"],
+    ["BookCollected", "収穫した種類"],
+    ["BookQuality", "最高品質"],
+    ["BookWeight", "最大重量"],
+    ["BookCollectGoal", "目標：３種類すべてを収穫"],
+    ["BookImprove", "３種類達成：次は自己記録の更新"],
+    ["BookIndependent", "品質と重量は別々の最高記録。未記録は --"],
+])
+
 goal_debug_labels = labels[next(i for i, row in enumerate(labels) if row[0] == "PestWarning"):]
-ascii_y = ((len(labels) + columns - 1) // columns) * cell_h
+assert len({name for name, _ in labels}) == len(labels)
+atlas_width = cell_w * columns
+measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+rects = []
+x = y = 0
+# Variable-width shelves retain stable label IDs without allocating a second texture.
+for name, text in labels:
+    width = int(measure.textlength(text, font=font)) + 4
+    assert width <= cell_w, (name, width)
+    if x + width > atlas_width:
+        x, y = 0, y + cell_h
+    rects.append((x, y, width, 38))
+    x += width + 4
+ascii_y = y + cell_h
 height = ascii_y + 128
 assert height <= 4096, "Split the label atlas before adding more rows"
-atlas = Image.new("RGBA", (cell_w * columns, height))
+atlas = Image.new("RGBA", (atlas_width, height))
 draw = ImageDraw.Draw(atlas)
-rects = []
-for i, (name, text) in enumerate(labels):
-    x, y = (i % columns) * cell_w, (i // columns) * cell_h
-    width = int(draw.textlength(text, font=font)) + 4
-    assert width <= cell_w, (name, width)
+for (_, text), (x, y, _, _) in zip(labels, rects):
     draw.text((x + 2, y + 4), text, fill="white", font=font, anchor="lt")
-    rects.append((x, y, width, 38))
+for (name, text), (x, y, width, height_) in zip(labels, rects):
+    left, top, right, bottom = draw.textbbox((x + 2, y + 4), text, font=font, anchor="lt")
+    assert x <= left <= right <= x + width and y <= top <= bottom <= y + height_, name
+    assert atlas.getchannel("A").crop((x, y, x + width, y + height_)).getbbox(), name
 ascii_font = ImageFont.truetype(str(font_path), 24)
 ascii_font.set_variation_by_axes([500])
 for i in range(95):

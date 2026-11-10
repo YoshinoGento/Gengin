@@ -4,6 +4,8 @@
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmIrrigationSystem.h"
 #include "farm/system/FarmProgressionSystem.h"
+#include "farm/system/FarmPestSystem.h"
+#include "farm/system/FarmSimulationStepSystem.h"
 #include <algorithm>
 #include <cmath>
 
@@ -12,17 +14,9 @@ class FarmTimeAdvanceSystem final {
 public:
     enum class StopReason {
         None, Cancelled, Blocked, InvalidState, ContextChanged, HarvestReady,
-        WaterLow, WaterExcess, ContestDay, Finished, NoTarget, BudgetLimit, TargetReached
+        WaterLow, WaterExcess, ContestDay, Finished, NoTarget, BudgetLimit, TargetReached, PestWarning, WeatherChanged
     };
-    struct Context {
-        farm::FarmGrid& grid;
-        farm::FarmIrrigationSystem& irrigation;
-        const FarmGrowthSystem& growth;
-        FarmDateSystem& date;
-        FarmContestDaySystem& contest;
-        const FarmEconomySystem& economy;
-        FarmProgressionSystem& progression;
-    };
+    using Context = FarmSimulationStepSystem::Context;
     struct Status {
         bool active = false;
         StopReason reason = StopReason::None;
@@ -38,6 +32,7 @@ public:
     [[nodiscard]] const Status& GetStatus() const noexcept { return status_; }
     void Reset() noexcept { *this = FarmTimeAdvanceSystem{}; }
     void Cancel() noexcept { if (status_.active) Stop(StopReason::Cancelled); }
+    void Interrupt() noexcept { if (status_.active) Stop(StopReason::ContextChanged); }
 
     bool Start(Context context, bool interactionBlocked) {
         if (status_.active) return false;
@@ -58,6 +53,10 @@ public:
         dateIdentity_ = &context.date;
         generation_ = context.grid.GetGeneration();
         expectedClock_ = context.date.CaptureSnapshot();
+        expectedMode_ = context.progression.GetMode();
+        expectedPests_ = context.progression.PestsEnabled();
+        expectedWeatherVersion_ = context.progression.WeatherVersion();
+        initialWeather_ = FarmWeatherSystem::Inspect(context.date.GetDay(), expectedWeatherVersion_).phase;
         status_.active = true;
         return true;
     }
@@ -72,16 +71,9 @@ public:
                 Stop(StopReason::BudgetLimit);
                 break;
             }
-            const double remaining = static_cast<double>(status_.targetDay - context.date.GetDay()) *
-                context.date.GetDayLengthSeconds() - context.date.GetElapsedSecondsInDay();
-            const float delta = static_cast<float>((std::min)(static_cast<double>(kStepSeconds),
-                remaining / context.date.GetTimeScale()));
-            if (!std::isfinite(delta) || delta <= 0) { Stop(StopReason::InvalidState); break; }
-            context.irrigation.UpdateWater(context.grid, delta, context.date.GetTimeScale());
-            context.growth.Update(context.grid, delta, context.date.GetTimeScale());
-            context.contest.Advance(context.date, delta, context.economy.GetContestResults(), status_.targetDay);
-            static_cast<void>(context.progression.EvaluateSeason(FarmContestSeasonSystem::Evaluate(
-                context.date.GetDay(), context.economy.GetContestResults())));
+            if (!FarmSimulationStepSystem::Step(context, kStepSeconds, status_.targetDay).advanced) {
+                Stop(StopReason::InvalidState); break;
+            }
             expectedClock_ = context.date.CaptureSnapshot();
             ++steps;
             ++status_.completedSteps;
@@ -98,11 +90,13 @@ private:
         return false;
     }
     bool Check(Context context, bool blocked) {
-        if (blocked || context.progression.PestsEnabled()) return Stop(StopReason::Blocked);
+        if (blocked) return Stop(StopReason::Blocked);
         const auto clock = context.date.CaptureSnapshot();
         if (status_.active && (gridIdentity_ != &context.grid || dateIdentity_ != &context.date ||
             generation_ != context.grid.GetGeneration() || clock.day != expectedClock_.day ||
-            clock.elapsedSecondsInDay != expectedClock_.elapsedSecondsInDay || clock.timeScale != expectedClock_.timeScale))
+            clock.elapsedSecondsInDay != expectedClock_.elapsedSecondsInDay || clock.timeScale != expectedClock_.timeScale ||
+            context.progression.GetMode() != expectedMode_ || context.progression.PestsEnabled() != expectedPests_ ||
+            context.progression.WeatherVersion() != expectedWeatherVersion_))
             return Stop(StopReason::ContextChanged);
         if (context.grid.GetTileCount() <= 0 || clock.day < 1 || !std::isfinite(clock.elapsedSecondsInDay) ||
             clock.elapsedSecondsInDay < 0 || clock.elapsedSecondsInDay >= context.date.GetDayLengthSeconds() ||
@@ -111,8 +105,13 @@ private:
         if (context.progression.IsCleared() || (context.progression.IsContestSeason() &&
             FarmContestSeasonSystem::Evaluate(clock.day, context.economy.GetContestResults()).finalized))
             return Stop(StopReason::Finished);
+        if (context.progression.PestsEnabled())
+            if (const int index = FarmPestSystem::FindActive(context.grid); index >= 0)
+                return Stop(StopReason::PestWarning, index);
         context.contest.Observe(clock.day, context.economy.GetContestResults(), !context.progression.IsFreeFarming());
         if (context.contest.PendingDay()) return Stop(StopReason::ContestDay);
+        if (status_.active && FarmWeatherSystem::Inspect(clock.day, expectedWeatherVersion_).phase != initialWeather_)
+            return Stop(StopReason::WeatherChanged);
         if (status_.active && clock.day >= status_.targetDay) return Stop(StopReason::TargetReached);
         for (int index = 0; index < context.grid.GetTileCount(); ++index) {
             const auto* tile = context.grid.GetTile(index);
@@ -144,4 +143,8 @@ private:
     const FarmDateSystem* dateIdentity_ = nullptr;
     std::uint64_t generation_ = 0;
     FarmDateSystem::Snapshot expectedClock_{};
+    FarmProgressionMode expectedMode_ = FarmProgressionMode::Trial;
+    bool expectedPests_ = false;
+    int expectedWeatherVersion_ = 0;
+    FarmWeatherSystem::Phase initialWeather_ = FarmWeatherSystem::Phase::Disabled;
 };

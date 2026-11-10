@@ -115,6 +115,12 @@ int main() {
     Check(title::HitTestTitleCanvas({0,0}));
     Check(title::HitTestTitleCanvas({1280,720}));
     for (const auto resolution : {Vector2{1600,900},Vector2{1280,720},Vector2{1920,1080}}) {
+        const auto start = title::MapTitleCanvasPointer({resolution.x*.5f,resolution.y*650/720}, resolution);
+        Check(start && Near(start->x, title::kStartCenter.x) && Near(start->y, title::kStartCenter.y));
+        const auto bottom = title::MapTitleCanvasPointer(resolution, resolution);
+        Check(bottom && Near(bottom->x, title::kWidth) && Near(bottom->y, title::kHeight));
+        Check(!title::MapTitleCanvasPointer({resolution.x + 1, 0}, resolution));
+        Check(!title::MapTitleCanvasPointer({-1, 0}, resolution));
         Check(title::HitTestTitleCanvasInViewport({resolution.x*.5f,resolution.y*650/720},resolution));
         Check(title::HitTestTitleCanvasInViewport({resolution.x*.8f,resolution.y*.9f},resolution));
     }

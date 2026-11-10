@@ -17,11 +17,6 @@
 #include "externals/imgui/imgui_internal.h"
 #include <optional>
 #endif
-#if defined(_DEBUG) && defined(USE_IMGUI)
-#include "editor/FarmNextGoalDebugCases.h"
-#include "farm/ui/FarmNextGoalView.h"
-#include <iterator>
-#endif
 
 namespace {
 constexpr int kFarmWorkspaceLayoutVersion = 7;
@@ -70,6 +65,9 @@ void EditorShell::Draw(
 	SrvManager* srvManager,
 	PostEffectSystem* postEffectSystem) {
 #ifdef USE_IMGUI
+#ifdef _DEBUG
+    const bool timeAdvanceWasOpen = showFarmTimeAdvanceLive_;
+#endif
 	DrawMainMenuBar();
 	editor::GamePlayEditorScene* playScene = dynamic_cast<editor::GamePlayEditorScene*>(currentScene);
 	if (playScene) {
@@ -93,6 +91,9 @@ void EditorShell::Draw(
 #ifdef _DEBUG
 	DrawFarmPestPlaytest();
 	DrawFarmNextGoalTest();
+	DrawFarmTimeAdvanceTest();
+    DrawFarmWeatherTest();
+    if (playScene) DrawFarmTimeAdvanceLive(*playScene, timeAdvanceWasOpen && !showFarmTimeAdvanceLive_);
 #endif
 	if (!gameMode) { DrawConsole(); }
 
@@ -119,6 +120,7 @@ void EditorShell::Draw(
 		const auto& viewport = gameViewportWindow_.GetFrameState();
 		scene::ViewportPointerInput pointer;
 		pointer.position = viewport.virtualMousePosition;
+		pointer.sourceResolution = {static_cast<float>(WinApp::kClientWidth), static_cast<float>(WinApp::kClientHeight)};
 		pointer.valid = viewport.imageVisible;
 		pointer.pressed = viewport.leftClicked;
 		pointer.held = ImGui::IsMouseDown(ImGuiMouseButton_Left);
@@ -280,6 +282,9 @@ void EditorShell::DrawMainMenuBar() {
 #ifdef _DEBUG
 		ImGui::MenuItem(text("Pest Test"), nullptr, &showFarmPestPlaytest_);
 		ImGui::MenuItem(text("Next Goal Test"), nullptr, &showFarmNextGoalTest_);
+		ImGui::MenuItem(text("Time Advance Test"), nullptr, &showFarmTimeAdvanceTest_);
+        ImGui::MenuItem(text("Weather Test"), nullptr, &showFarmWeatherTest_);
+        ImGui::MenuItem(text("Current Farm Time"), nullptr, &showFarmTimeAdvanceLive_);
 #endif
 		if (ImGui::MenuItem(text("Farm History"), nullptr, farmHistoryWindow_.IsOpen())) {
 			farmHistoryWindow_.SetOpen(!farmHistoryWindow_.IsOpen());
@@ -597,34 +602,41 @@ void EditorShell::DrawFarmHistory(editor::GamePlayEditorScene& playScene) {
 }
 
 #if defined(_DEBUG) && defined(USE_IMGUI)
+void EditorShell::DrawFarmWeatherTest() {
+    farmWeatherPlaytest_.Tick(ImGui::GetIO().DeltaTime, !showFarmWeatherTest_ || ImGui::GetIO().AppFocusLost);
+    if (!showFarmWeatherTest_) return;
+    const auto request = editor::FarmWeatherTestWindow::Draw(showFarmWeatherTest_, editorSettings_.GetLanguage(),
+        farmWeatherPlaytest_.Read(), farmWeatherFailed_);
+    if (request) farmWeatherFailed_ = !farmWeatherPlaytest_.Execute(*request);
+}
+
+void EditorShell::DrawFarmTimeAdvanceTest() {
+	farmTimeAdvancePlaytest_.Tick(!showFarmTimeAdvanceTest_ || ImGui::GetIO().AppFocusLost);
+	if (!showFarmTimeAdvanceTest_) return;
+	const auto request = farmTimeAdvanceWindow_.Draw(showFarmTimeAdvanceTest_, editorSettings_.GetLanguage(),
+		farmTimeAdvancePlaytest_.Read(), farmTimeAdvanceFailed_);
+	if (request) farmTimeAdvanceFailed_ = !farmTimeAdvancePlaytest_.Execute(*request);
+}
+
+void EditorShell::DrawFarmTimeAdvanceLive(editor::GamePlayEditorScene& scene, bool closedFromMenu) {
+    if (!showFarmTimeAdvanceLive_ && !closedFromMenu) return;
+    const auto action = closedFromMenu
+        ? std::optional{FarmTimeAdvanceControlSystem::Action::Cancel}
+        : editor::FarmTimeAdvanceLiveWindow::Draw(showFarmTimeAdvanceLive_,
+            editorSettings_.GetLanguage(), gamePlayEditorViewModel_);
+    if (!action) return;
+    editor::GamePlayEditorCommand command{};
+    command.type = editor::GamePlayEditorCommandType::ControlFarmTimeAdvance;
+    command.farmGeneration = gamePlayEditorViewModel_.farmGeneration;
+    command.timeAdvanceAction = *action;
+    scene.GetEditorBridge().Execute(command);
+}
+
 void EditorShell::DrawFarmNextGoalTest() {
 	if (!showFarmNextGoalTest_) return;
-	const auto text = [this](std::string_view key) { return editor::Localize(editorSettings_.GetLanguage(), key); };
-	const auto& cases = editor::kFarmNextGoalDebugCases;
-	ImGui::SetNextWindowSize({400.0f, 250.0f}, ImGuiCond_FirstUseEver);
-	if (ImGui::Begin(text("Next Goal Test###FarmNextGoalTest"), &showFarmNextGoalTest_)) {
-		const int count = static_cast<int>(std::size(cases));
-		ImGui::SetNextItemWidth(-1.0f);
-		if (ImGui::BeginCombo("##FarmGoalCase", text(cases[farmNextGoalCase_].label))) {
-			for (int i = 0; i < count; ++i) {
-				const bool selected = i == farmNextGoalCase_;
-				if (ImGui::Selectable(text(cases[i].label), selected)) farmNextGoalCase_ = i;
-				if (selected) ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-		const auto goal = FarmNextGoalSystem::Evaluate(cases[farmNextGoalCase_].facts);
-		const auto copy = farmui::DescribeFarmNextGoal(goal.kind);
-		ImGui::Separator();
-		if (copy) {
-			ImGui::TextWrapped("%s", farmui::FarmGoalDebugText(copy->title));
-			if (goal.contestDay > 0) ImGui::Text("D%d", goal.contestDay);
-			if (copy->detail) ImGui::TextWrapped("%s", farmui::FarmGoalDebugText(*copy->detail));
-		} else {
-			ImGui::TextUnformatted(text("No next goal displayed"));
-		}
-	}
-	ImGui::End();
+	const auto action = farmNextGoalWindow_.Draw(showFarmNextGoalTest_, editorSettings_.GetLanguage(),
+		farmNextGoalPlaytest_.Read(), farmNextGoalPlaytestFailed_);
+	if (action) farmNextGoalPlaytestFailed_ = !farmNextGoalPlaytest_.Execute(*action);
 }
 
 void EditorShell::DrawFarmPestPlaytest() {
@@ -780,7 +792,15 @@ void EditorShell::DrawFarmController(editor::GamePlayEditorScene& playScene) {
 	if (actions.harvestProtectionCommand) changed |= bridge.Execute(*actions.harvestProtectionCommand);
 	if (actions.contestReservationCommand) changed |= bridge.Execute(*actions.contestReservationCommand);
 	if (actions.contestSubmissionCommand) changed |= bridge.Execute(*actions.contestSubmissionCommand);
-	if (actions.contestDayCommand) changed |= bridge.Execute(*actions.contestDayCommand);
+	if (actions.contestDayCommand && bridge.Execute(*actions.contestDayCommand)) {
+		changed = true;
+		// The inspector action requests both dismissal and normal-time resumption.
+		editor::GamePlayEditorCommand resume;
+		resume.type = editor::GamePlayEditorCommandType::ControlFarmTimeAdvance;
+		resume.farmGeneration = gamePlayEditorViewModel_.farmGeneration;
+		resume.timeAdvanceAction = FarmTimeAdvanceControlSystem::Action::Resume;
+		bridge.Execute(resume);
+	}
 	if (actions.progressionModeCommand) changed |= bridge.Execute(*actions.progressionModeCommand);
 	if (changed) {
 		bridge.BuildViewModel(gamePlayEditorViewModel_);

@@ -1,6 +1,7 @@
 #include "farm/system/FarmPestSystem.h"
 #include "editor/FarmPestPlaytestSystem.h"
 #include "editor/FarmNextGoalDebugCases.h"
+#include "editor/FarmNextGoalPlaytestSystem.h"
 #include "farm/system/FarmContestSubmissionSystem.h"
 #include "farm/system/FarmDocumentSystem.h"
 #include "farm/system/FarmToolActionSystem.h"
@@ -78,6 +79,22 @@ void CheckNextGoals() {
         CheckPestLabels(view);
     }
     FarmEconomySystem economy;
+    FarmNextGoalFacts reminder;
+    reminder.contest = {Status::Reserved, 20};
+    reminder.field = FarmWaterAdvice::Harvest;
+    Check(FarmNextGoalSystem::Evaluate(reminder).kind == Kind::Harvest, "reservation must not hide harvest");
+    reminder.harvestInventoryFull = true;
+    Check(FarmNextGoalSystem::Evaluate(reminder).kind == Kind::InventoryFull, "reservation must not hide full storage");
+    reminder.field = FarmWaterAdvice::Monitor;
+    const auto waiting = FarmNextGoalSystem::Evaluate(reminder);
+    Check(waiting.kind == Kind::Reserved && waiting.contestDay == 20, "remind while crops grow normally");
+    reminder.contest = {Status::Today, 20};
+    reminder.paused = true;
+    Check(FarmNextGoalSystem::Evaluate(reminder).kind == Kind::Submit, "deadline must precede time resume");
+    reminder.pestTile = 2;
+    Check(FarmNextGoalSystem::Evaluate(reminder).kind == Kind::PestActive, "active pest must precede deadline");
+    reminder.blocked = true;
+    Check(FarmNextGoalSystem::Evaluate(reminder).kind == Kind::None, "blocked state suppresses every goal");
     economy.Initialize();
     Check(FarmNextGoalSystem::InspectSeeds(economy, carrot) == Access::Affordable, "affordable seed");
     farm::FarmRules rules;
@@ -110,7 +127,111 @@ void CheckNextGoals() {
         FarmNextGoalSystem::InspectContest(economy, 10).status == Status::Today, "reservation and deadline");
     Check(FarmContestSubmissionSystem::Submit(economy, 10, id, economy.GetInventoryGeneration()) &&
         FarmNextGoalSystem::InspectContest(economy, 10).status == Status::None, "already submitted");
+    Check(FarmNextGoalSystem::InspectContest(economy, 0).status == Status::None &&
+        FarmNextGoalSystem::InspectContest(economy, 31).status == Status::None, "invalid or ended contest date");
+    economy.Initialize(rules);
+    Check(economy.AddHarvest(quality, 1, 10), "future harvest fixture");
+    Check(FarmNextGoalSystem::InspectContest(economy, 8).status == Status::None &&
+        FarmNextGoalSystem::InspectContest(economy, 10).status == Status::ProtectAndReserve,
+        "future record must not be recommended before its harvest day");
+    economy.Initialize(rules);
+    Check(economy.AddHarvest(quality, 1, 0), "unknown harvest date fixture");
+    Check(FarmNextGoalSystem::InspectContest(economy, 10).status == Status::None, "unknown harvest date is not eligible");
+    FarmDateSystem date;
+    FarmStagePolicy policy{true};
+    FarmStageAccessSystem access;
+    access.Bind(date, policy);
+    rules.initialTomatoSeedCount = 1;
+    economy.Initialize(rules);
+    economy.BindStageAccess(access);
+    Check(FarmNextGoalSystem::InspectSeeds(economy, carrot) == Access::Insufficient &&
+        FarmNextGoalSystem::InspectSeeds(economy, farm::CropType::Tomato) == Access::Insufficient,
+        "locked seed stock must not be recommended");
     std::cout << "Next goal priorities and eligible actions passed.\n";
+}
+
+void CheckNextGoalActions() {
+    using Test = editor::FarmNextGoalPlaytestSystem;
+    using Action = Test::Action;
+    using Kind = FarmNextGoalKind;
+    Test sample;
+    Test untouched;
+    Check(!sample.Read().active && !sample.Execute(Action::Plant) && !sample.Execute(Action::Grow), "inactive goal sample");
+    Check(sample.Execute(Action::Restart) && sample.Read().goal.kind == Kind::Till, "sample starts with till goal");
+    Check(sample.Read().recommended == Action::Till, "recommendation follows actual goal");
+    const int seedPrice = sample.Read().money;
+    Check(seedPrice == farm::FarmRules{}.carrotSeedPrice, "sample has exactly one seed budget");
+    Check(!sample.Execute(Action::Harvest) && !sample.Execute(Action::Plant) &&
+        sample.Read().money == seedPrice && sample.Read().seeds == 0, "premature actions preserve inventory");
+    Check(sample.Execute(Action::Till) && sample.Read().goal.kind == Kind::BuySeed &&
+        !sample.Execute(Action::Till), "actual till leads to buy");
+    Check(sample.Execute(Action::BuySeed) && sample.Read().goal.kind == Kind::Plant &&
+        sample.Read().money == 0 && sample.Read().seeds == 1 && !sample.Execute(Action::BuySeed), "purchase debits once");
+    Check(sample.Execute(Action::Plant) && sample.Read().seeds == 0 && sample.Read().goal.kind == Kind::Water &&
+        !sample.Execute(Action::Plant), "plant consumes seed once");
+    for (int i = 0; i < 4; ++i) Check(sample.Execute(Action::Water), "watering through real tool");
+    Check(sample.Read().goal.kind == Kind::Grow, "moisture guidance updates from real forecast");
+    Check(sample.Execute(Action::TogglePause) && sample.Read().goal.kind == Kind::ResumeGrowth, "paused goal");
+    const auto paused = sample.Read();
+    Check(!sample.Execute(Action::Grow) && sample.Read().growth == paused.growth &&
+        sample.Read().moisture == paused.moisture, "pause prevents simulated growth");
+    Check(sample.Execute(Action::TogglePause) && sample.Read().goal.kind == Kind::Grow, "resume goal");
+    for (int step = 0; step < 32 && sample.Read().goal.kind != Kind::Harvest; ++step) {
+        for (int dose = 0; dose < 6 && sample.Read().moisture < 0.6f; ++dose)
+            Check(sample.Execute(Action::Water), "sample moisture upkeep");
+        Check(sample.Execute(Action::Grow), "bounded real growth stepping");
+    }
+    Check(sample.Read().goal.kind == Kind::Harvest && !sample.Execute(Action::Grow), "mature sample stops stepping");
+    Check(sample.Execute(Action::Harvest) && sample.Read().harvests == 1 &&
+        sample.Read().goal.kind == Kind::SellForSeeds && !sample.Execute(Action::Harvest), "harvest returns seed-funding advice");
+    Check(sample.Execute(Action::Sell) && sample.Read().harvests == 0 && sample.Read().money >= seedPrice &&
+        sample.Read().goal.kind == Kind::BuySeed && !sample.Execute(Action::Sell), "sale makes next planting possible");
+    Check(sample.Execute(Action::NoFunds) && sample.Read().goal.kind == Kind::NeedFunds &&
+        !sample.Execute(Action::BuySeed) && !sample.Execute(Action::Plant) && !sample.Execute(Action::Sell), "no impossible funding action");
+    Check(!sample.Read().recommended, "no recommendation for unavailable action");
+    Check(!sample.Execute(Action::Count) && !sample.Execute(static_cast<Action>(-1)) && sample.Read().money == 0,
+        "invalid actions rejected without indexing");
+    Check(sample.Execute(Action::Restart) && sample.Read().goal.kind == Kind::Till &&
+        sample.Read().seeds == 0 && sample.Read().harvests == 0 && sample.Read().growth == 0.0f &&
+        sample.Read().money == seedPrice && !sample.Read().paused && !untouched.Read().active, "reset and sample ownership");
+
+    Test guided;
+    Check(guided.Execute(Action::Restart), "guided sample starts");
+    bool sold = false;
+    for (int i = 0; i < 160 && !sold; ++i) {
+        const auto view = guided.Read();
+        Check(view.recommended && view.Can(*view.recommended), "recommended action is enabled");
+        if (!view.recommended) break;
+        sold = *view.recommended == Action::Sell;
+        Check(guided.Execute(*view.recommended), "one-button guided action executes");
+    }
+    Check(sold && guided.Read().harvests == 0 && guided.Read().money >= seedPrice,
+        "guided sequence reaches sale without manual state edits");
+
+    farm::FarmGrid grid;
+    FarmEconomySystem economy;
+    economy.Initialize();
+    FarmNextGoalContext context;
+    context.waterAdvice = FarmWaterAdvice::Plant;
+    context.selectedCrop = farm::CropType::Carrot;
+    Check(FarmNextGoalSystem::Evaluate(FarmNextGoalSystem::Inspect(grid, economy, context)).kind == Kind::SelectSoil,
+        "shared collection rejects nonexistent selection");
+    Check(grid.Initialize(1, 1), "collector grid");
+    farm::FarmTile tile;
+    tile.state = farm::FarmTileState::Planted;
+    tile.crop = context.selectedCrop;
+    Check(grid.SetTile(0, tile) && FarmPestSystem::AdvanceDays(grid, 5, 6, true).warningStarted, "collector pest setup");
+    context.pestsEnabled = true;
+    auto goal = FarmNextGoalSystem::Evaluate(FarmNextGoalSystem::Inspect(grid, economy, context));
+    Check(goal.kind == Kind::PestWarning && goal.pestTile == 0, "shared collection sees active pest");
+    context.blocked = true;
+    Check(FarmNextGoalSystem::Evaluate(FarmNextGoalSystem::Inspect(grid, economy, context)).kind == Kind::None,
+        "shared collection suppresses locked state");
+    context.blocked = context.pestsEnabled = false;
+    context.waterAdvice = FarmWaterAdvice::Water;
+    Check(FarmNextGoalSystem::Evaluate(FarmNextGoalSystem::Inspect(grid, economy, context)).kind == Kind::Water,
+        "disabled pest policy preserves ordinary guidance");
+    std::cout << "Next goal real-action sequence and shared collection passed.\n";
 }
 
 int ScorePath(bool cured) {
@@ -239,6 +360,7 @@ int main() {
     try {
         CheckDebugPlaytest();
         CheckNextGoals();
+        CheckNextGoalActions();
         const int cured = ScorePath(true);
         const int ignored = ScorePath(false);
         Check(cured > ignored, "damage has no contest impact");

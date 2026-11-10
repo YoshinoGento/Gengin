@@ -1,4 +1,5 @@
 #include "farm/system/FarmGrowthSystem.h"
+#include "farm/system/FarmWeatherSystem.h"
 
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmSoilSystem.h"
@@ -289,7 +290,7 @@ FarmGrowthForecast FarmGrowthSystem::Evaluate(
 	const farm::FarmTile& tile,
 	farm::CropType previewCrop,
 	float timeScale,
-	float irrigationStrength) const noexcept
+	float irrigationStrength, float soilRainPerSecond) const noexcept
 {
 	FarmGrowthForecast result;
 	result.irrigationStrength = SanitizeNormalized(irrigationStrength, 0.0f);
@@ -330,8 +331,11 @@ FarmGrowthForecast FarmGrowthSystem::Evaluate(
 	result.moistureDecayPerSecond = result.growing
 		? profile->moistureDecayPerSecond * timeScale
 		: 0.0f;
+	result.rainRecoveryPerSecond = std::isfinite(soilRainPerSecond) && soilRainPerSecond >= 0.0f &&
+		soilRainPerSecond <= FarmWeatherSystem::kSoilRainPerSecond && moisture < FarmWeatherSystem::kRainMoistureLimit
+		? soilRainPerSecond * timeScale : 0.0f;
 	result.netMoisturePerSecond =
-		result.irrigationRecoveryPerSecond - result.moistureDecayPerSecond;
+		result.irrigationRecoveryPerSecond + result.rainRecoveryPerSecond - result.moistureDecayPerSecond;
 	if (result.netMoisturePerSecond < 0.0f &&
 		std::isfinite(result.netMoisturePerSecond)) {
 		result.secondsUntilDry = moisture / -result.netMoisturePerSecond;
@@ -340,6 +344,8 @@ FarmGrowthForecast FarmGrowthSystem::Evaluate(
 		result.secondsUntilFullMoisture =
 			(kNormalizedMaximum - moisture) / result.netMoisturePerSecond;
 	}
+	// Rain is capped and scheduled, so constant-rate dry/full times would mislead.
+	if (soilRainPerSecond > 0.0f) result.secondsUntilDry = result.secondsUntilFullMoisture = -1.0f;
 	if (!result.growing) {
 		return result;
 	}

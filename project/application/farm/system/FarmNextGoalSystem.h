@@ -2,11 +2,12 @@
 
 #include "farm/system/FarmContestEntrySystem.h"
 #include "farm/system/FarmGrowthSystem.h"
+#include "farm/system/FarmPestSystem.h"
 
 enum class FarmNextGoalKind {
     None, PestWarning, PestActive, Submit, ProtectAndReserve, Reserve, Reserved,
     SelectSoil, Till, Plant, ChooseCrop, BuySeed, SellForSeeds, NeedFunds,
-    CheckWater, Water, ReduceWater, Grow, ResumeGrowth, Harvest, InventoryFull,
+    CheckWater, Water, StopIrrigation, ReduceWater, Grow, ResumeGrowth, Harvest, InventoryFull,
 };
 
 enum class FarmGoalSeedAccess { Owned, ChooseCrop, Affordable, CanSell, Insufficient };
@@ -34,9 +35,41 @@ struct FarmNextGoal {
     int contestDay = 0;
 };
 
+struct FarmNextGoalContext {
+    FarmWaterAdvice waterAdvice = FarmWaterAdvice::Unknown;
+    farm::CropType selectedCrop = farm::CropType::None;
+    int day = 1;
+    bool blocked = false;
+    bool pestsEnabled = false;
+    bool contestSeason = false;
+    bool paused = false;
+};
+
 // Read-only priorities. Advice never authorizes or performs a farm action.
 class FarmNextGoalSystem final {
 public:
+    [[nodiscard]] static FarmNextGoalFacts Inspect(const farm::FarmGrid& grid,
+        const FarmEconomySystem& economy, const FarmNextGoalContext& context) noexcept {
+        FarmNextGoalFacts facts;
+        facts.blocked = context.blocked;
+        if (facts.blocked) return facts;
+        if (context.pestsEnabled) {
+            const int target = FarmPestSystem::FindActive(grid);
+            if (const auto* tile = grid.GetTile(target)) {
+                facts.pestTile = target;
+                facts.pestWarning = tile->pests.damageDays == 0;
+            }
+        }
+        if (facts.pestTile < 0 && context.contestSeason)
+            facts.contest = InspectContest(economy, context.day);
+        facts.field = InspectField(grid.GetSelectedTile(), context.waterAdvice);
+        facts.paused = context.paused;
+        if (facts.field == FarmWaterAdvice::Plant)
+            facts.seeds = InspectSeeds(economy, context.selectedCrop);
+        facts.harvestInventoryFull = economy.GetHarvestRecordCount() >= FarmEconomySystem::kMaxHarvestRecords;
+        return facts;
+    }
+
     [[nodiscard]] static FarmNextGoal Evaluate(const FarmNextGoalFacts& facts) noexcept {
         using Kind = FarmNextGoalKind;
         if (facts.blocked) return {};
@@ -45,9 +78,11 @@ public:
         case FarmGoalContestStatus::Today: return {Kind::Submit, -1, facts.contest.day};
         case FarmGoalContestStatus::ProtectAndReserve: return {Kind::ProtectAndReserve, -1, facts.contest.day};
         case FarmGoalContestStatus::Reserve: return {Kind::Reserve, -1, facts.contest.day};
-        case FarmGoalContestStatus::Reserved: return {Kind::Reserved, -1, facts.contest.day};
         default: break;
         }
+        // A completed reservation is a reminder, not a reason to hide field care.
+        const FarmNextGoal reminder = facts.contest.status == FarmGoalContestStatus::Reserved
+            ? FarmNextGoal{Kind::Reserved, -1, facts.contest.day} : FarmNextGoal{};
         switch (facts.field) {
         case FarmWaterAdvice::Till: return {Kind::Till};
         case FarmWaterAdvice::Plant:
@@ -60,11 +95,13 @@ public:
             }
         case FarmWaterAdvice::CheckSupply: return {Kind::CheckWater};
         case FarmWaterAdvice::Water: return {Kind::Water};
-        case FarmWaterAdvice::CloseIntake:
+        case FarmWaterAdvice::CloseIntake: return {Kind::StopIrrigation};
         case FarmWaterAdvice::AvoidWater: return {Kind::ReduceWater};
-        case FarmWaterAdvice::Monitor: return {facts.paused ? Kind::ResumeGrowth : Kind::Grow};
+        case FarmWaterAdvice::Monitor:
+            if (facts.paused) return {Kind::ResumeGrowth};
+            return reminder.kind != Kind::None ? reminder : FarmNextGoal{Kind::Grow};
         case FarmWaterAdvice::Harvest: return {facts.harvestInventoryFull ? Kind::InventoryFull : Kind::Harvest};
-        default: return {Kind::SelectSoil};
+        default: return reminder.kind != Kind::None ? reminder : FarmNextGoal{Kind::SelectSoil};
         }
     }
 

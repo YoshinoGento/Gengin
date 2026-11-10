@@ -3,6 +3,7 @@
 #include "base/Logger.h"
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmToolActionSystem.h"
+#include "farm/system/FarmDevelopmentSystem.h"
 #include "io/JsonFile.h"
 
 #include <algorithm>
@@ -24,7 +25,10 @@
 
 namespace {
 constexpr int kPestSchemaVersion = 19;
-constexpr int kSchemaVersion = kPestSchemaVersion;
+constexpr int kWeatherSchemaVersion = 20;
+constexpr int kDevelopmentSchemaVersion = 21;
+constexpr int kCropRecordSchemaVersion = 22;
+constexpr int kSchemaVersion = kCropRecordSchemaVersion;
 constexpr int kMinimumSupportedSchemaVersion = 1;
 constexpr int kCatalogSchemaVersion = 1;
 constexpr int kMaximumGridDimension = 128;
@@ -337,6 +341,7 @@ nlohmann::json BuildJson(
 	}
 	document["economy"] = {
 		{ "money", economySnapshot.money },
+		{ "lifetimeSales", economySnapshot.lifetimeSales },
 		{ "cropCounts", economySnapshot.cropCounts },
 		{ "cropValues", economySnapshot.cropValues },
 		{ "seedCounts", economySnapshot.seedCounts },
@@ -345,6 +350,13 @@ nlohmann::json BuildJson(
 	};
 	document["economy"]["lastHarvestQuality"] = economySnapshot.lastHarvestQuality.crop == farm::CropType::None
 		? nlohmann::json(nullptr) : BuildQualityJson(economySnapshot.lastHarvestQuality);
+	auto& cropRecords = document["economy"]["soldCropRecords"] = nlohmann::json::array();
+	for (std::size_t i = 0; i < economySnapshot.soldCropRecords.size(); ++i) {
+		const auto& r = economySnapshot.soldCropRecords[i];
+		cropRecords.push_back({{"crop", farm::ToString(FarmCropRecordSystem::kCrops[i])},
+			{"harvested", r.harvested}, {"bestQuality", r.bestQuality},
+			{"sizeKnown", r.largest.known}, {"sizeMultiplier", r.largest.multiplier}});
+	}
 	auto& records = document["economy"]["harvestRecords"] = nlohmann::json::array();
 	for (std::size_t i = 0; i < economySnapshot.harvestRecordCount; ++i) {
 		const auto& record = economySnapshot.harvestRecords[i];
@@ -475,10 +487,13 @@ bool ParseSnapshot(
 		}
 
 		farm::FarmGrid::Snapshot candidate;
-		candidate.width = gridJson["width"].get<int>();
-		candidate.height = gridJson["height"].get<int>();
-		const int selectedIndex = gridJson["selectedIndex"].get<int>();
-		if (candidate.width <= 0 || selectedIndex < 0) {
+		int selectedIndex = 0;
+		if (!ReadNonNegativeInt(gridJson["width"], candidate.width) ||
+			!ReadNonNegativeInt(gridJson["height"], candidate.height) ||
+			!ReadNonNegativeInt(gridJson["selectedIndex"], selectedIndex) ||
+			candidate.width <= 0 || candidate.height <= 0 ||
+			candidate.width > kMaximumGridDimension || candidate.height > kMaximumGridDimension ||
+			document["tiles"].size() != static_cast<std::size_t>(candidate.width) * candidate.height || selectedIndex < 0) {
 			error = "Farm grid metadata is outside the supported range.";
 			return false;
 		}
@@ -571,7 +586,10 @@ bool ParseSnapshot(
 			candidate.tiles.push_back(tile);
 		}
 
-		if (!ValidateSnapshot(candidate, expectedWidth, expectedHeight, error)) {
+		const bool developmentSize = FarmDevelopmentSystem::StandardSize(expectedWidth, expectedHeight) &&
+			FarmDevelopmentSystem::StandardSize(candidate.width, candidate.height);
+		if (!ValidateSnapshot(candidate, developmentSize ? candidate.width : expectedWidth,
+			developmentSize ? candidate.height : expectedHeight, error)) {
 			return false;
 		}
 		output = std::move(candidate);
@@ -685,6 +703,8 @@ bool ParsePersistentState(
 		}
 		static_cast<void>(schemaVersion);
 		economySnapshot.contestResults = {};
+		economySnapshot.lifetimeSales = 0; // Legacy saves have no reliable cumulative revenue history.
+		economySnapshot.soldCropRecords = {};
 		if (schemaVersion == 1) {
 			return true;
 		}
@@ -695,6 +715,41 @@ bool ParsePersistentState(
 		}
 
 		const nlohmann::json& economyJson = document["economy"];
+		if (schemaVersion >= kCropRecordSchemaVersion) {
+			if (!economyJson.contains("soldCropRecords") || !economyJson["soldCropRecords"].is_array() ||
+				economyJson["soldCropRecords"].size() != economySnapshot.soldCropRecords.size()) {
+				error = "Invalid or missing crop records."; return false;
+			}
+			for (std::size_t i = 0; i < economySnapshot.soldCropRecords.size(); ++i) {
+				const auto& json = economyJson["soldCropRecords"][i];
+				auto& r = economySnapshot.soldCropRecords[i];
+				if (!json.is_object() || !json.contains("crop") ||
+					json["crop"] != farm::ToString(FarmCropRecordSystem::kCrops[i]) ||
+					!json.contains("harvested") || !json["harvested"].is_boolean() ||
+					!json.contains("bestQuality") || !ReadNonNegativeInt(json["bestQuality"], r.bestQuality) ||
+					!json.contains("sizeKnown") || !json["sizeKnown"].is_boolean() ||
+					!json.contains("sizeMultiplier") || !json["sizeMultiplier"].is_number()) {
+					error = "Invalid crop record fields."; return false;
+				}
+				r.harvested = json["harvested"].get<bool>();
+				const bool known = json["sizeKnown"].get<bool>();
+				const double multiplier = json["sizeMultiplier"].get<double>();
+				if (!std::isfinite(multiplier) || (known ?
+					multiplier < static_cast<double>(0.01f) || multiplier > FarmCropSizeResult::kMaximumMultiplier : multiplier != 0.0)) {
+					error = "Crop record size is outside the supported range."; return false;
+				}
+				r.largest = {static_cast<float>(multiplier), known};
+			}
+			if (!FarmCropRecordSystem::Validate(economySnapshot.soldCropRecords)) {
+				error = "Crop record values are inconsistent."; return false;
+			}
+		}
+		if (schemaVersion >= kDevelopmentSchemaVersion &&
+			(!economyJson.contains("lifetimeSales") ||
+			 !ReadNonNegativeInt(economyJson["lifetimeSales"], economySnapshot.lifetimeSales))) {
+			error = "Invalid or missing cumulative sale revenue.";
+			return false;
+		}
 		if (!economyJson.contains("money") || !economyJson["money"].is_number_integer()) {
 			error = "Farm economy money has an invalid type.";
 			return false;
@@ -961,6 +1016,7 @@ bool FarmDocumentSystem::Initialize(
 				auto legacyProgression = Progression().CaptureSnapshot();
 				legacyProgression.stagedUnlocks = false;
 				legacyProgression.pestsEnabled = false;
+				legacyProgression.weatherVersion = 0;
 				static_cast<void>(Progression().RestoreSnapshot(legacyProgression));
 				return SaveAs("Legacy Farm", grid, economySystem, cropSelectionSystem);
 			}
@@ -1123,6 +1179,17 @@ bool FarmDocumentSystem::Load(
 	if ((pestsEnabled && !stagedUnlocks) || !ValidatePestCalendar(snapshot, dateSnapshot.day, pestsEnabled)) {
 		SetError("Pest state does not match the saved date or mode."); return false;
 	}
+	int weatherVersion = 0;
+	if (document["schemaVersion"].get<int>() >= kWeatherSchemaVersion) {
+		if (!document.contains("weatherVersion") || !document["weatherVersion"].is_number_integer() ||
+			document["weatherVersion"] < 0 || document["weatherVersion"] > FarmWeatherSystem::kRulesVersion) {
+			SetError("Invalid or missing weather policy."); return false;
+		}
+		weatherVersion = document["weatherVersion"].get<int>();
+	}
+	if (weatherVersion != 0 && !stagedUnlocks) {
+		SetError("Weather requires a new staged contest farm."); return false;
+	}
 	if (!MigrateLegacyCrops(snapshot, economySnapshot, cropSelectionSnapshot, migratedLegacyCrops)) {
 		SetError("Legacy crop migration exceeds inventory limits or has invalid records.");
 		return false;
@@ -1133,11 +1200,11 @@ bool FarmDocumentSystem::Load(
 		economySystem.CaptureSnapshot();
 	const FarmCropSelectionSystem::Snapshot previousCropSelectionSnapshot =
 		cropSelectionSystem.CaptureSnapshot();
-	if (!grid.RestoreSnapshot(snapshot) ||
+	if (!grid.ReplaceSnapshot(snapshot) ||
 		!economySystem.RestoreSnapshot(economySnapshot) ||
 		!cropSelectionSystem.RestoreSnapshot(cropSelectionSnapshot)) {
 		const bool gridRollbackSucceeded =
-			grid.RestoreSnapshot(previousGridSnapshot);
+			grid.ReplaceSnapshot(previousGridSnapshot);
 		const bool economyRollbackSucceeded =
 			economySystem.RestoreSnapshot(previousEconomySnapshot);
 		const bool cropSelectionRollbackSucceeded =
@@ -1156,6 +1223,7 @@ bool FarmDocumentSystem::Load(
 	auto loadedProgression = Progression().CaptureSnapshot();
 	loadedProgression.stagedUnlocks = stagedUnlocks;
 	loadedProgression.pestsEnabled = pestsEnabled;
+	loadedProgression.weatherVersion = weatherVersion;
 	static_cast<void>(Progression().RestoreSnapshot(loadedProgression));
 
 	activeDocumentId_ = metadata.id;
@@ -1329,9 +1397,11 @@ bool FarmDocumentSystem::Reset(
 	farm::FarmGrid::Snapshot snapshot;
 	snapshot.width = grid.GetWidth();
 	snapshot.height = grid.GetHeight();
+	if (FarmDevelopmentSystem::StandardSize(snapshot.width, snapshot.height))
+		snapshot.height = FarmDevelopmentSystem::kInitialHeight;
 	snapshot.selectedX = 0;
 	snapshot.selectedY = 0;
-	snapshot.tiles.assign(static_cast<std::size_t>(grid.GetTileCount()), farm::FarmTile{});
+	snapshot.tiles.assign(static_cast<std::size_t>(snapshot.width) * snapshot.height, farm::FarmTile{});
 	const farm::FarmGrid::Snapshot previousGridSnapshot = [&]() {
 		farm::FarmGrid::Snapshot value;
 		grid.CaptureSnapshot(value);
@@ -1341,10 +1411,10 @@ bool FarmDocumentSystem::Reset(
 		economySystem.CaptureSnapshot();
 	const FarmCropSelectionSystem::Snapshot previousCropSelectionSnapshot =
 		cropSelectionSystem.CaptureSnapshot();
-	if (!grid.RestoreSnapshot(snapshot) ||
+	if (!grid.ReplaceSnapshot(snapshot) ||
 		!economySystem.RestoreSnapshot(defaultEconomySnapshot_) ||
 		!cropSelectionSystem.RestoreSnapshot(defaultCropSelectionSnapshot_)) {
-		static_cast<void>(grid.RestoreSnapshot(previousGridSnapshot));
+		static_cast<void>(grid.ReplaceSnapshot(previousGridSnapshot));
 		static_cast<void>(economySystem.RestoreSnapshot(previousEconomySnapshot));
 		static_cast<void>(cropSelectionSystem.RestoreSnapshot(previousCropSelectionSnapshot));
 		SetError("A Farm System rejected the reset state.");
@@ -1353,7 +1423,7 @@ bool FarmDocumentSystem::Reset(
 	Date().Initialize();
 	auto progressionRules = farm::FarmRules{};
 	progressionRules.clearMoneyTarget = Progression().GetTargetMoney();
-	Progression().Initialize(progressionRules, defaultMode_, defaultMode_ == FarmProgressionMode::ContestSeason);
+	Progression().Initialize(progressionRules, defaultMode_, defaultMode_ == FarmProgressionMode::ContestSeason, true);
 	static_cast<void>(Progression().SetMode(defaultMode_, economySystem.GetMoney(),
 		FarmContestSeasonSystem::Evaluate(Date().GetDay(), economySystem.GetContestResults())));
 	activeDocumentId_.clear();
@@ -1489,6 +1559,7 @@ bool FarmDocumentSystem::SaveToDocument(
 		Progression().IsContestSeason() ? "ContestSeason" : "Trial";
 	document["stagedUnlocks"] = Progression().StagePolicy().enabled;
 	document["pestsEnabled"] = Progression().PestsEnabled();
+	document["weatherVersion"] = Progression().WeatherVersion();
 	document["date"] = {{"day", dateSnapshot.day}, {"elapsedSecondsInDay", dateSnapshot.elapsedSecondsInDay},
 		{"timeScale", dateSnapshot.timeScale}};
 	const std::filesystem::path documentPath =

@@ -19,6 +19,10 @@
 
 #if defined(_DEBUG) && defined(USE_IMGUI)
 #include "editor/FarmPestPlaytestSystem.h"
+#include "editor/FarmNextGoalTestWindow.h"
+#include "editor/FarmTimeAdvanceTestWindow.h"
+#include "editor/FarmTimeAdvanceLiveWindow.h"
+#include "editor/FarmWeatherTestWindow.h"
 #endif
 
 #include <memory>
@@ -64,11 +68,24 @@ private:
 #if defined(_DEBUG) && defined(USE_IMGUI)
 	void DrawFarmPestPlaytest();
 	void DrawFarmNextGoalTest();
+	void DrawFarmTimeAdvanceTest();
+    void DrawFarmWeatherTest();
+    bool showFarmWeatherTest_ = false;
+    bool farmWeatherFailed_ = false;
+    editor::FarmWeatherPlaytestSystem farmWeatherPlaytest_;
+    void DrawFarmTimeAdvanceLive(editor::GamePlayEditorScene& scene, bool closedFromMenu);
+    bool showFarmTimeAdvanceLive_ = false;
+	bool showFarmTimeAdvanceTest_ = false;
+	editor::FarmTimeAdvancePlaytestSystem farmTimeAdvancePlaytest_;
+	editor::FarmTimeAdvanceTestWindow farmTimeAdvanceWindow_;
+	bool farmTimeAdvanceFailed_ = false;
 	editor::FarmPestPlaytestSystem farmPestPlaytest_;
 	bool showFarmPestPlaytest_ = false;
 	bool farmPestPlaytestFailed_ = false;
 	bool showFarmNextGoalTest_ = false;
-	int farmNextGoalCase_ = 0;
+	editor::FarmNextGoalPlaytestSystem farmNextGoalPlaytest_;
+	editor::FarmNextGoalTestWindow farmNextGoalWindow_;
+	bool farmNextGoalPlaytestFailed_ = false;
 #endif
 
 	EditorSettings editorSettings_;

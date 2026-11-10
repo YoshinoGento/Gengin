@@ -7,7 +7,10 @@
 #include "farm/ui/FarmTerrainView.h"
 #include "farm/ui/FarmHotbarView.h"
 #include "farm/ui/FarmNextGoalView.h"
+#include "farm/ui/FarmTimeAdvanceView.h"
 #include "farm/ui/FarmMenuView.h"
+#include "farm/ui/FarmDevelopmentView.h"
+#include "farm/ui/FarmRecordBookView.h"
 #include "farm/system/FarmOverviewCamera.h"
 #include <cassert>
 #include <cmath>
@@ -81,6 +84,7 @@ void AssertHalfOpenControl(const Item& item) {
         if (expected != Action::None) {
             assert(hit.argument == item.request.argument);
             assert(hit.inventoryGeneration == item.request.inventoryGeneration);
+            assert(hit.farmGeneration == item.request.farmGeneration);
         }
     }
     for (const auto p : {Vector2{right,r.y}, Vector2{r.x,bottom}, Vector2{right,bottom},
@@ -379,6 +383,26 @@ void TestCaptionLayout() {
 }
 
 int main() {
+    for (int reason = 0; reason <= static_cast<int>(FarmTimeAdvanceSystem::StopReason::PestWarning); ++reason) {
+        for (const bool active : {false, true}) {
+            View timeView;
+            FarmTimeAdvanceControlSystem::View state{};
+            state.held = true;
+            state.status.active = active;
+            state.status.reason = static_cast<FarmTimeAdvanceSystem::StopReason>(reason);
+            state.status.tileIndex = 3;
+            BuildPlayQuickView(timeView, true, true);
+            BuildTimeAdvanceControl(timeView, state, true);
+            BuildTimeAdvanceStatus(timeView, state);
+            for (std::size_t i = 0; i < timeView.count; ++i) {
+                AssertReadable(timeView.items[i]);
+                for (std::size_t j = i+1; j < timeView.count; ++j)
+                    assert(Separated(timeView.items[i].rect, timeView.items[j].rect));
+            }
+            assert(timeView.Hit(Center(HUDLayout::UtilitySlot(4))).action == (active ? Action::TimeCancel : Action::TimeAdvance));
+            assert(timeView.Hit(Center(HUDLayout::shortGoal)).action == Action::TimeFocus);
+        }
+    }
     for (int page=0;page<kMenuPageCount;++page) {
         for (int flags=0;flags<64;++flags) {
             MenuOverviewState state;
@@ -412,7 +436,43 @@ int main() {
             if (page==2) assert((menu.Hit(Center(MenuLayout::Cell(1,308))).action==Action::Load)==(state.documents>0));
         }
     }
-    for (int page=0;page<15;++page) {
+    for (int flags=0;flags<32;++flags) {
+        FarmDevelopmentSystem::View state;
+        state.rank=3; state.tiles=30; state.height=6; state.sales=2147483647;
+        state.remainingSales=1000;
+        state.standardFarm=(flags&1)!=0; state.maximumRank=(flags&2)!=0;
+        state.maximumArea=(flags&4)!=0; state.canExpand=(flags&8)!=0;
+        View menu;
+        BuildMenuShell(menu,15,false,(flags&16)!=0,false,Label::Ready);
+        BuildDevelopmentView(menu,state,123);
+        AssertItemsDoNotOverlap(menu);
+        for (std::size_t i=0;i<menu.count;++i) {
+            AssertReadable(menu.items[i]); AssertHalfOpenControl(menu.items[i]);
+        }
+        const auto hit=menu.Hit({200,510});
+        assert(hit.action==(state.canExpand ? Action::ExpandFarm : Action::None));
+        if (state.canExpand) assert(hit.argument==6 && hit.farmGeneration==123 && hit.inventoryGeneration==0);
+    }
+    for (int flags=0;flags<64;++flags) {
+        FarmRecordBookSystem::View state;
+        for (std::size_t i=0;i<state.rows.size();++i) {
+            auto& r=state.rows[i]; r.crop=FarmCropRecordSystem::kCrops[i];
+            r.harvested=(flags&(1<<i))!=0; r.weightKnown=r.harvested && (flags&(8<<i))!=0;
+            r.quality=100; r.grams=12000;
+            if (r.harvested) ++state.collected;
+            else state.nextCrop=r.crop;
+        }
+        View menu;
+        BuildMenuShell(menu,16,false,false,false,Label::Ready);
+        BuildRecordBookView(menu,state);
+        AssertItemsDoNotOverlap(menu);
+        for (std::size_t i=0;i<menu.count;++i) {
+            AssertReadable(menu.items[i]); AssertHalfOpenControl(menu.items[i]);
+        }
+        assert(menu.Hit({180,645}).action==Action::MenuDetails);
+        assert(menu.Hit({930,645}).action==Action::Close);
+    }
+    for (int page=0;page<17;++page) {
         View confirmation;
         BuildMenuShell(confirmation,page,true,true,false,Label::Failure);
         assert(confirmation.NextActionable(-1,1)==-1);

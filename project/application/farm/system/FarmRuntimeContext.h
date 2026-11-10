@@ -20,6 +20,7 @@ class FarmProgressionSystem;
 class FarmStageAccessSystem;
 class FarmToolActionSystem;
 class FarmToolSystem;
+class FarmTimeAdvanceControlSystem;
 struct FarmSaleResult;
 struct FarmToolActionResult;
 namespace farm { class FarmGrid; class FarmIrrigationSystem; class FarmIrrigationPreviewSystem; class FarmVisualSystem; }
@@ -73,6 +74,7 @@ struct FarmRuntimeContext {
     FarmStageAccessSystem& farmStageAccessSystem;
     FarmToolActionSystem& farmToolActionSystem;
     FarmToolSystem& farmToolSystem;
+    FarmTimeAdvanceControlSystem& farmTimeAdvance;
     const farm::FarmVisualSystem& farmVisualSystem;
     editor::GamePlayEditorBridge& gamePlayEditorBridge;
     const level::LevelGameplaySystem& levelGameplay;

@@ -29,6 +29,7 @@ struct FarmNextGoalCopy {
     case Kind::NeedFunds: return FarmNextGoalCopy{Label::GoalFunds, Label::GoalWhyFunds};
     case Kind::CheckWater: return FarmNextGoalCopy{Label::GoalCheckWater, Label::GoalWhyWater};
     case Kind::Water: return FarmNextGoalCopy{Label::GoalWater, Label::GoalWhyWater};
+    case Kind::StopIrrigation: return FarmNextGoalCopy{Label::GoalStopIrrigation, Label::GoalWhyWater};
     case Kind::ReduceWater: return FarmNextGoalCopy{Label::GoalReduceWater, Label::GoalWhyWater};
     case Kind::Grow: return FarmNextGoalCopy{Label::GoalGrow};
     case Kind::ResumeGrowth: return FarmNextGoalCopy{Label::GoalResumeGrowth};

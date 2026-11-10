@@ -1,4 +1,5 @@
 #include "gameplay/GamePlaySessionSystem.h"
+#include "farm/system/FarmDevelopmentSystem.h"
 #include "scene/SceneManager.h"
 #include "base/Framework.h"
 #include "base/FrameClock.h"
@@ -235,7 +236,7 @@ SelectedTileHUDData BuildSelectedTileHUDData(
 	const FarmGrowthSystem& growthSystem,
 	float timeScale,
 	farm::CropType selectedSeedCrop,
-	int selectedSeedCount)
+	int selectedSeedCount, float soilRainPerSecond)
 {
 	const farm::FarmTile* selectedTile = grid.GetSelectedTile();
 	if (selectedTile == nullptr) {
@@ -283,7 +284,7 @@ SelectedTileHUDData BuildSelectedTileHUDData(
 		*selectedTile,
 		selectedSeedCrop,
 		timeScale,
-		irrigationSystem.GetAvailableIrrigationStrength(grid, data.index));
+		irrigationSystem.GetAvailableIrrigationStrength(grid, data.index), soilRainPerSecond);
 	data.moistureStatus = ToHUDMoistureStatus(forecast.moistureStatus);
 	data.moistureRangeValid = forecast.moistureValid;
 	data.goodMoistureMinimum = forecast.goodMoistureMinimum;
@@ -449,7 +450,7 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 	farmCropSelectionSystem_.Initialize();
 	farmFeedbackSystem_.Initialize();
 	farmHarvestVisualSystem_.Clear();
-	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason, true);
+	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason, true, true);
 	farmStageAccessSystem_.Bind(farmDateSystem_, farmProgressionSystem_.StagePolicy());
 	farmEconomySystem_.BindStageAccess(farmStageAccessSystem_);
 	farmToolActionSystem_.BindStageAccess(farmStageAccessSystem_);
@@ -844,6 +845,7 @@ void GamePlaySessionSystem::PrepareRenderFrame(float presentationDeltaTime) {
 }
 
 void GamePlaySessionSystem::FixedUpdate(float fixedDeltaTime) {
+    if (farmTimeAdvance_.HoldsSimulation() && !timelineScrubbing_) return;
     farmContestDaySystem_.Observe(farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults(), !farmProgressionSystem_.IsFreeFarming());
     if (farmContestDaySystem_.PendingDay()) return;
     if (layoutLibraryFrame_) return;
@@ -865,25 +867,14 @@ void GamePlaySessionSystem::FixedUpdate(float fixedDeltaTime) {
 
 	levelRouteTimer_ += fixedDeltaTime;
 	if (!farmProgressionSystem_.IsCleared() && !farmIrrigationPreviewSystem_.IsActive()) {
-		farmGrowthComparisonSystem_.ObserveBeforeStep(farmGrid_);
-		if (farmIrrigationSystem_.UpdateWater(farmGrid_, fixedDeltaTime, farmDateSystem_.GetTimeScale())) {
-			farmDocumentSystem_.MarkDirty();
-		}
-		if (farmGrowthSystem_.Update(
-			farmGrid_,
-			fixedDeltaTime,
-			farmDateSystem_.GetTimeScale())) {
-			farmDocumentSystem_.MarkDirty();
-		}
-		farmGrowthComparisonSystem_.ObserveAfterStep(farmGrid_, fixedDeltaTime, farmDateSystem_.GetTimeScale());
-		const int previousDay = farmDateSystem_.GetDay();
-		farmContestDaySystem_.Advance(farmDateSystem_, fixedDeltaTime, farmEconomySystem_.GetContestResults(),
-			farmProgressionSystem_.IsContestSeason() ? FarmContestEntrySystem::kContestDays.back() + 1 : 0,
-			!farmProgressionSystem_.IsFreeFarming());
-		ApplyFarmDayEvents(previousDay);
-		static_cast<void>(farmProgressionSystem_.EvaluateSeason(FarmContestSeasonSystem::Evaluate(
-			farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults())));
-		if (!farmDocumentSystem_.IsDirty()) farmDocumentSystem_.MarkDirty();
+        const auto result = FarmSimulationStepSystem::Step(SimulationContext(), fixedDeltaTime,
+            farmProgressionSystem_.IsContestSeason() ? FarmContestEntrySystem::kContestDays.back() + 1 : 0);
+        if (result.advanced) farmDocumentSystem_.MarkDirty();
+        if (result.dayChanged) farmToolActionSystem_.ClearHistory();
+#ifndef USE_IMGUI
+        if (result.pestWarning) farmRuntimeController_.PauseForPestWarning();
+        if (result.weatherChanged) farmRuntimeController_.PauseForWeatherChange();
+#endif
 	}
 	const auto groundQuery = BuildPlayerGroundQuery();
 	levelGameplay_.UpdatePlayer(pendingPlayerCommand_, fixedDeltaTime, &groundQuery);
@@ -1113,8 +1104,10 @@ void GamePlaySessionSystem::OnScreenTransitionCovered() {
 
 void GamePlaySessionSystem::PrepareFixedUpdate()
 {
+    farmTimeAdvance_.BeginFrame();
     layoutLibraryFrame_ = layoutLibraryRequested_;
     if (layoutLibraryRequested_) {
+        farmTimeAdvance_.Interrupt();
         layoutLibraryRequested_ = false;
         pendingPlayerCommand_ = {};
         farmRuntimeController_.OpenLayoutLibrary(RuntimeContext());
@@ -1146,6 +1139,7 @@ void GamePlaySessionSystem::PrepareFixedUpdate()
 	timelineForwardHeld_ = (rewindKeyHeld && shiftHeld) || timelineStepForwardRequested_;
 	timelineRewindHeld_ = (rewindKeyHeld && !shiftHeld) || timelineStepBackwardRequested_;
 	timelineScrubbing_ = timeline_.IsInitialized() && (timelineRewindHeld_ || timelineForwardHeld_);
+    UpdateTimeAdvance();
 	if (framework_ && framework_->GetAudio()) {
 		if (timelineScrubbing_) {
 			framework_->GetAudio()->SetGlobalTemporalState(
@@ -1225,6 +1219,7 @@ void GamePlaySessionSystem::SyncLevelGameplayPresentation()
 
 void GamePlaySessionSystem::InitializeTimeline()
 {
+    farmTimeAdvance_.Interrupt();
 	timeline_.Clear();
 	CaptureTimelineSnapshot(timelineScratch_);
 	timeline_.Initialize(kTimelineSnapshotCapacity, timelineScratch_);
@@ -1640,7 +1635,7 @@ void GamePlaySessionSystem::Draw() {
 	const bool irrigationPreviewActive = previewGrid != nullptr && previewIrrigation != nullptr;
 	const farm::FarmGrid& displayedFarmGrid = irrigationPreviewActive ? *previewGrid : farmGrid_;
     const bool arrivalScenery = farmGameMode_ && farmArrivalRenderer_.IsReady() &&
-        displayedFarmGrid.GetWidth()==5 && displayedFarmGrid.GetHeight()==4;
+        FarmDevelopmentSystem::StandardSize(displayedFarmGrid.GetWidth(), displayedFarmGrid.GetHeight());
     farmArrivalRenderer_.Prepare(camera_.get(),farmRuntimeController_.StartFrame(),arrivalScenery,realDeltaTime_);
 	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : farmIrrigationSystem_;
 	farmRenderer_.Prepare(displayedFarmGrid, farmVisualSystem_, camera_.get(),
@@ -1845,7 +1840,7 @@ FarmHUDViewData GamePlaySessionSystem::BuildFarmHUDViewData() const {
 		? *previewIrrigation : farmIrrigationSystem_;
 	viewData.day = farmDateSystem_.GetDay();
 	viewData.money = farmEconomySystem_.GetMoney();
-	viewData.rank = 1;
+	viewData.rank = FarmDevelopmentSystem::Rank(farmEconomySystem_.GetLifetimeSales());
 	viewData.cropCount = farmEconomySystem_.GetTotalCropCount();
 	viewData.saleValue = farmEconomySystem_.GetSalePreviewValue();
 	viewData.selectedSeedCrop = farmCropSelectionSystem_.GetSelectedCrop();
@@ -1874,7 +1869,8 @@ FarmHUDViewData GamePlaySessionSystem::BuildFarmHUDViewData() const {
 	const SelectedTileHUDData selectedTileData = BuildSelectedTileHUDData(
 		displayedFarmGrid, displayedIrrigation, farmGrowthSystem_,
 		farmDateSystem_.GetTimeScale(),
-		viewData.selectedSeedCrop, viewData.seedCount);
+		viewData.selectedSeedCrop, viewData.seedCount,
+		FarmWeatherSystem::Inspect(farmDateSystem_.GetDay(), farmProgressionSystem_.WeatherVersion()).soilRainPerSecond);
 	viewData.selectedTileValid = selectedTileData.valid;
 	viewData.selectedTileMoistureRangeValid = selectedTileData.moistureRangeValid;
 	viewData.selectedTileGoodMoistureMinimum = selectedTileData.goodMoistureMinimum;
@@ -1956,6 +1952,7 @@ void GamePlaySessionSystem::HandleFarmDateDebugInput() {
 }
 
 bool GamePlaySessionSystem::HandleFarmInput() {
+    if (farmTimeAdvance_.Read().status.active) return true;
 #ifndef USE_IMGUI
 	if (farmRuntimeController_.ConsumesInput()) return true;
 #endif
@@ -2130,6 +2127,7 @@ bool GamePlaySessionSystem::ResetFarmSession()
 
 bool GamePlaySessionSystem::ResetFarmSessionState()
 {
+    farmTimeAdvance_.Reset();
 	const auto mode = farmProgressionSystem_.GetMode();
 	const auto rules = FarmProgressionSystem::InitialRules(mode);
 	if (!farmGrid_.Initialize(5, 4)) {
@@ -2144,7 +2142,7 @@ bool GamePlaySessionSystem::ResetFarmSessionState()
 	farmIrrigationSystem_.Initialize();
 	farmToolActionSystem_.Initialize();
 	farmCropSelectionSystem_.Initialize();
-	farmProgressionSystem_.Initialize(rules, mode, true);
+	farmProgressionSystem_.Initialize(rules, mode, true, true);
 	farmFeedbackSystem_.Initialize(false);
 	farmHarvestVisualSystem_.Clear();
 	farmIrrigationSystem_.Rebuild(farmGrid_);
@@ -2954,6 +2952,46 @@ void GamePlaySessionSystem::ChangeAnimationModel(int index) {
 	}
 }
 
+FarmSimulationStepSystem::Context GamePlaySessionSystem::SimulationContext() {
+    return {farmGrid_, farmIrrigationSystem_, farmGrowthSystem_, farmDateSystem_, farmContestDaySystem_,
+        farmEconomySystem_, farmProgressionSystem_, &farmGrowthComparisonSystem_};
+}
+
+bool GamePlaySessionSystem::TimeAdvanceBlocked() const {
+    const WinApp* window = framework_ ? framework_->GetWinApp() : nullptr;
+    return !window || GetForegroundWindow() != window->GetHwnd() || layoutLibraryFrame_ ||
+        timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() || farmCropSelectionSystem_.IsOpen() ||
+        farmRuntimeController_.BlocksTimeAdvance();
+}
+
+void GamePlaySessionSystem::UpdateTimeAdvance() {
+    // PrepareFixedUpdate runs once per rendered frame, including editor pause.
+    // The hold prevents all subsequent FixedUpdate calls from advancing the farm twice.
+    const int steps = farmTimeAdvance_.Tick(SimulationContext(), TimeAdvanceBlocked());
+    if (steps <= 0) return;
+    farmToolActionSystem_.ClearHistory();
+    farmDocumentSystem_.MarkDirty();
+    CaptureTimelineSnapshot(timelineScratch_);
+    timeline_.Record(timelineScratch_);
+}
+
+bool GamePlaySessionSystem::ControlTimeAdvance(FarmTimeAdvanceControlSystem::Action action) {
+    using A = FarmTimeAdvanceControlSystem::Action;
+    switch (action) {
+    case A::Start: return farmTimeAdvance_.Start(SimulationContext(), TimeAdvanceBlocked(), true);
+    case A::Step: return farmTimeAdvance_.Start(SimulationContext(), TimeAdvanceBlocked(), false);
+    case A::Cancel: farmTimeAdvance_.Cancel(); return true;
+    case A::Resume: farmTimeAdvance_.Reset(); return true;
+    case A::Focus: {
+        const int index = farmTimeAdvance_.Read().status.tileIndex;
+        if (!farmGrid_.GetTile(index)) return false;
+        farmGrid_.SetSelectedIndex(index);
+        return true;
+    }
+    default: return false;
+    }
+}
+
 FarmRuntimeContext GamePlaySessionSystem::RuntimeContext() {
     return {
         .host = *this,
@@ -2976,6 +3014,7 @@ FarmRuntimeContext GamePlaySessionSystem::RuntimeContext() {
         .farmStageAccessSystem = farmStageAccessSystem_,
         .farmToolActionSystem = farmToolActionSystem_,
         .farmToolSystem = farmToolSystem_,
+        .farmTimeAdvance = farmTimeAdvance_,
         .farmVisualSystem = farmVisualSystem_,
         .gamePlayEditorBridge = gamePlayEditorBridge_,
         .levelGameplay = levelGameplay_,

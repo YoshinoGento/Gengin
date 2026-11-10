@@ -9,6 +9,7 @@
 #include "title/TitleAudioSettingsSystem.h"
 #include "title/TitleAudioSettingsView.h"
 #include "title/TitlePondRenderer.h"
+#include "title/TitlePresentationLayout.h"
 
 class TitleScene final : public BaseScene, public scene::ViewportInputTarget {
 public:
@@ -21,10 +22,13 @@ public:
     void RequestStart() noexcept;
 	void SetViewportPointerInput(const scene::ViewportPointerInput& input) noexcept override {
 		viewportInput_ = {};
-		viewportInput_.pointer = input.position;
-		viewportInput_.pointerValid = input.valid;
-		viewportInput_.pressed = input.pressed;
-		viewportInput_.held = input.held;
+		if (const auto point = title::MapTitleCanvasPointer(input.position, input.sourceResolution);
+			input.valid && point) {
+			viewportInput_.pointer = *point;
+			viewportInput_.pointerValid = true;
+			viewportInput_.pressed = input.pressed;
+			viewportInput_.held = input.held;
+		}
 		viewportFocused_ = input.focused;
 	}
 

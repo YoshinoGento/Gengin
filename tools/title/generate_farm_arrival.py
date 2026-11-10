@@ -19,7 +19,8 @@ GRASS_BOUNDS = (-30,30,-14,46)
 GRASS_JITTER = .06
 GRASS_SCALE = (.95,1.05)
 # Runtime plot, two-track road, tool bench and close-up leaf, before wind/patch expansion.
-GRASS_KEEPOUTS = ((-4,4,4.7,11.3),(7.1,8.95,-15,24),
+PLOT_KEEPOUT = (-4,4,3.2,12.8)  # Maximum 5x6 farm plus a walking margin.
+GRASS_KEEPOUTS = (PLOT_KEEPOUT,(7.1,8.95,-15,24),
                  (-5.65,-3.60,6.5,7.7),(-5.6,-4.35,2.35,3.25))
 
 
@@ -92,7 +93,7 @@ def build_scenery():
     mesh = Mesh()
     mesh.ground()
     # Below all legal terrain levels (minimum=0); replaces only the flat ground draw.
-    mesh.rectangle(-4,4,4.7,11.3,-.225,landscape.DIRT,"under_plot",2)
+    mesh.rectangle(*PLOT_KEEPOUT,-.225,landscape.DIRT,"under_plot",2)
     mesh.rectangle(7.1,7.7,-15,24,-.227,landscape.DIRT,"road",1)
     mesh.rectangle(8.35,8.95,-15,24,-.227,landscape.DIRT,"road",1)
     for index,(x,z) in enumerate(TREE_POSITIONS):
@@ -181,7 +182,7 @@ def build():
             target.setparams(source.getparams())
             target.writeframes(source.readframes(source.getframerate()*16))
     (OUT/"manifest.json").write_text(json.dumps({"triangles":counts,"grassInstances":grass_count,
-        "plotKeepout":[-4,4,4.7,11.3],"authorship":"Original procedural geometry and impact sound; existing project countryside/packet textures and grass models reused."},indent=2)+'\n',encoding="ascii")
+        "plotKeepout":PLOT_KEEPOUT,"authorship":"Original procedural geometry and impact sound; existing project countryside/packet textures and grass models reused."},indent=2)+'\n',encoding="ascii")
     print(json.dumps(counts),grass_count,"grass instances")
 
 
@@ -196,6 +197,7 @@ if __name__ == '__main__':
         path = OUT/'manifest.json'
         manifest = json.loads(path.read_text(encoding='ascii'))
         manifest['triangles']['scenery'] = count
+        manifest['plotKeepout'] = PLOT_KEEPOUT
         path.write_text(json.dumps(manifest,indent=2)+'\n',encoding='ascii')
         print(f'PASS arrival scenery: {count} triangles; other assets untouched')
     elif args.grass_only:

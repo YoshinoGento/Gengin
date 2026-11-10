@@ -48,6 +48,8 @@ bool SameQuality(const FarmCropQualityResult& a, const FarmCropQualityResult& b)
 void FarmEconomySystem::Initialize(const farm::FarmRules& rules)
 {
 	money_ = rules.initialMoney >= 0 ? rules.initialMoney : 0;
+	lifetimeSales_ = 0;
+	soldCropRecords_ = {};
 	cropCounts_.fill(0);
 	cropValues_.fill(0);
 	sellPrices_ = {
@@ -273,10 +275,13 @@ FarmSaleResult FarmEconomySystem::SellMatching(farm::CropType crop) noexcept
 			cropValues_[slot] += record.quantity * record.quality.salePrice;
 		}
 		if (!matches || record.saleProtected) harvestRecords_[remaining++] = record;
+		else FarmCropRecordSystem::Accumulate(soldCropRecords_, record.quality);
 	}
 	std::fill(harvestRecords_.begin() + remaining, harvestRecords_.end(), HarvestRecord{});
 	harvestRecordCount_ = remaining;
 	money_ += result.earnedMoney;
+	// Saturate the historical counter without blocking otherwise valid sales.
+	lifetimeSales_ += (std::min)(result.earnedMoney, (std::numeric_limits<int>::max)() - lifetimeSales_);
 	return result;
 }
 
@@ -396,7 +401,7 @@ FarmEconomySystem::Snapshot FarmEconomySystem::CaptureSnapshot() const noexcept
 {
 	return {
 		money_, cropCounts_, cropValues_, sellPrices_, seedCounts_, seedPrices_,
-		lastHarvestQuality_, harvestRecords_, harvestRecordCount_, nextHarvestRecordId_, contestReservationId_, contestResults_
+		lastHarvestQuality_, harvestRecords_, harvestRecordCount_, nextHarvestRecordId_, contestReservationId_, contestResults_, lifetimeSales_, soldCropRecords_
 	};
 }
 
@@ -417,7 +422,7 @@ int FarmEconomySystem::GetUnrecordedCropCount() const noexcept
 
 bool FarmEconomySystem::ValidateSnapshot(const Snapshot& snapshot) noexcept
 {
-	if (snapshot.money < 0 || !AreValuesValid(snapshot.cropCounts) ||
+	if (snapshot.money < 0 || snapshot.lifetimeSales < 0 || !FarmCropRecordSystem::Validate(snapshot.soldCropRecords) || !AreValuesValid(snapshot.cropCounts) ||
 		!AreValuesValid(snapshot.cropValues) ||
 		!AreValuesValid(snapshot.sellPrices) || !AreValuesValid(snapshot.seedCounts) ||
 		!AreValuesValid(snapshot.seedPrices) ||
@@ -462,6 +467,8 @@ bool FarmEconomySystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
 {
 	if (!ValidateSnapshot(snapshot)) return false;
 	money_ = snapshot.money;
+	lifetimeSales_ = snapshot.lifetimeSales;
+	soldCropRecords_ = snapshot.soldCropRecords;
 	cropCounts_ = snapshot.cropCounts;
 	cropValues_ = snapshot.cropValues;
 	sellPrices_ = snapshot.sellPrices;

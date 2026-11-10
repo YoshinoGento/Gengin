@@ -51,6 +51,8 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         button(Label::StageGuide,Action::StageGuide,1,328);
         view.Metric(Label::ShopMoney,{176,426,450,38},220,std::to_string(s.money)+"G");
         view.Metric(Label::MenuSeedCount,{646,426,450,38},260,std::to_string(s.seeds));
+        button(Label::Development,Action::Development,0,500);
+        button(Label::CropBook,Action::CropBook,1,500);
     } else if (s.page == 1) {
         view.Add(Label::MenuTerrainWork,{176,130,920,38});
         button(Label::Overview,Action::TerrainField,0,188,s.unlocked);
@@ -58,6 +60,7 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         view.Metric(Label::StageHeight,{176,298,920,38},540,"H"+std::to_string(s.maximumHeight));
         view.Metric(Label::WaterStats,{176,358,920,38},540,
             std::to_string(s.suppliedCanals)+" / "+std::to_string(s.suppliedTiles));
+        button(Label::Development,Action::Development,0,438);
     } else if (s.page == 2) {
         view.Add(Label::MenuSaveHeading,{176,130,920,38});
         button(Label::Save,Action::Save,0,180,s.canSave);

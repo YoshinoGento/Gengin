@@ -34,6 +34,8 @@ public:
 	[[nodiscard]] static bool IsValidTile(const FarmTile& tile) noexcept;
 	void CaptureSnapshot(Snapshot& output) const;
 	bool RestoreSnapshot(const Snapshot& snapshot);
+	// Explicit document/development replacement; ordinary Undo remains dimension-strict.
+	bool ReplaceSnapshot(const Snapshot& snapshot);
 	[[nodiscard]] uint64_t GetGeneration() const noexcept { return generation_; }
 
 private:

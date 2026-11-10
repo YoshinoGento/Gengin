@@ -33,6 +33,8 @@ public:
     }
     void Draw() { ui_.Draw(view_, pointer_); }
     void PauseForPestWarning() noexcept { paused_ = true; }
+    void PauseForWeatherChange() noexcept { paused_ = true; }
+    bool BlocksTimeAdvance() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || terrain_ || observation_ || (ready_ && flow_.BlocksSimulation()); }
     bool BlocksSimulation() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || paused_ || terrain_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool ConsumesInput() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool IsOpen() const noexcept { return open_; }

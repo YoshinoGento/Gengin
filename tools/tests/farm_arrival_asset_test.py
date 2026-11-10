@@ -60,6 +60,12 @@ class ArrivalAssets(unittest.TestCase):
                 self.assertGreater(sum(x*x for x in cross),1e-14)
 
     def test_grass_excludes_plot_road_and_props(self):
+        self.assertEqual(tuple(json.loads((OUT/'manifest.json').read_text())['plotKeepout']), arrival.PLOT_KEEPOUT)
+        a,b,c,d=arrival.PLOT_KEEPOUT
+        self.assertLess(a,-5*1.43/2)
+        self.assertGreater(b,5*1.43/2)
+        self.assertLess(c,8-6*1.43/2)
+        self.assertGreater(d,8+6*1.43/2)
         layout=json.loads((OUT/'grass_layout.json').read_text())
         generated=arrival.build_grass_layout()
         self.assertEqual(layout,generated)

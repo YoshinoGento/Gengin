@@ -1,4 +1,5 @@
 #include "farm/system/FarmIrrigationSystem.h"
+#include "farm/system/FarmWeatherSystem.h"
 
 #include "farm/core/FarmGrid.h"
 
@@ -296,10 +297,11 @@ std::span<const FarmIrrigationTileFlow> FarmIrrigationSystem::GetLastTileFlows(c
 		: std::span<const FarmIrrigationTileFlow>{};
 }
 
-bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float timeScale)
+bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float timeScale, float soilRainPerSecond)
 {
 	lastStep_ = {};
-	if (!std::isfinite(deltaTime) || !std::isfinite(timeScale) || deltaTime <= 0.0f || timeScale <= 0.0f) { return false; }
+	if (!std::isfinite(deltaTime) || !std::isfinite(timeScale) || deltaTime <= 0.0f || timeScale <= 0.0f ||
+		!std::isfinite(soilRainPerSecond) || soilRainPerSecond < 0.0f || soilRainPerSecond > FarmWeatherSystem::kSoilRainPerSecond) { return false; }
 	bool changed = false;
 	const double dt = static_cast<double>((std::min)(deltaTime, maxDeltaTime_)) * timeScale;
 	Rebuild(grid);
@@ -320,6 +322,16 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 	for (int i = 0; i < count; ++i) {
 		auto tile = *grid.GetTile(i);
 		const float oldWater = tile.waterAmount;
+		if (soilRainPerSecond > 0.0f && tile.feature == FarmTileFeature::None &&
+			tile.state != FarmTileState::Empty && std::isfinite(tile.moisture) && tile.moisture >= 0.0f &&
+			tile.moisture < FarmWeatherSystem::kRainMoistureLimit) {
+			const float previous = tile.moisture;
+			tile.moisture = static_cast<float>((std::min)(static_cast<double>(FarmWeatherSystem::kRainMoistureLimit),
+				tile.moisture + soilRainPerSecond * dt));
+			lastTileFlows_[i].rainReceived = tile.moisture - previous;
+			lastStep_.rainDelivered += lastTileFlows_[i].rainReceived;
+			changed |= tile.moisture != previous;
+		}
 		measuredTiles_[i] = { tile.heightLevel, tile.feature, tile.state, tile.crop, tile.irrigationEnabled };
 		measurable &= std::isfinite(oldWater) && oldWater >= 0.0f && oldWater <= 1.0f &&
 			std::isfinite(tile.moisture) && tile.moisture >= 0.0f && tile.moisture <= 1.0f &&

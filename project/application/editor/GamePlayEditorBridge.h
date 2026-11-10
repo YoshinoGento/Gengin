@@ -10,6 +10,7 @@
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmDateSystem.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
+#include "farm/system/FarmTimeAdvanceControlSystem.h"
 #include "farm/system/FarmIrrigationPreviewSystem.h"
 #include "farm/system/FarmIrrigationSystem.h"
 #include "farm/system/FarmToolActionSystem.h"
@@ -293,6 +294,8 @@ struct GamePlayEditorViewModel {
 	FarmToolActionResult selectedFarmAction{};
 	FarmPlaytestEditorViewData farmPlaytest;
 	FarmComparisonView farmGrowthComparison;
+	FarmTimeAdvanceControlSystem::View farmTimeAdvance;
+	bool farmTimeAdvanceBlocked = true;
 	VisibilityEditorViewData visibility;
 	CameraEditorViewData camera;
 	ObjectInspectorEditorViewData objectInspector;
@@ -348,13 +351,17 @@ enum class GamePlayEditorCommandType {
 	StartFarmComparison,
 	StopFarmComparison,
 	ResetFarmComparison,
+	ControlFarmTimeAdvance,
+	ExpandFarm,
 };
 
 struct GamePlayEditorCommand {
 	GamePlayEditorCommandType type = GamePlayEditorCommandType::SelectFarmTile;
+	FarmTimeAdvanceControlSystem::Action timeAdvanceAction = FarmTimeAdvanceControlSystem::Action::Cancel;
 	int farmTileIndex = -1;
 	uint64_t farmGeneration = 0;
 	FarmTool farmTool = FarmTool::Hoe;
+	int expectedFarmHeight = 0;
 	int harvestRecordId = 0;
 	int contestDay = 0;
 	FarmProgressionMode progressionMode = FarmProgressionMode::Trial;

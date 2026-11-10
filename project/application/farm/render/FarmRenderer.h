@@ -38,7 +38,8 @@ public:
 private:
 	bool visible_ = true;
 	int lastDrawTileCount_ = 0;
-	static constexpr std::size_t kMaximumParts = 640;
+	// Thirty editable cells, including the worst-case 32 surface parts per cell.
+	static constexpr std::size_t kMaximumParts = 30 * 32;
 	static constexpr std::size_t kMaximumTargetParts = 16;
 	static constexpr std::size_t kMaximumCropParts = kMaximumParts * 2;
 	static constexpr std::size_t kMaximumHarvestParts = 16;

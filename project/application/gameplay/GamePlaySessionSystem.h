@@ -100,6 +100,10 @@ public:
 
 private:
     FarmRuntimeContext RuntimeContext();
+    FarmSimulationStepSystem::Context SimulationContext();
+    bool TimeAdvanceBlocked() const;
+    void UpdateTimeAdvance();
+    bool ControlTimeAdvance(FarmTimeAdvanceControlSystem::Action action);
 	enum class PlayerAnimationMode;
 	struct GameplaySnapshot;
 	void AddLog(const std::string& message);
@@ -301,6 +305,7 @@ private:
 	farm::FarmHarvestVisualSystem farmHarvestVisualSystem_;
 	FarmGrowthSystem farmGrowthSystem_;
 	FarmGrowthComparisonSystem farmGrowthComparisonSystem_;
+	FarmTimeAdvanceControlSystem farmTimeAdvance_;
 	FarmInputSystem farmInputSystem_;
 	farm::FarmIrrigationPreviewSystem farmIrrigationPreviewSystem_;
 	farm::FarmIrrigationSystem farmIrrigationSystem_;

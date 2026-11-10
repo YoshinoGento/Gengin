@@ -17,6 +17,7 @@ struct FarmIrrigationTileFlow {
 	float outgoing = 0.0f;
 	float soilReceived = 0.0f;
 	float soilSent = 0.0f;
+	float rainReceived = 0.0f;
 };
 
 struct FarmIrrigationStepSummary {
@@ -28,14 +29,16 @@ struct FarmIrrigationStepSummary {
 	double soilDelivered = 0.0;
 	double stockAfter = 0.0;
 	double balanceError = 0.0;
+	double rainDelivered = 0.0; // External soil input, excluded from canal stock balance.
 };
 
 // Owns finite reservoir flow and soil delivery; topology is potential reachability.
 class FarmIrrigationSystem final {
 public:
 	void Initialize(const FarmRules& rules = {}) noexcept;
+    [[nodiscard]] float GetMaxUpdateDeltaTime() const noexcept { return maxDeltaTime_; }
 	void Rebuild(const FarmGrid& grid);
-	bool UpdateWater(FarmGrid& grid, float deltaTime, float timeScale);
+	bool UpdateWater(FarmGrid& grid, float deltaTime, float timeScale, float soilRainPerSecond = 0.0f);
 	[[nodiscard]] FarmIrrigationStepSummary GetLastStep(const FarmGrid& grid) const noexcept;
 	// View valid only until the next UpdateWater/Initialize; consumers must copy their view data.
 	[[nodiscard]] std::span<const FarmIrrigationTileFlow> GetLastTileFlows(const FarmGrid& grid) const noexcept;

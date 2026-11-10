@@ -4,6 +4,7 @@
 #include "farm/data/FarmRules.h"
 #include "farm/system/FarmCropQualitySystem.h"
 #include "farm/system/FarmStageAccessSystem.h"
+#include "farm/system/FarmCropRecordSystem.h"
 
 #include <array>
 #include <cstdint>
@@ -73,6 +74,8 @@ public:
 		int nextHarvestRecordId = 1;
 		int contestReservationId = 0;
 		ContestResults contestResults{};
+		int lifetimeSales = 0;
+		FarmCropRecordSystem::Records soldCropRecords{};
 	};
 
 	void Initialize(const farm::FarmRules& rules = {});
@@ -107,6 +110,8 @@ public:
 	[[nodiscard]] const ContestResults& GetContestResults() const noexcept { return contestResults_; }
 
 	[[nodiscard]] int GetMoney() const noexcept { return money_; }
+	[[nodiscard]] int GetLifetimeSales() const noexcept { return lifetimeSales_; }
+	[[nodiscard]] const FarmCropRecordSystem::Records& GetSoldCropRecords() const noexcept { return soldCropRecords_; }
 	[[nodiscard]] int GetCropCount(farm::CropType crop) const noexcept;
 	[[nodiscard]] int GetTotalCropCount() const noexcept;
 	[[nodiscard]] int GetSellPrice(farm::CropType crop) const noexcept;
@@ -135,6 +140,8 @@ private:
 	const FarmStageAccessSystem* stageAccess_=nullptr; // Borrowed for the owning Scene's lifetime; not saved.
 	[[nodiscard]] FarmSaleResult SellMatching(farm::CropType crop) noexcept;
 	int money_ = 0;
+	int lifetimeSales_ = 0;
+	FarmCropRecordSystem::Records soldCropRecords_{};
 	std::array<int, farm::kFarmCropTypeCount> cropCounts_{};
 	std::array<int, farm::kFarmCropTypeCount> cropValues_{};
 	std::array<int, farm::kFarmCropTypeCount> sellPrices_{};
