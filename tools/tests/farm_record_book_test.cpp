@@ -110,7 +110,7 @@ void Save() {
     const auto expected=Book::Inspect(e);
     Check(docs.SaveAs("Records",grid,e,selection), "save");
     const auto documentId=docs.GetActiveDocumentId(), path=docs.GetPath();
-    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==22, "schema22");
+    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==25, "schema25");
     e.Initialize(); Check(docs.Load(documentId,grid,e,selection) && Same(expected,Book::Inspect(e)), "load");
     auto minimum=saved; minimum["economy"]["soldCropRecords"][0]["sizeMultiplier"]=0.01f;
     Check(JsonFile::Save(path,minimum) && docs.Load(documentId,grid,e,selection) && Book::Inspect(e).rows[0].weightKnown,
@@ -132,7 +132,7 @@ void Save() {
         if(kind==11) records[0]["sizeMultiplier"]=8.1;
         if(kind==12) records[0]["sizeMultiplier"]=1e100;
         if(kind==13) records[0]["harvested"]=false;
-        if(kind==14) bad["schemaVersion"]=23;
+        if(kind==14) bad["schemaVersion"]=26;
         if(kind==15) records[0]["sizeMultiplier"]=8.0000001;
         if(kind==16) { records[0]["sizeKnown"]=false; records[0]["sizeMultiplier"]=1e-100; }
         const auto generation=e.GetInventoryGeneration();

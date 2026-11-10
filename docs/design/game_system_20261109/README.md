@@ -2,7 +2,7 @@
 
 確認日: 2026-11-09。以下は実装前の監査結果です。害虫の初回版については、[実装記録](03_PestDesign.md#初回実装記録-2026-11-09)を参照してください。
 
-11/10の更新: [通常農場の時間送り](07_SafeTimeAdvance.md)、[予報付きの雨](08_RainSystem.md)、[農場ランクと土地拡張](09_FarmDevelopment.md)、[作物別の収穫記録](10_CropRecordBook.md)を実装。以下の「呼出しなし」「ランク1固定」は11/9時点の記録であり、現在の状態ではありません。各文書で実装と未検証を分けています。
+11/10の更新: [通常農場の時間送り](07_SafeTimeAdvance.md)、[予報付きの雨](08_RainSystem.md)、[農場ランクと土地拡張](09_FarmDevelopment.md)、[作物別の収穫記録](10_CropRecordBook.md)、[虫よけ植物](11_RepellentPlants.md)、[害虫の隣接拡散](12_PestSpread.md)、[害虫の表示と駆除反応](13_PestFeedback.md)、[雨粒・雨音・明るさ](14_RainPresentation.md)、[栽培の再開支援](15_CultivationRecovery.md)を実装。以下の「呼出しなし」「ランク1固定」は11/9時点の記録であり、現在の状態ではありません。各文書で実装と未検証を分けています。
 
 ## 最初に読む順番
 

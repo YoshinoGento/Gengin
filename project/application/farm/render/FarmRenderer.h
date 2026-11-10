@@ -15,6 +15,7 @@ namespace farm {
 
 class FarmGrid;
 class FarmHarvestVisualSystem;
+class FarmPestVisualSystem;
 
 class FarmRenderer {
 public:
@@ -26,7 +27,8 @@ public:
 	void SetVisible(bool visible) { visible_ = visible; }
 	bool IsVisible() const { return visible_; }
 	void Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
-        int hoveredTileIndex = -1, const FarmHarvestVisualSystem* harvest = nullptr, bool showSelection = true);
+        int hoveredTileIndex = -1, const FarmHarvestVisualSystem* harvest = nullptr, bool showSelection = true,
+        const FarmPestVisualSystem* pests = nullptr);
 	void Draw();
 	void DrawShadow();
 	int GetLastDrawTileCount() const { return lastDrawTileCount_; }

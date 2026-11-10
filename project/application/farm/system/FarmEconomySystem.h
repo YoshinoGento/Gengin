@@ -76,6 +76,7 @@ public:
 		ContestResults contestResults{};
 		int lifetimeSales = 0;
 		FarmCropRecordSystem::Records soldCropRecords{};
+		int lastRecoveryDay = 0; // 0 means no aid received in this farm.
 	};
 
 	void Initialize(const farm::FarmRules& rules = {});
@@ -110,6 +111,7 @@ public:
 	[[nodiscard]] const ContestResults& GetContestResults() const noexcept { return contestResults_; }
 
 	[[nodiscard]] int GetMoney() const noexcept { return money_; }
+	[[nodiscard]] int GetLastRecoveryDay() const noexcept { return lastRecoveryDay_; }
 	[[nodiscard]] int GetLifetimeSales() const noexcept { return lifetimeSales_; }
 	[[nodiscard]] const FarmCropRecordSystem::Records& GetSoldCropRecords() const noexcept { return soldCropRecords_; }
 	[[nodiscard]] int GetCropCount(farm::CropType crop) const noexcept;
@@ -137,6 +139,9 @@ public:
 	bool RestoreSnapshot(const Snapshot& snapshot) noexcept;
 
 private:
+	friend class FarmRecoverySystem;
+	[[nodiscard]] bool GrantRecoverySeed(farm::CropType crop, int quantity, int day) noexcept;
+	int lastRecoveryDay_ = 0;
 	const FarmStageAccessSystem* stageAccess_=nullptr; // Borrowed for the owning Scene's lifetime; not saved.
 	[[nodiscard]] FarmSaleResult SellMatching(farm::CropType crop) noexcept;
 	int money_ = 0;

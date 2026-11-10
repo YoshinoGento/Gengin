@@ -98,7 +98,7 @@ int main() {
     assert(documents.SaveAs("size roundtrip", grid, economy, selection));
     const std::string path = documents.GetPath(), id = documents.GetActiveDocumentId();
     nlohmann::json original;
-    assert(JsonFile::Load(path, original) && original["schemaVersion"] == 22);
+    assert(JsonFile::Load(path, original) && original["schemaVersion"] == 25);
     assert(original["playMode"]=="ContestSeason");
     {
         for(int version=1;version<=13;++version) {
@@ -180,7 +180,7 @@ int main() {
         assert(date.GetDay()==1 && economy.GetHarvestRecord(0)->harvestedDay==0);
         assert(documents.Save(grid,economy,selection));
         nlohmann::json migrated; assert(JsonFile::Load(path,migrated));
-        assert(migrated["schemaVersion"]==22 && migrated["economy"]["harvestRecords"][0]["harvestedDay"]==0);
+        assert(migrated["schemaVersion"]==25 && migrated["economy"]["harvestRecords"][0]["harvestedDay"]==0);
         assert(JsonFile::Save(path,original) && documents.Load(id,grid,economy,selection));
     }
     assert(economy.GetLastHarvestQuality().harvestSize.multiplier == 1.25f);
@@ -342,5 +342,5 @@ int main() {
     assert(date.RestoreSnapshot({2147483647,0,4})); date.AdvanceOneDay(); date.Update(1e30f);
     assert(date.GetDay()==2147483647 && date.GetElapsedSecondsInDay()==0);
     date.Initialize(); date.Update(121.25f); assert(date.GetDay()==3 && date.GetElapsedSecondsInDay()==1.25f);
-    std::cout << "PASS: schema22 intake/mode/result/clock roundtrip, legacy1-14, atomic invalid load and reset\n";
+    std::cout << "PASS: schema25 intake/mode/result/clock roundtrip, legacy1-14, atomic invalid load and reset\n";
 }

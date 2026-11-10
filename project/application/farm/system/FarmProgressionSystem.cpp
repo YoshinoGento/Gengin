@@ -14,7 +14,8 @@ farm::FarmRules FarmProgressionSystem::InitialRules(FarmProgressionMode mode) no
 	return rules;
 }
 
-void FarmProgressionSystem::Initialize(const farm::FarmRules& rules, FarmProgressionMode mode, bool enablePests, bool enableWeather) noexcept
+void FarmProgressionSystem::Initialize(const farm::FarmRules& rules, FarmProgressionMode mode,
+	bool enablePests, bool enableWeather, bool enablePestSpread) noexcept
 {
 	targetMoney_ = (std::max)(1, rules.clearMoneyTarget);
 	cleared_ = false;
@@ -22,6 +23,8 @@ void FarmProgressionSystem::Initialize(const farm::FarmRules& rules, FarmProgres
 	stagePolicy_.enabled = mode_ == FarmProgressionMode::ContestSeason;
 	pestsEnabled_ = stagePolicy_.enabled && enablePests;
 	weatherVersion_ = stagePolicy_.enabled && enableWeather ? FarmWeatherSystem::kRulesVersion : 0;
+	pestSpread_ = pestsEnabled_ && enablePestSpread
+		? farm::FarmPestSpreadState{farm::FarmPestSpreadState::kRulesVersion, 1} : farm::FarmPestSpreadState{};
 }
 
 bool FarmProgressionSystem::EvaluateClear(int currentMoney) noexcept
@@ -46,6 +49,7 @@ bool FarmProgressionSystem::SetMode(FarmProgressionMode mode, int money, const F
 		stagePolicy_.enabled = false;
 		pestsEnabled_ = false;
 		weatherVersion_ = 0;
+		pestSpread_ = {};
 	}
 	mode_ = mode;
 	cleared_ = false;
@@ -97,7 +101,7 @@ float FarmProgressionSystem::GetProgress(int currentMoney, int day) const noexce
 
 FarmProgressionSystem::Snapshot FarmProgressionSystem::CaptureSnapshot() const noexcept
 {
-	return { targetMoney_, cleared_, mode_, stagePolicy_.enabled, pestsEnabled_, weatherVersion_ };
+	return { targetMoney_, cleared_, mode_, stagePolicy_.enabled, pestsEnabled_, weatherVersion_, pestSpread_ };
 }
 
 bool FarmProgressionSystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
@@ -107,7 +111,8 @@ bool FarmProgressionSystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
 		(snapshot.stagedUnlocks && snapshot.mode != FarmProgressionMode::ContestSeason) ||
 		(snapshot.pestsEnabled && !snapshot.stagedUnlocks) ||
 		!FarmWeatherSystem::ValidVersion(snapshot.weatherVersion) ||
-		(snapshot.weatherVersion != 0 && !snapshot.stagedUnlocks)) {
+		(snapshot.weatherVersion != 0 && !snapshot.stagedUnlocks) ||
+		!snapshot.pestSpread.IsValid() || (snapshot.pestSpread.version != 0 && !snapshot.pestsEnabled)) {
 		return false;
 	}
 	targetMoney_ = snapshot.targetMoney;
@@ -116,5 +121,6 @@ bool FarmProgressionSystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
 	stagePolicy_.enabled = snapshot.stagedUnlocks;
 	pestsEnabled_ = snapshot.pestsEnabled;
 	weatherVersion_ = snapshot.weatherVersion;
+	pestSpread_ = snapshot.pestSpread;
 	return true;
 }

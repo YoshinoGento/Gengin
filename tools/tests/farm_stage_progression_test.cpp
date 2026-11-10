@@ -84,7 +84,7 @@ void Run() {
     Check(docs.Initialize((root / "saves").string(), grid, economy, selection, &date, &progression), "document init");
     Check(docs.SaveAs("StageTest", grid, economy, selection), "stage save");
     nlohmann::json saved;
-    Check(JsonFile::Load(docs.GetPath(), saved) && saved["schemaVersion"] == 22 && saved["stagedUnlocks"] == true,
+    Check(JsonFile::Load(docs.GetPath(), saved) && saved["schemaVersion"] == 25 && saved["stagedUnlocks"] == true,
         "stage serialization");
     const auto path = docs.GetPath(); const auto id = docs.GetActiveDocumentId();
     Check(progression.SetMode(Mode::FreeFarming, economy.GetMoney(), FarmContestSeasonSystem::Evaluate(date.GetDay(), {})), "free switch");
@@ -148,7 +148,7 @@ void Run() {
     }
     Check(FarmContestGoalSystem::Evaluate(0, {}, true)[0].status == FarmContestGoalStatus::Unknown, "invalid day");
     for (const auto& r : farmui::kLabels) Check(r.x + r.width <= farmui::kAtlasWidth && r.y + r.height <= farmui::kAsciiY, "atlas bounds");
-    std::cout << "PASS: stage boundaries, action authority, stale confirmations/history, schema22/legacy, layout, verdicts and view bounds\n";
+    std::cout << "PASS: stage boundaries, action authority, stale confirmations/history, schema25/legacy, layout, verdicts and view bounds\n";
 }
 }
 int main() { try { Run(); } catch (const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; } }

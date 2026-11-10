@@ -156,7 +156,7 @@ void SaveCompatibility() {
     Check(f.date.RestoreSnapshot({17, 59.5f, 2}) && docs.SaveAs("WeatherTest", f.grid, f.economy, selection), "weather save");
     const auto id = docs.GetActiveDocumentId(), path = docs.GetPath();
     nlohmann::json saved;
-    Check(JsonFile::Load(path, saved) && saved["schemaVersion"] == 22 && saved["weatherVersion"] == 1, "weather schema");
+    Check(JsonFile::Load(path, saved) && saved["schemaVersion"] == 25 && saved["weatherVersion"] == 1, "weather schema");
     for (int kind = 0; kind < 7; ++kind) {
         auto bad = saved;
         if (kind == 0) bad.erase("weatherVersion");

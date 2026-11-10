@@ -24,6 +24,7 @@ class FarmTimeAdvanceControlSystem;
 struct FarmSaleResult;
 struct FarmToolActionResult;
 namespace farm { class FarmGrid; class FarmIrrigationSystem; class FarmIrrigationPreviewSystem; class FarmVisualSystem; }
+namespace farm { class FarmPestVisualSystem; }
 namespace editor { class GamePlayEditorBridge; }
 namespace level { class LevelGameplaySystem; }
 enum class ScreenTransitionResult;
@@ -42,6 +43,7 @@ public:
     virtual void ApplyCameraPose(const farm::OverviewPose& pose, bool updateOverview) = 0;
     virtual void SetUsePlayerCamera(bool enabled) = 0;
     virtual void InitializeTimeline() = 0;
+    virtual void RequestFarmLayoutLibrary() noexcept = 0;
     virtual bool ResetFarmSession() = 0;
     virtual bool RetryCompletedSeason() = 0;
     virtual void RouteFarmSale(const FarmSaleResult& result) = 0;
@@ -78,4 +80,5 @@ struct FarmRuntimeContext {
     const farm::FarmVisualSystem& farmVisualSystem;
     editor::GamePlayEditorBridge& gamePlayEditorBridge;
     const level::LevelGameplaySystem& levelGameplay;
+    farm::FarmPestVisualSystem* pestVisual = nullptr; // Optional for non-rendering hosts; Session-owned.
 };

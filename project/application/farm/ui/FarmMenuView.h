@@ -53,6 +53,7 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         view.Metric(Label::MenuSeedCount,{646,426,450,38},260,std::to_string(s.seeds));
         button(Label::Development,Action::Development,0,500);
         button(Label::CropBook,Action::CropBook,1,500);
+        button(Label::Recovery,Action::Recovery,0,564);
     } else if (s.page == 1) {
         view.Add(Label::MenuTerrainWork,{176,130,920,38});
         button(Label::Overview,Action::TerrainField,0,188,s.unlocked);
@@ -61,6 +62,7 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         view.Metric(Label::WaterStats,{176,358,920,38},540,
             std::to_string(s.suppliedCanals)+" / "+std::to_string(s.suppliedTiles));
         button(Label::Development,Action::Development,0,438);
+        button(Label::Repellent,Action::Repellent,1,438);
     } else if (s.page == 2) {
         view.Add(Label::MenuSaveHeading,{176,130,920,38});
         button(Label::Save,Action::Save,0,180,s.canSave);

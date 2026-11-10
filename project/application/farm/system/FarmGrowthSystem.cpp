@@ -183,7 +183,7 @@ FarmWaterGuidance FarmGrowthSystem::AnalyzeWater(
 	farm::FarmWaterStatus supply) noexcept
 {
 	FarmWaterGuidance result;
-	if (!tile || tile->feature != farm::FarmTileFeature::None) return result;
+	if (!tile || tile->repellentPlant || tile->feature != farm::FarmTileFeature::None) return result;
 	result.visible = true;
 	result.intakeClosed = !tile->irrigationEnabled;
 	result.supply = supply;

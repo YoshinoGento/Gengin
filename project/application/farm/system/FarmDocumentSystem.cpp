@@ -28,7 +28,10 @@ constexpr int kPestSchemaVersion = 19;
 constexpr int kWeatherSchemaVersion = 20;
 constexpr int kDevelopmentSchemaVersion = 21;
 constexpr int kCropRecordSchemaVersion = 22;
-constexpr int kSchemaVersion = kCropRecordSchemaVersion;
+constexpr int kRepellentSchemaVersion = 23;
+constexpr int kPestSpreadSchemaVersion = 24;
+constexpr int kRecoverySchemaVersion = 25;
+constexpr int kSchemaVersion = kRecoverySchemaVersion;
 constexpr int kMinimumSupportedSchemaVersion = 1;
 constexpr int kCatalogSchemaVersion = 1;
 constexpr int kMaximumGridDimension = 128;
@@ -99,6 +102,9 @@ bool TryParseFeature(const std::string& value, farm::FarmTileFeature& output) {
 }
 
 bool ValidateTile(const farm::FarmTile& tile, std::string& error) {
+	if (!farm::FarmGrid::IsValidTile(tile)) {
+		error = "Invalid farm tile occupancy or state."; return false;
+	}
 	if (tile.heightLevel < FarmToolActionSystem::kMinimumHeightLevel ||
 		tile.heightLevel > FarmToolActionSystem::kMaximumHeightLevel) {
 		error = "Tile height is outside the supported range.";
@@ -327,6 +333,7 @@ nlohmann::json BuildJson(
 			{ "pests", {{"warningDay", tile.pests.warningDay}, {"damageDays", tile.pests.damageDays}} },
 			{ "waterAmount", tile.waterAmount },
 			{ "irrigationEnabled", tile.irrigationEnabled },
+			{ "repellentPlant", tile.repellentPlant },
 			{ "soilNutrients", tile.soilNutrients },
 			{ "careHistory", {
 				{ "drySeconds", tile.careHistory.drySeconds },
@@ -342,6 +349,7 @@ nlohmann::json BuildJson(
 	document["economy"] = {
 		{ "money", economySnapshot.money },
 		{ "lifetimeSales", economySnapshot.lifetimeSales },
+		{ "lastRecoveryDay", economySnapshot.lastRecoveryDay },
 		{ "cropCounts", economySnapshot.cropCounts },
 		{ "cropValues", economySnapshot.cropValues },
 		{ "seedCounts", economySnapshot.seedCounts },
@@ -447,17 +455,20 @@ bool ParseMetadata(
 
 bool ReadNonNegativeInt(const nlohmann::json& value, int& output);
 
-bool ValidatePestCalendar(const farm::FarmGrid::Snapshot& grid, int day, bool enabled) {
-	bool active = false;
+bool ValidatePestCalendar(const farm::FarmGrid::Snapshot& grid, int day, bool enabled,
+	const farm::FarmPestSpreadState& spread = {}) {
+	if (!spread.IsValid() || (spread.version != 0 && (!enabled || spread.lastProcessedDay != day))) return false;
+	int active = 0;
 	for (const auto& tile : grid.tiles) {
 		const auto& pests = tile.pests;
 		if (!pests.IsValid()) return false;
 		if (!pests.warningDay) continue;
-		if (active || !enabled || pests.warningDay > day ||
+		if (!enabled || pests.warningDay > day ||
+			(spread.version == 0 && !farm::FarmPestState::IsWarningDay(pests.warningDay)) ||
 			pests.damageDays != (std::min)(day - pests.warningDay, farm::FarmPestState::kMaximumDamageDays)) return false;
-		active = true;
+		++active;
 	}
-	return true;
+	return active <= (spread.version == 0 ? 1 : FarmPestSystem::kMaximumActive);
 }
 
 bool ParseSnapshot(
@@ -523,6 +534,12 @@ bool ParseSnapshot(
 				tile.irrigationEnabled = tileJson["irrigationEnabled"].get<bool>();
 			}
 			tile.growth = tileJson["growth"].get<float>();
+			if (schemaVersion >= kRepellentSchemaVersion) {
+				if (!tileJson.contains("repellentPlant") || !tileJson["repellentPlant"].is_boolean()) {
+					error = "Invalid or missing repellent plant occupancy."; return false;
+				}
+				tile.repellentPlant = tileJson["repellentPlant"].get<bool>();
+			}
 			if (schemaVersion >= kPestSchemaVersion) {
 				const auto it = tileJson.find("pests");
 				if (it == tileJson.end() || !it->is_object() ||
@@ -705,6 +722,7 @@ bool ParsePersistentState(
 		economySnapshot.contestResults = {};
 		economySnapshot.lifetimeSales = 0; // Legacy saves have no reliable cumulative revenue history.
 		economySnapshot.soldCropRecords = {};
+		economySnapshot.lastRecoveryDay = 0;
 		if (schemaVersion == 1) {
 			return true;
 		}
@@ -715,6 +733,11 @@ bool ParsePersistentState(
 		}
 
 		const nlohmann::json& economyJson = document["economy"];
+		if (schemaVersion >= kRecoverySchemaVersion &&
+			(!economyJson.contains("lastRecoveryDay") ||
+			 !ReadNonNegativeInt(economyJson["lastRecoveryDay"], economySnapshot.lastRecoveryDay))) {
+			error = "Invalid or missing recovery day."; return false;
+		}
 		if (schemaVersion >= kCropRecordSchemaVersion) {
 			if (!economyJson.contains("soldCropRecords") || !economyJson["soldCropRecords"].is_array() ||
 				economyJson["soldCropRecords"].size() != economySnapshot.soldCropRecords.size()) {
@@ -1017,6 +1040,7 @@ bool FarmDocumentSystem::Initialize(
 				legacyProgression.stagedUnlocks = false;
 				legacyProgression.pestsEnabled = false;
 				legacyProgression.weatherVersion = 0;
+				legacyProgression.pestSpread = {};
 				static_cast<void>(Progression().RestoreSnapshot(legacyProgression));
 				return SaveAs("Legacy Farm", grid, economySystem, cropSelectionSystem);
 			}
@@ -1147,6 +1171,9 @@ bool FarmDocumentSystem::Load(
 	if (!ParseDate(document, dateSnapshot, economySnapshot)) {
 		SetError("Invalid farm date or harvest day after the saved date."); return false;
 	}
+	if (economySnapshot.lastRecoveryDay > dateSnapshot.day) {
+		SetError("Recovery day is after the saved farm date."); return false;
+	}
 	FarmProgressionMode mode = FarmProgressionMode::Trial;
 	if (document["schemaVersion"].get<int>() >= 14) {
 		if (!document.contains("playMode") || !document["playMode"].is_string() ||
@@ -1176,7 +1203,18 @@ bool FarmDocumentSystem::Load(
 		}
 		pestsEnabled = document["pestsEnabled"].get<bool>();
 	}
-	if ((pestsEnabled && !stagedUnlocks) || !ValidatePestCalendar(snapshot, dateSnapshot.day, pestsEnabled)) {
+	farm::FarmPestSpreadState pestSpread;
+	if (document["schemaVersion"].get<int>() >= kPestSpreadSchemaVersion) {
+		if (!document.contains("pestSpread") || !document["pestSpread"].is_object()) {
+			SetError("Invalid or missing pest spread state."); return false;
+		}
+		const auto& spread = document["pestSpread"];
+		if (!spread.contains("version") || !ReadNonNegativeInt(spread["version"], pestSpread.version) ||
+			!spread.contains("lastProcessedDay") || !ReadNonNegativeInt(spread["lastProcessedDay"], pestSpread.lastProcessedDay)) {
+			SetError("Invalid pest spread clock or version."); return false;
+		}
+	}
+	if ((pestsEnabled && !stagedUnlocks) || !ValidatePestCalendar(snapshot, dateSnapshot.day, pestsEnabled, pestSpread)) {
 		SetError("Pest state does not match the saved date or mode."); return false;
 	}
 	int weatherVersion = 0;
@@ -1224,6 +1262,7 @@ bool FarmDocumentSystem::Load(
 	loadedProgression.stagedUnlocks = stagedUnlocks;
 	loadedProgression.pestsEnabled = pestsEnabled;
 	loadedProgression.weatherVersion = weatherVersion;
+	loadedProgression.pestSpread = pestSpread;
 	static_cast<void>(Progression().RestoreSnapshot(loadedProgression));
 
 	activeDocumentId_ = metadata.id;
@@ -1423,7 +1462,7 @@ bool FarmDocumentSystem::Reset(
 	Date().Initialize();
 	auto progressionRules = farm::FarmRules{};
 	progressionRules.clearMoneyTarget = Progression().GetTargetMoney();
-	Progression().Initialize(progressionRules, defaultMode_, defaultMode_ == FarmProgressionMode::ContestSeason, true);
+	Progression().Initialize(progressionRules, defaultMode_, defaultMode_ == FarmProgressionMode::ContestSeason, true, true);
 	static_cast<void>(Progression().SetMode(defaultMode_, economySystem.GetMoney(),
 		FarmContestSeasonSystem::Evaluate(Date().GetDay(), economySystem.GetContestResults())));
 	activeDocumentId_.clear();
@@ -1548,10 +1587,13 @@ bool FarmDocumentSystem::SaveToDocument(
 		SetError("Harvest inventory is inconsistent; save rejected."); return false;
 	}
 	const auto dateSnapshot = Date().CaptureSnapshot();
+	if (economySnapshot.lastRecoveryDay > dateSnapshot.day) {
+		SetError("Recovery day is after the saved farm date; save rejected."); return false;
+	}
 	if (!ValidateHarvestDates(dateSnapshot, economySnapshot)) {
 		SetError("Farm date and harvest days are inconsistent; save rejected."); return false;
 	}
-	if (!ValidatePestCalendar(snapshot, dateSnapshot.day, Progression().PestsEnabled())) {
+	if (!ValidatePestCalendar(snapshot, dateSnapshot.day, Progression().PestsEnabled(), Progression().PestSpread())) {
 		SetError("Pest state does not match the saved date or mode."); return false;
 	}
 	auto document = BuildJson(snapshot, economySnapshot, cropSelectionSnapshot, documentId, displayName, savedAt);
@@ -1560,6 +1602,8 @@ bool FarmDocumentSystem::SaveToDocument(
 	document["stagedUnlocks"] = Progression().StagePolicy().enabled;
 	document["pestsEnabled"] = Progression().PestsEnabled();
 	document["weatherVersion"] = Progression().WeatherVersion();
+	document["pestSpread"] = {{"version", Progression().PestSpread().version},
+		{"lastProcessedDay", Progression().PestSpread().lastProcessedDay}};
 	document["date"] = {{"day", dateSnapshot.day}, {"elapsedSecondsInDay", dateSnapshot.elapsedSecondsInDay},
 		{"timeScale", dateSnapshot.timeScale}};
 	const std::filesystem::path documentPath =

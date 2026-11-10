@@ -4,6 +4,8 @@
 #include "farm/ui/FarmTimeAdvanceView.h"
 #include "farm/ui/FarmMenuView.h"
 #include "farm/ui/FarmDevelopmentView.h"
+#include "farm/ui/FarmRepellentView.h"
+#include "farm/ui/FarmRecoveryView.h"
 #include "farm/ui/FarmRecordBookView.h"
 #include "farm/system/FarmRuntimeContext.h"
 #include "editor/GamePlayEditorBridge.h"
@@ -29,6 +31,7 @@
 #include "farm/ui/FarmQualityView.h"
 #include "farm/ui/FarmContestDetailView.h"
 #include "title/TitleAudioSettingsSystem.h"
+#include "farm/system/FarmPestVisualSystem.h"
 #include "farm/ui/FarmContestOutcomeView.h"
 #include "farm/ui/FarmExhibitionView.h"
 #include "farm/ui/FarmTerrainView.h"
@@ -61,6 +64,8 @@ constexpr int kStageGuidePage = 13;
 constexpr int kContestOutcomePage = 14;
 constexpr int kDevelopmentPage = 15;
 constexpr int kCropBookPage = 16;
+constexpr int kRepellentPage = 17;
+constexpr int kRecoveryPage = 18;
 template<class... Args> std::string Numbers(const char* format, Args... args) {
     char buffer[96]{};
     std::snprintf(buffer, sizeof(buffer), format, args...);
@@ -268,10 +273,15 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             goalContext.paused = held;
             const auto goal = FarmNextGoalSystem::Evaluate(
                 FarmNextGoalSystem::Inspect(s.farmGrid, s.farmEconomySystem, goalContext));
-            if (timeAdvance.held) {
+            const auto recovery = FarmRecoverySystem::Inspect(s.farmGrid, s.farmEconomySystem,
+                s.farmDateSystem.GetDay(), goalContext.blocked);
+            if (recovery.CanClaim() || recovery.status == FarmRecoverySystem::Status::ClaimedToday) {
+                farmui::BuildRecoveryPrompt(view_, recovery.status);
+            } else if (timeAdvance.held) {
                 farmui::BuildTimeAdvanceStatus(view_, timeAdvance);
             } else if (goal.pestTile >= 0) {
-                farmui::BuildPestView(view_, goal.pestTile, index == goal.pestTile, goal.kind == FarmNextGoalKind::PestWarning);
+                farmui::BuildPestView(view_, goal.pestTile, index == goal.pestTile, goal.kind == FarmNextGoalKind::PestWarning,
+                    FarmPestSystem::CountActive(s.farmGrid), s.farmProgressionSystem.PestSpread().version != 0);
             } else {
                 farmui::BuildFarmNextGoalView(view_, goal, farmui::HUDLayout::shortGoal.Contains(pointer_));
             }
@@ -384,6 +394,14 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             const auto quality = s.farmToolActionSystem.EvaluateHarvestQuality(*tile);
             view_.Value(Label::NutrientQuality, 590, Numbers("%.0f / 100", quality.nutrientBalance * 100));
         }
+    } else if (page_ == kRecoveryPage) {
+        farmui::BuildRecoveryView(view_, FarmRecoverySystem::Inspect(s.farmGrid, s.farmEconomySystem,
+            s.farmDateSystem.GetDay(), s.farmProgressionSystem.IsCleared() ||
+            s.farmIrrigationPreviewSystem.IsActive() || s.host.IsTimelineScrubbing()));
+    } else if (page_ == kRepellentPage) {
+        farmui::BuildRepellentView(view_, FarmRepellentSystem::Inspect(s.farmGrid,
+            s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() || s.host.IsTimelineScrubbing(),
+            s.farmProgressionSystem.PestsEnabled()));
     } else if (page_ == kCropBookPage) {
         farmui::BuildRecordBookView(view_, FarmRecordBookSystem::Inspect(s.farmEconomySystem));
     } else if (page_ == kDevelopmentPage) {
@@ -518,6 +536,40 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     }
     s.farmTimeAdvance.Interrupt();
     if (HandleSaleRequest(s,request)) return;
+    if (request.action == Action::Recovery) {
+        if (pending_ != Action::None || flow_.BlocksSimulation() || shop_.IsOpen()) return;
+        open_ = true; page_ = kRecoveryPage; status_ = Label::Ready; focusedItem_ = -1; return;
+    }
+    if (request.action == Action::RecoveryClaim) {
+        if (!open_ || page_ != kRecoveryPage || pending_ != Action::None ||
+            flow_.BlocksSimulation() || shop_.IsOpen()) return;
+        editor::GamePlayEditorCommand command{};
+        command.type = GamePlayEditorCommandType::ClaimFarmRecovery;
+        command.expectedRecoveryDay = request.argument;
+        command.inventoryGeneration = request.inventoryGeneration;
+        command.farmGeneration = request.farmGeneration;
+        status_ = s.gamePlayEditorBridge.Execute(command) ? Label::RecoveryDone : Label::Failure;
+        focusedItem_ = -1;
+        return;
+    }
+    if (request.action == Action::Repellent) {
+        if (pending_ != Action::None || flow_.BlocksSimulation() || shop_.IsOpen()) return;
+        open_ = true; page_ = kRepellentPage; status_ = Label::Ready; focusedItem_ = -1; return;
+    }
+    if (request.action == Action::RepellentSelect || request.action == Action::RepellentPlace ||
+        request.action == Action::RepellentRemove) {
+        if (!open_ || page_ != kRepellentPage || pending_ != Action::None ||
+            flow_.BlocksSimulation() || shop_.IsOpen()) return;
+        editor::GamePlayEditorCommand command{};
+        command.type = request.action == Action::RepellentSelect ? GamePlayEditorCommandType::SelectFarmTile :
+            request.action == Action::RepellentPlace ? GamePlayEditorCommandType::PlaceFarmRepellent :
+            GamePlayEditorCommandType::RemoveFarmRepellent;
+        command.farmGeneration = request.farmGeneration;
+        command.farmTileIndex = request.argument;
+        const bool changed = s.gamePlayEditorBridge.Execute(command);
+        status_ = changed ? Label::Success : Label::Failure;
+        return;
+    }
     if (request.action == Action::Development || request.action == Action::CropBook) {
         if (pending_ != Action::None || flow_.BlocksSimulation() || shop_.IsOpen()) return;
         open_ = true; page_ = request.action == Action::CropBook ? kCropBookPage : kDevelopmentPage;
@@ -644,6 +696,10 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
             FarmPestSystem::Cure(s.farmGrid, request.argument, tile->pests.warningDay)) {
             s.farmToolActionSystem.ClearHistory();
             s.farmDocumentSystem.MarkDirty();
+            if (s.pestVisual) (void)s.pestVisual->OnCured(s.farmGrid,request.argument,s.farmVisualSystem);
+            title::TitleAudioSettingsSystem settings;
+            settings.Initialize();
+            pestAudio_.PlayCured(settings.GetContestVolume());
         }
         return;
     }
@@ -754,7 +810,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     case Action::ChangePlayMode:
         if (!FarmProgressionSystem::ValidMode(static_cast<FarmProgressionMode>(request.argument))) return;
         pendingPlayMode_=request.argument; pending_=request.action; open_=true; return;
-    case Action::LayoutLibrary: OpenLayoutLibrary(s); return;
+    case Action::LayoutLibrary: s.host.RequestFarmLayoutLibrary(); return;
     case Action::Accept: {
         const Action action = pending_; pending_ = Action::None;
         if (action == Action::None) return;
@@ -1190,6 +1246,8 @@ void FarmRuntimeController::OpenLayoutLibrary(const FarmRuntimeContext& s) {
 
 bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& input) {
     frameCaptured_ = false;
+    if (!s.host.IsViewportFocused() || s.host.IsTimelineScrubbing() || RequestsTitle() ||
+        exhibition_.Active() || open_ || shop_.IsOpen() || flow_.BlocksSimulation()) pestAudio_.Stop();
     if (!ready_) return false;
     if (exhibition_.Active()) return UpdateExhibition(s, input);
     if (!s.host.IsViewportFocused()) {

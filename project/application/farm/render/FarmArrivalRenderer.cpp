@@ -54,7 +54,7 @@ InitializationTask FarmArrivalRenderer::InitializeIncrementally(Object3dCommon* 
 }
 
 void FarmArrivalRenderer::Prepare(Camera* camera, const FarmStartPresentationSystem::Frame& frame,
-    bool supported, float deltaSeconds) {
+    bool supported, float deltaSeconds, const farm::FarmRainFrame& weather) {
     visibleScene_=ready_ && supported && camera;
     if(!visibleScene_) return;
     using namespace farm::arrival;
@@ -72,6 +72,15 @@ void FarmArrivalRenderer::Prepare(Camera* camera, const FarmStartPresentationSys
     atmosphere.skyTop={.19f,.48f,.69f,1}; atmosphere.skyHorizon={.79f,.83f,.69f,1};
     atmosphere.cloudColor={.92f,.92f,.84f,1};
     atmosphere.groundExposure=.55f; atmosphere.grassWindXZ={.30f,.10f};
+    const float overcast=std::isfinite(weather.cloud) ? std::clamp(weather.cloud,0.0f,1.0f) : 0;
+    const auto tint=[overcast](Vector4 clear,Vector4 rainy) {
+        return Vector4{clear.x+(rainy.x-clear.x)*overcast,clear.y+(rainy.y-clear.y)*overcast,
+            clear.z+(rainy.z-clear.z)*overcast,1};
+    };
+    atmosphere.skyTop=tint(atmosphere.skyTop,{.29f,.36f,.41f,1});
+    atmosphere.skyHorizon=tint(atmosphere.skyHorizon,{.52f,.59f,.61f,1});
+    atmosphere.cloudColor=tint(atmosphere.cloudColor,{.48f,.54f,.57f,1});
+    atmosphere.groundExposure*=1-.30f*overcast;
     atmosphere.grassPhase=time*1.1f; atmosphere.skyYaw=time*.001f;
     // Keep celestial discs below the terrain; this opening uses dawn illumination, not another sky clock.
     atmosphere.sun.center={.5f,3}; atmosphere.moon.center={.5f,4};

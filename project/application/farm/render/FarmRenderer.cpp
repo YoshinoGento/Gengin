@@ -2,6 +2,7 @@
 
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmHarvestVisualSystem.h"
+#include "farm/system/FarmPestVisualSystem.h"
 #include "farm/render/FarmMaterialStyle.h"
 #include "3d/Object3d.h"
 #include "3d/ModelManager.h"
@@ -44,19 +45,20 @@ bool FarmRenderer::Initialize(Object3dCommon* common, ModelManager* models, Text
 			if (cropModels_[i] && cropModels_[i]->HasSkinCluster()) cropModels_[i] = nullptr;
 		}
 	}
-	parts_.reserve(kMaximumParts + kMaximumTargetParts + kMaximumCropParts + kMaximumHarvestParts);
-	objects_.reserve(kMaximumParts + kMaximumTargetParts + kMaximumCropParts + kMaximumHarvestParts);
+	parts_.reserve(kMaximumParts + kMaximumTargetParts + kMaximumCropParts + kMaximumHarvestParts + FarmPestMeshParts::kCapacity);
+	objects_.reserve(kMaximumParts + kMaximumTargetParts + kMaximumCropParts + kMaximumHarvestParts + FarmPestMeshParts::kCapacity);
 	return true;
 }
 
 void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
-	int hoveredTileIndex, const FarmHarvestVisualSystem* harvest, bool showSelection) {
+	int hoveredTileIndex, const FarmHarvestVisualSystem* harvest, bool showSelection, const FarmPestVisualSystem* pests) {
 	parts_.clear();
 	lastDrawTileCount_ = 0;
 	limitExceeded_ = false;
 	if (!IsReady() || !visible_ || !camera) { return; }
 	if (grid.GetTileCount() > static_cast<int>(kMaximumParts)) { limitExceeded_ = true; return; }
 	std::size_t terrainCount = 0;
+	std::size_t plantCount = 0;
 	for (int index = 0; index < grid.GetTileCount(); ++index) {
 		const auto tileParts = BuildFarmTileMeshParts(grid, index, visual);
 		if (terrainCount + tileParts.count > kMaximumParts) {
@@ -64,10 +66,14 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 		}
 		parts_.insert(parts_.end(), tileParts.parts.begin(), tileParts.parts.begin() + tileParts.count);
 		terrainCount += tileParts.count;
-		if (HasCropMeshes()) {
-			const auto crops = BuildFarmCropMeshParts(grid, index, visual);
-			parts_.insert(parts_.end(), crops.parts.begin(), crops.parts.begin() + crops.count);
+		const auto repellent = BuildFarmRepellentMeshParts(grid, index, visual);
+		const auto crops = HasCropMeshes() ? BuildFarmCropMeshParts(grid, index, visual) : FarmCropMeshParts{};
+		if (plantCount + repellent.count + crops.count > kMaximumCropParts) {
+			parts_.clear(); lastDrawTileCount_ = 0; limitExceeded_ = true; return;
 		}
+		parts_.insert(parts_.end(), repellent.parts.begin(), repellent.parts.begin() + repellent.count);
+		parts_.insert(parts_.end(), crops.parts.begin(), crops.parts.begin() + crops.count);
+		plantCount += repellent.count + crops.count;
 		lastDrawTileCount_ += tileParts.count > 0 ? 1 : 0;
 	}
 	static_assert(kMaximumHarvestParts == FarmHarvestVisualSystem::kCapacity * 2);
@@ -76,6 +82,10 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 			const auto effect = harvest->GetParts(grid, i);
 			parts_.insert(parts_.end(), effect.parts.begin(), effect.parts.begin() + effect.count);
 		}
+	}
+	if (pests) {
+		const auto cues = pests->BuildParts(grid, visual);
+		parts_.insert(parts_.end(), cues.parts.begin(), cues.parts.begin() + cues.count);
 	}
 	const int selectedIndex = showSelection ? grid.GetSelectedIndex() : -1;
 	const auto selection = BuildFarmSelectionMeshParts(grid, selectedIndex, visual);
@@ -117,7 +127,7 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 		object.SetShininess(material.shininess);
 		if (!object.SetSurfaceDetail(material.detail)) { parts_.clear(); lastDrawTileCount_ = 0; return; }
 		object.SetEnableLighting(!part.water && part.surface != FarmMeshSurface::Selection &&
-			part.surface != FarmMeshSurface::Hover);
+			part.surface != FarmMeshSurface::Hover && part.surface != FarmMeshSurface::PestCue);
 		object.Update(camera, 0.0f);
 	}
 }
@@ -132,7 +142,8 @@ void FarmRenderer::DrawShadow() {
 	for (std::size_t index = 0; index < parts_.size(); ++index) {
 		if (!parts_[index].water && parts_[index].surface != FarmMeshSurface::SoilBoundary &&
 			parts_[index].surface != FarmMeshSurface::Selection &&
-			parts_[index].surface != FarmMeshSurface::Hover) { objects_[index]->DrawShadow(); }
+			parts_[index].surface != FarmMeshSurface::Hover &&
+			parts_[index].surface != FarmMeshSurface::PestCue) { objects_[index]->DrawShadow(); }
 	}
 }
 

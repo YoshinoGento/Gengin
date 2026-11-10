@@ -62,6 +62,7 @@ void FarmEconomySystem::Initialize(const farm::FarmRules& rules)
 		rules.initialCarrotSeedCount >= 0 ? rules.initialCarrotSeedCount : 0,
 		(std::max)(rules.initialTomatoSeedCount, 0), (std::max)(rules.initialPumpkinSeedCount, 0),
 	};
+	lastRecoveryDay_ = 0;
 	seedPrices_ = {
 		rules.testCropSeedPrice > 0 ? rules.testCropSeedPrice : 0,
 		rules.carrotSeedPrice > 0 ? rules.carrotSeedPrice : 0,
@@ -401,8 +402,17 @@ FarmEconomySystem::Snapshot FarmEconomySystem::CaptureSnapshot() const noexcept
 {
 	return {
 		money_, cropCounts_, cropValues_, sellPrices_, seedCounts_, seedPrices_,
-		lastHarvestQuality_, harvestRecords_, harvestRecordCount_, nextHarvestRecordId_, contestReservationId_, contestResults_, lifetimeSales_, soldCropRecords_
+		lastHarvestQuality_, harvestRecords_, harvestRecordCount_, nextHarvestRecordId_, contestReservationId_, contestResults_, lifetimeSales_, soldCropRecords_, lastRecoveryDay_
 	};
+}
+
+bool FarmEconomySystem::GrantRecoverySeed(farm::CropType crop, int quantity, int day) noexcept
+{
+	// AddSeed validates capacity. Commit the daily limit and invalidate outstanding inventory requests together.
+	if (day <= 0 || lastRecoveryDay_ >= day || !IsCropUnlocked(crop) || !AddSeed(crop, quantity)) return false;
+	lastRecoveryDay_ = day;
+	++inventoryGeneration_;
+	return true;
 }
 
 bool FarmEconomySystem::IsRecordedQualityValid(const FarmCropQualityResult& quality) noexcept
@@ -422,7 +432,7 @@ int FarmEconomySystem::GetUnrecordedCropCount() const noexcept
 
 bool FarmEconomySystem::ValidateSnapshot(const Snapshot& snapshot) noexcept
 {
-	if (snapshot.money < 0 || snapshot.lifetimeSales < 0 || !FarmCropRecordSystem::Validate(snapshot.soldCropRecords) || !AreValuesValid(snapshot.cropCounts) ||
+	if (snapshot.lastRecoveryDay < 0 || snapshot.money < 0 || snapshot.lifetimeSales < 0 || !FarmCropRecordSystem::Validate(snapshot.soldCropRecords) || !AreValuesValid(snapshot.cropCounts) ||
 		!AreValuesValid(snapshot.cropValues) ||
 		!AreValuesValid(snapshot.sellPrices) || !AreValuesValid(snapshot.seedCounts) ||
 		!AreValuesValid(snapshot.seedPrices) ||
@@ -467,6 +477,7 @@ bool FarmEconomySystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
 {
 	if (!ValidateSnapshot(snapshot)) return false;
 	money_ = snapshot.money;
+	lastRecoveryDay_ = snapshot.lastRecoveryDay;
 	lifetimeSales_ = snapshot.lifetimeSales;
 	soldCropRecords_ = snapshot.soldCropRecords;
 	cropCounts_ = snapshot.cropCounts;

@@ -30,7 +30,7 @@ int main() {
     const auto id = layouts.Entries().front().id;
     const auto path = root / (id + ".json");
     nlohmann::json json; { std::ifstream file(path); file >> json; }
-    assert(json.size() == 6 && json.at("tiles")[0].size() == 4 && json["version"] == 2);
+    assert(json.size() == 6 && json.at("tiles")[0].size() == 5 && json["version"] == 3);
     assert(!json.contains("economy") && !json.at("tiles")[0].contains("growth"));
     assert(grid.Initialize(5,4)); assert(grid.SetSelectedIndex(12));
     const auto generation = grid.GetGeneration();

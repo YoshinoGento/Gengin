@@ -1,6 +1,8 @@
 #include "editor/GamePlayEditorBridge.h"
 #include "farm/system/FarmSoilSystem.h"
 #include "farm/system/FarmDevelopmentSystem.h"
+#include "farm/system/FarmRepellentSystem.h"
+#include "farm/system/FarmRecoverySystem.h"
 
 #include "3d/Object3d.h"
 #include "base/FrameClock.h"
@@ -484,6 +486,31 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 	}
 
 	switch (command.type) {
+	case GamePlayEditorCommandType::ClaimFarmRecovery: {
+		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() || layoutLibraryFrame_) return false;
+		const FarmRecoverySystem::View request{FarmRecoverySystem::Status::Eligible,
+			command.expectedRecoveryDay, 0, command.inventoryGeneration, command.farmGeneration};
+		if (!FarmRecoverySystem::Claim(farmGrid_, farmEconomySystem_, farmDateSystem_.GetDay(), request)) return false;
+		(void)farmCropSelectionSystem_.SetSelectedCrop(FarmRecoverySystem::kSeed);
+		// Old snapshots must not erase the daily limit or restore resources alongside the grant.
+		farmToolActionSystem_.ClearHistory();
+		farmGrowthComparisonSystem_.Reset();
+		farmDocumentSystem_.MarkDirty();
+		InitializeTimeline();
+		return true;
+	}
+	case GamePlayEditorCommandType::PlaceFarmRepellent:
+	case GamePlayEditorCommandType::RemoveFarmRepellent:
+		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() || layoutLibraryFrame_) return false;
+		if (!FarmRepellentSystem::SetPlant(farmGrid_, command.farmTileIndex, command.farmGeneration,
+			command.type == GamePlayEditorCommandType::PlaceFarmRepellent)) return false;
+		// Old tool commands must not restore a tile snapshot over this new occupancy.
+		farmToolActionSystem_.ClearHistory();
+		farmGrowthComparisonSystem_.Reset();
+		farmIrrigationSystem_.Rebuild(farmGrid_);
+		farmDocumentSystem_.MarkDirty();
+		InitializeTimeline();
+		return true;
 	case GamePlayEditorCommandType::ExpandFarm:
 		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() || layoutLibraryFrame_) return false;
 		if (!FarmDevelopmentSystem::Expand(farmGrid_, farmEconomySystem_, command.farmGeneration,
@@ -491,6 +518,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 		farmToolActionSystem_.ClearHistory();
 		farmGrowthComparisonSystem_.Reset();
 		farmHarvestVisualSystem_.Clear();
+		farmPestVisualSystem_.Clear();
 		farmIrrigationSystem_.Rebuild(farmGrid_);
 		farmDocumentSystem_.MarkDirty();
 		InitializeTimeline();
@@ -620,6 +648,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 	case GamePlayEditorCommandType::UndoFarmEdit:
 		if (farmToolActionSystem_.Undo()) {
 			farmHarvestVisualSystem_.Clear();
+			farmPestVisualSystem_.Clear();
 			farmIrrigationPreviewSystem_.Cancel();
 			farmIrrigationSystem_.Rebuild(farmGrid_);
 			farmDocumentSystem_.MarkDirty();
@@ -629,6 +658,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 	case GamePlayEditorCommandType::RedoFarmEdit:
 		if (farmToolActionSystem_.Redo()) {
 			farmHarvestVisualSystem_.Clear();
+			farmPestVisualSystem_.Clear();
 			farmIrrigationPreviewSystem_.Cancel();
 			farmIrrigationSystem_.Rebuild(farmGrid_);
 			farmDocumentSystem_.MarkDirty();
@@ -792,6 +822,7 @@ bool GamePlaySessionSystem::Execute(const FarmDocumentCommand& command) {
 			farmIrrigationPreviewSystem_.Cancel();
 			farmGrowthComparisonSystem_.Reset();
 			farmHarvestVisualSystem_.Clear();
+			farmPestVisualSystem_.Clear();
 			farmIrrigationSystem_.Rebuild(farmGrid_);
 			InitializeTimeline();
 			farmFeedbackSystem_.Clear();

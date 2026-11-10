@@ -143,6 +143,17 @@ inline CropType PlayableCrop(int index) noexcept {
 	return index >= 0 && index < kPlayableCropCount ? CropTypeFromSlot(index + 1) : CropType::None;
 }
 
+struct FarmPestSpreadState {
+	static constexpr int kRulesVersion = 1;
+	static constexpr int kLastSpreadDay = 30;
+	int version = 0;
+	int lastProcessedDay = 0;
+	constexpr bool IsValid() const noexcept {
+		return version == 0 ? lastProcessedDay == 0 : version == kRulesVersion && lastProcessedDay >= 1;
+	}
+	bool operator==(const FarmPestSpreadState&) const noexcept = default;
+};
+
 struct FarmPestState {
 	static constexpr int kFirstWarningDay = 6;
 	static constexpr int kWarningInterval = 10;
@@ -159,7 +170,7 @@ struct FarmPestState {
 			(day - kFirstWarningDay) % kWarningInterval == 0;
 	}
 	constexpr bool IsValid() const noexcept {
-		return (warningDay == 0 || IsWarningDay(warningDay)) &&
+		return (warningDay == 0 || (warningDay >= kFirstWarningDay && warningDay <= FarmPestSpreadState::kLastSpreadDay)) &&
 			damageDays >= 0 && damageDays <= kMaximumDamageDays;
 	}
 	bool operator==(const FarmPestState&) const noexcept = default;
@@ -179,6 +190,7 @@ struct FarmTile {
 	float soilNutrients = 0.60f;
 	FarmCropCareHistory careHistory{};
 	FarmPestState pests{};
+	bool repellentPlant = false;
 };
 
 inline bool IsValidFarmTileFeature(FarmTileFeature feature) noexcept

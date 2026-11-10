@@ -91,6 +91,10 @@ bool FarmGrid::IsValidTile(const FarmTile& tile) noexcept
     default: return false;
     }
     if (tile.crop != CropType::None && ToCropSlot(tile.crop) < 0) return false;
+    if (tile.repellentPlant && (tile.feature != FarmTileFeature::None || tile.crop != CropType::None ||
+        tile.growth != 0.0f || !tile.careHistory.IsEmpty() || tile.pests != FarmPestState{} ||
+        (tile.state != FarmTileState::Empty && tile.state != FarmTileState::Tilled &&
+         tile.state != FarmTileState::Watered))) return false;
     if (tile.feature == FarmTileFeature::None && tile.waterAmount != 0.0f) return false;
     if (tile.state != FarmTileState::Planted && !tile.careHistory.IsEmpty()) return false;
     if (!tile.pests.IsValid() || (tile.pests != FarmPestState{} &&

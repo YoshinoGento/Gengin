@@ -22,6 +22,10 @@
 #include "farm/system/FarmCropSelectionSystem.h"
 #include "farm/system/FarmFeedbackSystem.h"
 #include "farm/system/FarmHarvestVisualSystem.h"
+#include "farm/system/FarmPestVisualSystem.h"
+#include "farm/system/FarmRainPresentationSystem.h"
+#include "farm/system/FarmRainAudioSystem.h"
+#include "farm/render/FarmRainRenderer.h"
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
 #include "farm/system/FarmInputSystem.h"
@@ -82,7 +86,7 @@ public:
 	[[nodiscard]] const editor::GamePlayEditorBridge& GetEditorBridge() const noexcept { return gamePlayEditorBridge_; }
 	[[nodiscard]] const Camera* GetCamera() const noexcept { return camera_.get(); }
 	bool SetFarmGameMode(bool enabled);
-    void RequestFarmLayoutLibrary() noexcept { layoutLibraryRequested_ = true; }
+    void RequestFarmLayoutLibrary() noexcept override { layoutLibraryRequested_ = true; }
 	[[nodiscard]] bool IsFarmGameMode() const noexcept { return farmGameMode_; }
 	// Cylinderメッシュの再生成（パラメータ変更時に呼ぶ）
 	// アニメーションモデルの動的切り替え（ImGuiからの呼び出し用）
@@ -109,6 +113,7 @@ private:
 	void AddLog(const std::string& message);
 	void UpdateSceneDeltaTime();
 	void PrepareRenderFrame(float presentationDeltaTime);
+    void UpdateRainPresentation(float realSeconds, bool audible);
 	void HandleKeyboardMovement();
 	void HandleCameraInput(float deltaTime, bool suppressArrowKeys);
 	void ClampCameraPitch();
@@ -303,6 +308,11 @@ private:
 	FarmCropSelectionSystem farmCropSelectionSystem_;
 	FarmFeedbackSystem farmFeedbackSystem_;
 	farm::FarmHarvestVisualSystem farmHarvestVisualSystem_;
+	farm::FarmPestVisualSystem farmPestVisualSystem_;
+    farm::FarmRainPresentationSystem farmRainPresentation_;
+    FarmRainAudioSystem farmRainAudio_;
+    FarmRainRenderer farmRainRenderer_;
+    bool farmRainAudioSuspended_ = false;
 	FarmGrowthSystem farmGrowthSystem_;
 	FarmGrowthComparisonSystem farmGrowthComparisonSystem_;
 	FarmTimeAdvanceControlSystem farmTimeAdvance_;

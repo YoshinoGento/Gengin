@@ -1,6 +1,7 @@
 #pragma once
 #include "base/InitializationTask.h"
 #include "farm/system/FarmStartPresentationSystem.h"
+#include "farm/system/FarmRainPresentationSystem.h"
 #include "title/TitleGrassRenderer.h"
 #include "title/TitleSkyRenderer.h"
 #include "3d/Object3d.h"
@@ -16,7 +17,7 @@ public:
     bool Initialize(Object3dCommon* common, ModelManager* models, TextureManager* textures);
     InitializationTask InitializeIncrementally(Object3dCommon* common, ModelManager* models, TextureManager* textures);
     void Prepare(Camera* camera, const FarmStartPresentationSystem::Frame& frame,
-        bool supported, float deltaSeconds);
+        bool supported, float deltaSeconds, const farm::FarmRainFrame& weather = {});
     void DrawSky();
     void Draw();
     void DrawShadow();

@@ -14,6 +14,7 @@ bool TilesEqual(const FarmTile& left, const FarmTile& right) noexcept
 	return left.heightLevel == right.heightLevel &&
 		left.feature == right.feature &&
 		left.irrigationEnabled == right.irrigationEnabled &&
+		left.repellentPlant == right.repellentPlant &&
 		left.state == right.state &&
 		left.crop == right.crop &&
 		left.moisture == right.moisture &&
@@ -30,7 +31,7 @@ bool TilesEqual(const FarmTile& left, const FarmTile& right) noexcept
 
 bool IsUnusedTile(const FarmTile& tile) noexcept
 {
-	return tile.state == FarmTileState::Empty &&
+	return !tile.repellentPlant && tile.state == FarmTileState::Empty &&
 		tile.crop == CropType::None &&
 		std::isfinite(tile.moisture) && tile.moisture == 0.0f &&
 		std::isfinite(tile.growth) && tile.growth == 0.0f;

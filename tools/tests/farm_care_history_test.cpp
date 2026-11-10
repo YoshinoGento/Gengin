@@ -86,7 +86,7 @@ int main()
 
 	nlohmann::json savedJson;
 	assert(JsonFile::Load(savedPath, savedJson));
-    assert(savedJson["schemaVersion"].get<int>() == 22);
+    assert(savedJson["schemaVersion"].get<int>() == 25);
 	assert(savedJson["tiles"][0]["careHistory"].is_object());
 	assert(Near(
 		savedJson["tiles"][0]["careHistory"]["efficiencySeconds"].get<float>(),
@@ -159,5 +159,5 @@ int main()
 
 	std::filesystem::remove_all(root, error);
 	assert(!error);
-	std::cout << "PASS: schema 22 soil/history round trip, invalid input, schema 5/6 migration\n";
+	std::cout << "PASS: schema 25 soil/history round trip, invalid input, schema 5/6 migration\n";
 }

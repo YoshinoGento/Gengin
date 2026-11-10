@@ -29,7 +29,8 @@ enum class Action {
     ExhibitionOpen, ExhibitionSelect, ExhibitionWatch, ExhibitionHome, ExhibitionExit,
     MenuDetails, AudioSettings, ShopProduct,
     HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel,
-    PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook
+    PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook,
+    Repellent, RepellentSelect, RepellentPlace, RepellentRemove, Recovery, RecoveryClaim
 };
 struct Request {
     Action action = Action::None;

@@ -123,7 +123,7 @@ void Save() {
     Check(grid.SetTile(29,tile) && grid.SetSelectedIndex(29) && docs.SaveAs("Expanded",grid,economy,selection), "expanded save");
     const auto id=docs.GetActiveDocumentId(), path=docs.GetPath();
     nlohmann::json saved;
-    Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==22 && saved["economy"]["lifetimeSales"]==1500, "schema22");
+    Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==25 && saved["economy"]["lifetimeSales"]==1500, "schema25");
     Check(docs.Load(initialId,grid,economy,selection) && grid.GetHeight()==4 && economy.GetLifetimeSales()==0, "smaller save load");
     Check(docs.Load(id,grid,economy,selection) && grid.GetHeight()==6 && grid.GetSelectedIndex()==29 &&
         Same(*grid.GetTile(29),tile) && economy.GetLifetimeSales()==1500, "expanded save load");
@@ -139,7 +139,7 @@ void Save() {
         if(kind==7) bad["grid"]["selectedIndex"]=30;
         if(kind==8) bad["grid"]["height"]=7;
         if(kind==9) bad["tiles"].erase(bad["tiles"].begin());
-        if(kind==10) bad["schemaVersion"]=23;
+        if(kind==10) bad["schemaVersion"]=26;
         const auto generation=grid.GetGeneration();
         Check(JsonFile::Save(path,bad) && !docs.Load(id,grid,economy,selection) && grid.GetGeneration()==generation &&
             grid.GetHeight()==6 && economy.GetLifetimeSales()==1500 && Same(*grid.GetTile(29),tile), "invalid load not atomic");

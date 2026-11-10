@@ -55,7 +55,7 @@ public:
         c.growth.Update(c.grid, delta, clock.timeScale);
         if (c.comparison) c.comparison->ObserveAfterStep(c.grid, delta, clock.timeScale);
         c.contest.Advance(c.date, delta, c.economy.GetContestResults(), boundary, !c.progression.IsFreeFarming());
-        const auto pests = FarmPestSystem::AdvanceDays(c.grid, clock.day, c.date.GetDay(), c.progression.PestsEnabled());
+        const auto pests = c.progression.AdvancePests(c.grid, clock.day, c.date.GetDay());
         static_cast<void>(c.progression.EvaluateSeason(FarmContestSeasonSystem::Evaluate(c.date.GetDay(), c.economy.GetContestResults())));
         return {true, c.date.GetDay() != clock.day, pests.warningStarted,
             FarmWeatherSystem::Changed(clock.day, c.date.GetDay(), c.progression.WeatherVersion()),

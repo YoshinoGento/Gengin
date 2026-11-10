@@ -54,7 +54,9 @@ public:
         facts.blocked = context.blocked;
         if (facts.blocked) return facts;
         if (context.pestsEnabled) {
-            const int target = FarmPestSystem::FindActive(grid);
+            const auto* selected = grid.GetSelectedTile();
+            const int target = selected && selected->pests.warningDay != 0
+                ? grid.GetSelectedIndex() : FarmPestSystem::FindActive(grid);
             if (const auto* tile = grid.GetTile(target)) {
                 facts.pestTile = target;
                 facts.pestWarning = tile->pests.damageDays == 0;
@@ -106,7 +108,7 @@ public:
     }
 
     [[nodiscard]] static FarmWaterAdvice InspectField(const farm::FarmTile* tile, FarmWaterAdvice advice) noexcept {
-        if (!tile || tile->feature != farm::FarmTileFeature::None) return FarmWaterAdvice::Unknown;
+        if (!tile || tile->repellentPlant || tile->feature != farm::FarmTileFeature::None) return FarmWaterAdvice::Unknown;
         // The water view also recognizes legacy Watered tiles, but Seed requires Tilled.
         if (advice == FarmWaterAdvice::Plant && tile->state != farm::FarmTileState::Tilled)
             return FarmWaterAdvice::Unknown;

@@ -11,6 +11,9 @@
 #include "farm/ui/FarmMenuView.h"
 #include "farm/ui/FarmDevelopmentView.h"
 #include "farm/ui/FarmRecordBookView.h"
+#include "farm/ui/FarmRepellentView.h"
+#include "farm/ui/FarmRecoveryView.h"
+#include "farm/ui/FarmPestView.h"
 #include "farm/system/FarmOverviewCamera.h"
 #include <cassert>
 #include <cmath>
@@ -285,6 +288,7 @@ void TestHotbarVisibilityAcrossCropPopup() {
 }
 
 void TestComposedHUD() {
+    for (int pestCount = 0; pestCount <= 3; ++pestCount)
     for (bool selected : {false,true}) for (bool goal : {false,true}) for (bool feedback : {false,true})
     for (bool enabled : {false,true}) for (bool player : {false,true}) {
         View view;
@@ -302,7 +306,10 @@ void TestComposedHUD() {
         view.IconButton(Label::Menu,HUDIcon::Menu,HUDLayout::UtilitySlot(5),{Action::Menu});
         view.IconButton(Label::ShopTitle,HUDIcon::Shop,HUDLayout::UtilitySlot(0),{Action::OpenSeedShop},enabled);
         view.IconButton(Label::HarvestDisplay,HUDIcon::Inventory,HUDLayout::UtilitySlot(1),{Action::HarvestDisplay},enabled);
-        if (enabled) BuildFarmNextGoalView(view,{FarmNextGoalKind::ProtectAndReserve,-1,30},true);
+        if (enabled) {
+            if (pestCount > 0) BuildPestView(view, 5, selected, feedback, pestCount, true);
+            else BuildFarmNextGoalView(view,{FarmNextGoalKind::ProtectAndReserve,-1,30},true);
+        }
         AssertItemsDoNotOverlap(view);
         std::size_t panelsUsed = 3+(selected ? 1 : 0); // Hotbar, field actions, one caption, optional water guidance.
         panelsUsed += (view.shortGoal ? 1 : 0) + (view.shortGoalDetail ? 1 : 0);
@@ -472,7 +479,55 @@ int main() {
         assert(menu.Hit({180,645}).action==Action::MenuDetails);
         assert(menu.Hit({930,645}).action==Action::Close);
     }
-    for (int page=0;page<17;++page) {
+    for (int flags=0;flags<32;++flags) {
+        FarmRepellentSystem::View state;
+        state.selected=15; state.tileCount=30; state.generation=123;
+        state.present=(flags&1)!=0; state.canPlace=!state.present && (flags&2)==0;
+        state.canRemove=state.present && (flags&2)==0; state.pestsEnabled=(flags&4)!=0;
+        for (std::size_t i=0;i<state.cells.size();++i) {
+            auto& cell=state.cells[i]; cell.index=(flags&8)!=0 && i<3 ? -1 : 11+static_cast<int>(i);
+            cell.kind=static_cast<FarmRepellentSystem::CellKind>(i%4);
+            cell.protectedAfter=(flags&16)!=0;
+        }
+        View menu; BuildMenuShell(menu,17,false,false,false,Label::Ready);
+        BuildRepellentView(menu,state);
+        assert(menu.count<View::kCapacity);
+        AssertItemsDoNotOverlap(menu);
+        for (std::size_t i=0;i<menu.count;++i) { AssertReadable(menu.items[i]); AssertHalfOpenControl(menu.items[i]); }
+        const auto hit=menu.Hit({700,510});
+        assert(hit.action==(state.present ? (state.canRemove?Action::RepellentRemove:Action::None) :
+            (state.canPlace?Action::RepellentPlace:Action::None)));
+        if (hit.action!=Action::None) assert(hit.farmGeneration==123 && hit.argument==15);
+        assert(menu.Hit({200,580}).argument==14 && menu.Hit({420,580}).argument==16);
+        bool previousTile=false, nextTile=false;
+        for (std::size_t i=0;i<menu.count;++i) {
+            const auto& item=menu.items[i];
+            if (item.request.action!=Action::RepellentSelect) continue;
+            previousTile|=item.label==Label::PreviousTile;
+            nextTile|=item.label==Label::NextTile;
+            assert(item.label!=Label::Previous && item.label!=Label::Next);
+        }
+        assert(previousTile && nextTile);
+    }
+    for (int status=0;status<=static_cast<int>(FarmRecoverySystem::Status::Eligible);++status) {
+        using S=FarmRecoverySystem::Status;
+        FarmRecoverySystem::View state{static_cast<S>(status),12,2147483647,456,123};
+        View menu; BuildMenuShell(menu,18,false,false,false,Label::RecoveryDone);
+        BuildRecoveryView(menu,state);
+        assert(menu.count<View::kCapacity);
+        AssertItemsDoNotOverlap(menu);
+        for (std::size_t i=0;i<menu.count;++i) { AssertReadable(menu.items[i]); AssertHalfOpenControl(menu.items[i]); }
+        const auto hit=menu.Hit({200,490});
+        const auto expected=state.CanClaim()?Action::RecoveryClaim:state.status==S::CanBuy?Action::OpenSeedShop:
+            state.status==S::HarvestAvailable?Action::HarvestInventory:Action::None;
+        assert(hit.action==expected);
+        if (state.CanClaim()) assert(hit.argument==12 && hit.inventoryGeneration==456 && hit.farmGeneration==123);
+        assert(menu.Hit({930,645}).action==Action::Close);
+        View hud; BuildRecoveryPrompt(hud,state.status);
+        AssertReadable(hud.items[0]);
+        assert(hud.Hit(Center(HUDLayout::shortGoal)).action==Action::Recovery);
+    }
+    for (int page=0;page<19;++page) {
         View confirmation;
         BuildMenuShell(confirmation,page,true,true,false,Label::Failure);
         assert(confirmation.NextActionable(-1,1)==-1);

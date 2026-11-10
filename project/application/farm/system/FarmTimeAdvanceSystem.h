@@ -55,6 +55,7 @@ public:
         expectedClock_ = context.date.CaptureSnapshot();
         expectedMode_ = context.progression.GetMode();
         expectedPests_ = context.progression.PestsEnabled();
+        expectedSpreadVersion_ = context.progression.PestSpread().version;
         expectedWeatherVersion_ = context.progression.WeatherVersion();
         initialWeather_ = FarmWeatherSystem::Inspect(context.date.GetDay(), expectedWeatherVersion_).phase;
         status_.active = true;
@@ -96,6 +97,7 @@ private:
             generation_ != context.grid.GetGeneration() || clock.day != expectedClock_.day ||
             clock.elapsedSecondsInDay != expectedClock_.elapsedSecondsInDay || clock.timeScale != expectedClock_.timeScale ||
             context.progression.GetMode() != expectedMode_ || context.progression.PestsEnabled() != expectedPests_ ||
+            context.progression.PestSpread().version != expectedSpreadVersion_ ||
             context.progression.WeatherVersion() != expectedWeatherVersion_))
             return Stop(StopReason::ContextChanged);
         if (context.grid.GetTileCount() <= 0 || clock.day < 1 || !std::isfinite(clock.elapsedSecondsInDay) ||
@@ -145,6 +147,7 @@ private:
     FarmDateSystem::Snapshot expectedClock_{};
     FarmProgressionMode expectedMode_ = FarmProgressionMode::Trial;
     bool expectedPests_ = false;
+    int expectedSpreadVersion_ = 0;
     int expectedWeatherVersion_ = 0;
     FarmWeatherSystem::Phase initialWeather_ = FarmWeatherSystem::Phase::Disabled;
 };

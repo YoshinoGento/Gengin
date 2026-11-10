@@ -10,7 +10,7 @@ namespace farm {
 enum class FarmMeshShape { Box, TriangleLower, TriangleUpper, Turnip, Carrot, Leaves, CarrotLeaves,
     Tomato, TomatoStems, Pumpkin, PumpkinVines };
 enum class FarmMeshSurface { None, CanalBed, CanalBank, SoilBoundary, Selection, Hover, Crop,
-	Earth, Soil, Grass };
+	Earth, Soil, Grass, PestCue };
 struct FarmMeshPart {
 	Vector3 position{};
 	Vector3 scale{1.0f, 1.0f, 1.0f}; // Box: half-size. Crop: radius/height in its base-anchored OBJ space.
@@ -36,6 +36,36 @@ struct FarmCropMeshParts {
 	std::array<FarmMeshPart, 2> parts{};
 	std::size_t count = 0;
 };
+
+struct FarmRepellentMeshParts {
+	std::array<FarmMeshPart, 8> parts{};
+	std::size_t count = 0;
+};
+
+inline FarmRepellentMeshParts BuildFarmRepellentMeshParts(
+	const FarmGrid& grid, int index, const FarmVisualSystem& system) noexcept {
+	FarmRepellentMeshParts result;
+	const auto* tile = grid.GetTile(index);
+	const auto visual = system.GetTileVisualData(grid, index);
+	if (!tile || !tile->repellentPlant || !visual.valid || !FarmGrid::IsValidTile(*tile)) return result;
+	// Voxel shrub anchored on the shared flat plateau; dimensions follow tile scale.
+	const float unit = visual.halfExtent;
+	const auto add = [&](Vector3 offset, Vector3 halfSize, Vector4 color) {
+		result.parts[result.count++] = {{visual.center.x + offset.x * unit,
+			visual.center.y + offset.y * unit, visual.center.z + offset.z * unit},
+			{halfSize.x * unit, halfSize.y * unit, halfSize.z * unit}, color, false, {},
+			FarmMeshShape::Box, FarmMeshSurface::Crop};
+	};
+	add({0,.30f,0}, {.045f,.30f,.045f}, {.21f,.37f,.09f,1});
+	add({-.15f,.27f,0}, {.22f,.08f,.15f}, {.20f,.43f,.13f,1});
+	add({.15f,.42f,.03f}, {.24f,.08f,.16f}, {.28f,.51f,.15f,1});
+	add({0,.49f,-.13f}, {.15f,.10f,.23f}, {.33f,.55f,.17f,1});
+	add({-.17f,.64f,-.08f}, {.12f,.09f,.12f}, {.93f,.64f,.15f,1});
+	add({.17f,.68f,.08f}, {.13f,.08f,.13f}, {1,.77f,.22f,1});
+	add({-.17f,.74f,-.08f}, {.065f,.025f,.065f}, {.62f,.30f,.06f,1});
+	add({.17f,.77f,.08f}, {.07f,.025f,.07f}, {.71f,.36f,.07f,1});
+	return result;
+}
 
 // Crop OBJ space: root/leaf base at y=0, top at y=1, horizontal extent <=1.
 inline FarmCropMeshParts BuildFarmCropMeshParts(

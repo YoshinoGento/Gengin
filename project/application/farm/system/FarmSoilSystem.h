@@ -30,7 +30,7 @@ public:
         return profile && Valid(nutrients) ? std::clamp(nutrients / profile->target, 0.0f, 1.0f) : 0.0f;
     }
     [[nodiscard]] static bool CanCompost(const farm::FarmTile& tile) noexcept {
-        return tile.feature == farm::FarmTileFeature::None && tile.crop == farm::CropType::None &&
+        return !tile.repellentPlant && tile.feature == farm::FarmTileFeature::None && tile.crop == farm::CropType::None &&
             (tile.state == farm::FarmTileState::Tilled || tile.state == farm::FarmTileState::Watered) &&
             Valid(tile.soilNutrients) && tile.soilNutrients < 1.0f;
     }

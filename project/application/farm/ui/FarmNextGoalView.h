@@ -26,7 +26,7 @@ struct FarmNextGoalCopy {
     case Kind::ChooseCrop: return FarmNextGoalCopy{Label::GoalChooseCrop, Label::GoalWhySeeds};
     case Kind::BuySeed: return FarmNextGoalCopy{Label::GoalBuy, Label::GoalWhySeeds};
     case Kind::SellForSeeds: return FarmNextGoalCopy{Label::GoalSell, Label::GoalWhyFunds};
-    case Kind::NeedFunds: return FarmNextGoalCopy{Label::GoalFunds, Label::GoalWhyFunds};
+    case Kind::NeedFunds: return FarmNextGoalCopy{Label::RecoveryHelp, Label::GoalWhyFunds};
     case Kind::CheckWater: return FarmNextGoalCopy{Label::GoalCheckWater, Label::GoalWhyWater};
     case Kind::Water: return FarmNextGoalCopy{Label::GoalWater, Label::GoalWhyWater};
     case Kind::StopIrrigation: return FarmNextGoalCopy{Label::GoalStopIrrigation, Label::GoalWhyWater};
@@ -45,7 +45,8 @@ inline void BuildFarmNextGoalView(View& view, const FarmNextGoal& goal, bool det
     view.shortGoal = true;
     if (goal.contestDay > 0)
         view.Metric(copy->title, HUDLayout::shortGoal, 316, "D" + std::to_string(goal.contestDay));
-    else view.Add(copy->title, HUDLayout::shortGoal);
+    else view.Add(copy->title, HUDLayout::shortGoal,
+        {goal.kind == FarmNextGoalKind::NeedFunds ? Action::Recovery : Action::None});
     if (details && copy->detail) {
         view.shortGoalDetail = true;
         view.Add(*copy->detail, HUDLayout::shortGoalDetail);

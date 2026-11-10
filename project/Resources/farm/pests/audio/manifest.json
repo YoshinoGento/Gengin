@@ -1,0 +1,9 @@
+{
+  "provenance": "Original synthetic net swish and soft confirmation pluck. No external samples.",
+  "rate": 24000,
+  "channels": 1,
+  "bits": 16,
+  "seconds": 0.34,
+  "file": "cured.wav",
+  "sha256": "16c736c067f05d39144975a1b391bf65c6ab7b730e026d0bc08e4d0d8bad74cb"
+}

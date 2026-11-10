@@ -272,6 +272,7 @@ SelectedTileHUDData BuildSelectedTileHUDData(
 	data.state = selectedTile->state;
 	data.crop = selectedTile->crop;
 	data.growthStage = farm::GetCropGrowthStage(*selectedTile);
+	if (selectedTile->repellentPlant) return data;
 	if (selectedTile->feature == farm::FarmTileFeature::Canal) {
 		data.nextAction = FarmHUDNextAction::Canal;
 		return data;
@@ -450,7 +451,8 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 	farmCropSelectionSystem_.Initialize();
 	farmFeedbackSystem_.Initialize();
 	farmHarvestVisualSystem_.Clear();
-	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason, true, true);
+	farmPestVisualSystem_.Clear();
+	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason, true, true, true);
 	farmStageAccessSystem_.Bind(farmDateSystem_, farmProgressionSystem_.StagePolicy());
 	farmEconomySystem_.BindStageAccess(farmStageAccessSystem_);
 	farmToolActionSystem_.BindStageAccess(farmStageAccessSystem_);
@@ -600,6 +602,10 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 	farmRuntimeController_.Refresh(RuntimeContext());
 #endif
 	// Reveal can draw before the first input/simulation update.
+    farmRainPresentation_.Reset();
+    if (!farmRainRenderer_.Initialize(framework_->GetDxCommon())) AddLog("Rain geometry unavailable.");
+    if (!farmRainAudio_.Initialize(framework_->GetAudio())) AddLog("Rain ambience unavailable.");
+    co_await std::suspend_always{};
 	PrepareRenderFrame(0.0f);
 	framework_->GetParticleManager()->Update(camera_.get(), 0.0f);
     co_return true;
@@ -661,7 +667,10 @@ void GamePlaySessionSystem::Update() {
 		farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults())));
 	farmContestDaySystem_.Observe(farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults(), !farmProgressionSystem_.IsFreeFarming());
 	UpdateSceneDeltaTime();
-    if (layoutLibraryFrame_) return;
+    if (layoutLibraryFrame_) {
+        farmRainAudio_.Stop();
+        return;
+    }
 
 	// Collect frame requests before scheduling Scene systems.
 	Input* frameInput = framework_ ? framework_->GetInput() : nullptr;
@@ -715,8 +724,11 @@ void GamePlaySessionSystem::Update() {
 	if (farmProgressionSystem_.IsCleared()) farmGrowthComparisonSystem_.Stop();
 	farmFeedbackSystem_.Update(realDeltaTime_);
 	if (timelineScrubbing_) farmHarvestVisualSystem_.Clear();
+	if (timelineScrubbing_ || !farmProgressionSystem_.PestsEnabled()) farmPestVisualSystem_.Clear();
+	farmPestVisualSystem_.Update(farmGrid_, viewportFocused_ ? realDeltaTime_ : 0.0f);
 	// Committed harvest feedback must finish even when pause or clear stops world time.
 	farmHarvestVisualSystem_.Update(farmGrid_, realDeltaTime_);
+    UpdateRainPresentation(viewportFocused_ ? realDeltaTime_ : 0.0f, viewportFocused_);
 	PrepareRenderFrame(sceneDeltaTime_);
 
 	// スペースキー入力時の分岐（activeParticleType_ は Game.cpp の ImGui から書き換わる）
@@ -750,6 +762,17 @@ void GamePlaySessionSystem::Update() {
 	framework_->GetParticleManager()->Update(camera_.get(), timelineScrubbing_ ? 0.0f : sceneDeltaTime_);
 }
 
+void GamePlaySessionSystem::UpdateRainPresentation(float realSeconds, bool audible) {
+    const bool outdoor = farmGameMode_ && !timelineScrubbing_ &&
+        !farmRuntimeController_.PresentsIntroduction() && !farmRuntimeController_.PresentsFarmResult() &&
+        !farmRuntimeController_.ShowsSeedShop() && !farmRuntimeController_.ShowsHarvestDisplay() &&
+        !farmRuntimeController_.ShowsContestDetail() && !farmRuntimeController_.RequestsTitle();
+    const auto weather = FarmWeatherSystem::Inspect(farmDateSystem_.GetDay(), farmProgressionSystem_.WeatherVersion());
+    farmRainPresentation_.Update(weather.phase, outdoor, realSeconds);
+    farmRainAudio_.Update(farmRainPresentation_.GetFrame().rain, farmRuntimeController_.EnvironmentVolume(),
+        audible && !farmRainAudioSuspended_ && outdoor && weather.phase != FarmWeatherSystem::Phase::Disabled, realSeconds);
+}
+
 void GamePlaySessionSystem::PrepareRenderFrame(float presentationDeltaTime) {
 	camera_->SetTranslate(cameraPos_);
 	camera_->SetRotate(cameraRot_);
@@ -778,7 +801,7 @@ void GamePlaySessionSystem::PrepareRenderFrame(float presentationDeltaTime) {
 	lightingSystem->SetDirectionalLight({
 		{ lightColor_.x, lightColor_.y, lightColor_.z, 1.0f },
 		lightDirection_,
-		lightIntensity_ });
+		lightIntensity_ * farmRainPresentation_.GetFrame().LightScale() });
 	LightingSystem::SpotLight spotLight{};
 	spotLight.color = { spotLightColor_.x, spotLightColor_.y, spotLightColor_.z, 1.0f };
 	spotLight.position = spotLightPos_;
@@ -1099,6 +1122,8 @@ void GamePlaySessionSystem::CreateLevelObjectsFromLevel() {
 
 void GamePlaySessionSystem::OnScreenTransitionCovered() {
 	farmRuntimeController_.CommitScreenTransition(RuntimeContext());
+    farmRainAudioSuspended_ = false;
+    UpdateRainPresentation(0.0f, false);
 	PrepareRenderFrame(0.0f);
 }
 
@@ -1107,6 +1132,7 @@ void GamePlaySessionSystem::PrepareFixedUpdate()
     farmTimeAdvance_.BeginFrame();
     layoutLibraryFrame_ = layoutLibraryRequested_;
     if (layoutLibraryRequested_) {
+        farmRainAudio_.Stop();
         farmTimeAdvance_.Interrupt();
         layoutLibraryRequested_ = false;
         pendingPlayerCommand_ = {};
@@ -1127,6 +1153,9 @@ void GamePlaySessionSystem::PrepareFixedUpdate()
 		viewportMousePosition_ = input->GetMousePosition();
 		keyboardCaptured = farmRuntimeController_.Update(RuntimeContext(), *input) || keyboardCaptured;
 		if (farmRuntimeController_.RequestsTitle()) {
+			// SceneManager stops Update during departure, so stop the loop before handing off.
+			farmRainAudioSuspended_ = true;
+			farmRainAudio_.Stop();
 			if (sceneManager_) sceneManager_->ChangeSceneWithRipple("TITLE");
 			return;
 		}
@@ -1636,11 +1665,14 @@ void GamePlaySessionSystem::Draw() {
 	const farm::FarmGrid& displayedFarmGrid = irrigationPreviewActive ? *previewGrid : farmGrid_;
     const bool arrivalScenery = farmGameMode_ && farmArrivalRenderer_.IsReady() &&
         FarmDevelopmentSystem::StandardSize(displayedFarmGrid.GetWidth(), displayedFarmGrid.GetHeight());
-    farmArrivalRenderer_.Prepare(camera_.get(),farmRuntimeController_.StartFrame(),arrivalScenery,realDeltaTime_);
+    farmArrivalRenderer_.Prepare(camera_.get(),farmRuntimeController_.StartFrame(),arrivalScenery,realDeltaTime_,
+        farmRainPresentation_.GetFrame());
 	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : farmIrrigationSystem_;
 	farmRenderer_.Prepare(displayedFarmGrid, farmVisualSystem_, camera_.get(),
 		farmRuntimeController_.ResolveHoveredTile(RuntimeContext()), irrigationPreviewActive ? nullptr : &farmHarvestVisualSystem_,
-        !farmRuntimeController_.PresentsIntroduction());
+        !farmRuntimeController_.PresentsIntroduction(),
+        !irrigationPreviewActive && !timelineScrubbing_ && farmProgressionSystem_.PestsEnabled() &&
+        !farmRuntimeController_.PresentsIntroduction() ? &farmPestVisualSystem_ : nullptr);
 
 	auto DrawLevelObjects = [&]() {
 		if (!showLevelObjects_) {
@@ -1801,6 +1833,11 @@ void GamePlaySessionSystem::Draw() {
 		}
 	}
 
+    const auto& rainLayout = farmVisualSystem_.GetLayout();
+    const float rainPitch = rainLayout.tileSize + rainLayout.tileGap;
+    farmRainRenderer_.Draw(farmRainPresentation_.GetFrame(), *camera_, rainLayout.center,
+        farmGrid_.GetWidth()*rainPitch + 8.0f, farmGrid_.GetHeight()*rainPitch + 8.0f);
+
 	// HUD is the final Scene overlay and does not mutate gameplay state.
 	if (farmHudInitialized_ || stageClearHudInitialized_) {
 		spriteCommon->PreDraw();
@@ -1915,7 +1952,7 @@ void GamePlaySessionSystem::ApplyFarmDayEvents(int previousDay) {
 	if (!farmProgressionSystem_.PestsEnabled() || day <= previousDay) return;
 	// A tile-only undo must not resurrect a crop with yesterday's exposure.
 	farmToolActionSystem_.ClearHistory();
-	const auto result = FarmPestSystem::AdvanceDays(farmGrid_, previousDay, day, true);
+	const auto result = farmProgressionSystem_.AdvancePests(farmGrid_, previousDay, day);
 	if (!result.changed) return;
 	farmDocumentSystem_.MarkDirty();
 #ifndef USE_IMGUI
@@ -2142,9 +2179,10 @@ bool GamePlaySessionSystem::ResetFarmSessionState()
 	farmIrrigationSystem_.Initialize();
 	farmToolActionSystem_.Initialize();
 	farmCropSelectionSystem_.Initialize();
-	farmProgressionSystem_.Initialize(rules, mode, true, true);
+	farmProgressionSystem_.Initialize(rules, mode, true, true, true);
 	farmFeedbackSystem_.Initialize(false);
 	farmHarvestVisualSystem_.Clear();
+	farmPestVisualSystem_.Clear();
 	farmIrrigationSystem_.Rebuild(farmGrid_);
 	farmDocumentSystem_.MarkDirty();
 	if (farmRestartCount_ < (std::numeric_limits<std::uint32_t>::max)()) {
@@ -2314,6 +2352,7 @@ void GamePlaySessionSystem::HandleFarmHistoryInput() {
 	}
 	if (changed) {
 		farmHarvestVisualSystem_.Clear();
+		farmPestVisualSystem_.Clear();
 		farmIrrigationPreviewSystem_.Cancel();
 		farmIrrigationSystem_.Rebuild(farmGrid_);
 		farmDocumentSystem_.MarkDirty();
@@ -2887,6 +2926,7 @@ void GamePlaySessionSystem::AddLog(const std::string& message) {
 
 void GamePlaySessionSystem::Finalize()
 {
+    farmRainAudio_.Finalize();
     farmRuntimeController_.FinalizePresentationAudio();
 	gamePlayEditorBridge_.Unbind();
 	if (framework_ && framework_->GetParticleManager()) {
@@ -3018,6 +3058,7 @@ FarmRuntimeContext GamePlaySessionSystem::RuntimeContext() {
         .farmVisualSystem = farmVisualSystem_,
         .gamePlayEditorBridge = gamePlayEditorBridge_,
         .levelGameplay = levelGameplay_,
+        .pestVisual = &farmPestVisualSystem_,
     };
 }
 void GamePlaySessionSystem::ApplyCameraPose(const farm::OverviewPose& pose, bool updateOverview) {
@@ -3029,6 +3070,11 @@ void GamePlaySessionSystem::ApplyCameraPose(const farm::OverviewPose& pose, bool
 }
 ScreenTransitionResult GamePlaySessionSystem::BeginScreenTransition(scene::RipplePoint origin,
     scene::TransitionSoundTheme sound, scene::TransitionStyle style) {
-    return sceneManager_ ? sceneManager_->BeginScreenTransition(&owner_, origin, sound, style)
+    const auto result = sceneManager_ ? sceneManager_->BeginScreenTransition(&owner_, origin, sound, style)
         : ScreenTransitionResult::Unavailable;
+    if (result == ScreenTransitionResult::Started) {
+        farmRainAudioSuspended_ = true;
+        farmRainAudio_.Stop();
+    }
+    return result;
 }

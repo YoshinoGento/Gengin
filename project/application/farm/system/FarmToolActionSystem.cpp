@@ -34,6 +34,7 @@ bool TilesEqual(const farm::FarmTile& left, const farm::FarmTile& right)
 		left.careHistory.nutrientGrowth == right.careHistory.nutrientGrowth &&
 		left.careHistory.nutrientSupply == right.careHistory.nutrientSupply &&
 		left.pests == right.pests &&
+		left.repellentPlant == right.repellentPlant &&
 		left.soilNutrients == right.soilNutrients;
 }
 
@@ -49,7 +50,7 @@ private:
 	bool Apply(bool expected, bool value) {
 		if (!grid_ || grid_->GetGeneration() != generation_) return false;
 		auto* tile = grid_->GetTile(index_);
-		if (!tile || tile->feature != farm::FarmTileFeature::None || tile->irrigationEnabled != expected) return false;
+		if (!tile || tile->repellentPlant || tile->feature != farm::FarmTileFeature::None || tile->irrigationEnabled != expected) return false;
 		auto candidate = *tile;
         candidate.irrigationEnabled = value;
         return grid_->SetTile(index_, candidate);
@@ -283,7 +284,7 @@ FarmToolPlan FarmToolActionSystem::PlanTool(
     const auto* tile = grid.GetTile(tileIndex);
     if (!tile) {
         plan.result.status = FarmToolActionStatus::InvalidTarget;
-    } else if (tile->feature != farm::FarmTileFeature::None) {
+    } else if (tile->repellentPlant || tile->feature != farm::FarmTileFeature::None) {
         plan.result.status = FarmToolActionStatus::InvalidState;
     } else if (const FarmToolBehavior* behavior = FindFarmToolBehavior(tool)) {
         plan = behavior->Plan({*tile, selectedCrop, economy, stageAccess_,
@@ -363,7 +364,7 @@ bool FarmToolActionSystem::LowerSelectedTile(farm::FarmGrid& grid)
 bool FarmToolActionSystem::CanSetIrrigation(const farm::FarmGrid& grid, int tileIndex) const noexcept
 {
 	const auto* tile = grid.GetTile(tileIndex);
-	return tile && tile->feature == farm::FarmTileFeature::None;
+	return tile && !tile->repellentPlant && tile->feature == farm::FarmTileFeature::None;
 }
 
 bool FarmToolActionSystem::SetSelectedIrrigation(farm::FarmGrid& grid, bool enabled)
@@ -425,7 +426,7 @@ bool FarmToolActionSystem::CommitCanalPath(
 		const farm::FarmTile* tile = grid.GetTile(tileIndex);
 		const auto requiredFeature = remove
 			? farm::FarmTileFeature::Canal : farm::FarmTileFeature::None;
-		if (tile == nullptr || tile->feature != requiredFeature ||
+		if (tile == nullptr || tile->repellentPlant || tile->feature != requiredFeature ||
 			tile->state != farm::FarmTileState::Empty || tile->crop != farm::CropType::None ||
 			tile->moisture != 0.0f || tile->growth != 0.0f) {
 			return false;
@@ -492,7 +493,7 @@ bool FarmToolActionSystem::CanToggleCanal(
 	if (tile->feature == farm::FarmTileFeature::Canal) {
 		return true;
 	}
-	if (tile->feature != farm::FarmTileFeature::None) {
+	if (tile->repellentPlant || tile->feature != farm::FarmTileFeature::None) {
 		return false;
 	}
 	return tile->state == farm::FarmTileState::Empty &&
@@ -531,7 +532,7 @@ bool FarmToolActionSystem::CanToggleWaterSource(
 	if (tile->feature == farm::FarmTileFeature::WaterSource) {
 		return true;
 	}
-	if (tile->feature != farm::FarmTileFeature::None) {
+	if (tile->repellentPlant || tile->feature != farm::FarmTileFeature::None) {
 		return false;
 	}
 	return tile->state == farm::FarmTileState::Empty &&

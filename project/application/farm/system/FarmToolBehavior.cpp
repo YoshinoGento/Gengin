@@ -23,7 +23,7 @@ class HoeBehavior final : public FarmToolBehavior {
 public:
     FarmToolPlan Plan(const FarmToolContext& context) const noexcept override {
         auto plan = BeginPlan(FarmTool::Hoe, context);
-        if (context.tile.feature != farm::FarmTileFeature::None ||
+        if (context.tile.repellentPlant || context.tile.feature != farm::FarmTileFeature::None ||
             context.tile.state != farm::FarmTileState::Empty) return plan;
         plan.result.status = FarmToolActionStatus::Applied;
         plan.after.state = farm::FarmTileState::Tilled;
@@ -37,7 +37,7 @@ public:
     FarmToolPlan Plan(const FarmToolContext& context) const noexcept override {
         auto plan = BeginPlan(FarmTool::Water, context);
         const auto& tile = context.tile;
-        if (tile.feature != farm::FarmTileFeature::None ||
+        if (tile.repellentPlant || tile.feature != farm::FarmTileFeature::None ||
             (tile.state != farm::FarmTileState::Tilled && tile.state != farm::FarmTileState::Planted) ||
             !std::isfinite(tile.moisture) || tile.moisture < 0.0f || tile.moisture > kFullMoisture ||
             !std::isfinite(context.wateringIncrement) || context.wateringIncrement <= 0.0f ||
@@ -56,7 +56,7 @@ class SeedBehavior final : public FarmToolBehavior {
 public:
     FarmToolPlan Plan(const FarmToolContext& context) const noexcept override {
         auto plan = BeginPlan(FarmTool::Seed, context);
-        if (context.tile.feature != farm::FarmTileFeature::None ||
+        if (context.tile.repellentPlant || context.tile.feature != farm::FarmTileFeature::None ||
             !farm::IsPlantableCrop(context.selectedCrop)) return plan;
         if ((context.stageAccess && !context.stageAccess->Get().Allows(context.selectedCrop)) ||
             (context.economy && !context.economy->IsCropUnlocked(context.selectedCrop))) {
@@ -84,7 +84,7 @@ public:
     FarmToolPlan Plan(const FarmToolContext& context) const noexcept override {
         auto plan = BeginPlan(FarmTool::Harvest, context);
         const auto& tile = context.tile;
-        if (tile.feature != farm::FarmTileFeature::None ||
+        if (tile.repellentPlant || tile.feature != farm::FarmTileFeature::None ||
             tile.state != farm::FarmTileState::Planted || tile.crop == farm::CropType::None) return plan;
         if (tile.growth < kHarvestReadyGrowth) {
             plan.result.status = FarmToolActionStatus::NotReady;

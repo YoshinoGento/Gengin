@@ -9,6 +9,7 @@
 #include "farm/system/FarmHarvestDisplaySystem.h"
 #include "farm/system/FarmContestOutcomeSystem.h"
 #include "farm/system/FarmContestAudioSystem.h"
+#include "farm/system/FarmPestAudioSystem.h"
 #include "farm/system/FarmExhibitionSystem.h"
 
 struct FarmRuntimeContext;
@@ -25,9 +26,12 @@ public:
     }
     bool Update(const FarmRuntimeContext& context, const Input& input);
     void InitializePresentationAudio(Audio* audio) {
+        menuAudio_.Initialize();
         (void)arrivalAudio_.Initialize(audio); (void)contestAudio_.Initialize(audio);
+        (void)pestAudio_.Initialize(audio);
     }
-    void FinalizePresentationAudio() { arrivalAudio_.Finalize(); contestAudio_.Finalize(); }
+    void FinalizePresentationAudio() { arrivalAudio_.Finalize(); contestAudio_.Finalize(); pestAudio_.Finalize(); }
+    [[nodiscard]] int EnvironmentVolume() const noexcept { return menuAudio_.GetFrame().volume[0]; }
     FarmStartPresentationSystem::Frame StartFrame() const noexcept {
         return flow_.GetPhase()==FarmPlayFlow::Phase::Starting ? startPresentation_.GetFrame() : FarmStartPresentationSystem::Frame{};
     }
@@ -89,6 +93,7 @@ private:
     FarmHarvestDisplaySystem harvestDisplay_;
     FarmContestPresentationSystem contestPresentation_;
     FarmContestAudioSystem contestAudio_;
+    FarmPestAudioSystem pestAudio_;
     FarmContestOutcomeSystem contestOutcome_;
     FarmExhibitionSystem exhibition_;
     title::TitleAudioSettingsSystem menuAudio_;

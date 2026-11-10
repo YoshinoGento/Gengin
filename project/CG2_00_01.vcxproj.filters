@@ -430,6 +430,17 @@
 	<ClInclude Include="application\editor\FarmTimeAdvanceTestWindow.h" />
     <ClInclude Include="application\farm\system\FarmWeatherSystem.h" />
     <ClInclude Include="application\farm\system\FarmDevelopmentSystem.h" />
+    <ClInclude Include="application\farm\system\FarmRepellentSystem.h" />
+    <ClInclude Include="application\farm\system\FarmRecoverySystem.h" />
+    <ClInclude Include="application\farm\ui\FarmRecoveryView.h" />
+    <ClInclude Include="application\farm\system\FarmPestVisualSystem.h" />
+    <ClInclude Include="application\farm\system\FarmPestAudioSystem.h" />
+    <ClInclude Include="application\farm\render\FarmPestMeshLayout.h" />
+    <ClInclude Include="application\farm\system\FarmRainPresentationSystem.h" />
+    <ClInclude Include="application\farm\system\FarmRainAudioSystem.h" />
+    <ClInclude Include="application\farm\render\FarmRainGeometry.h" />
+    <ClInclude Include="application\farm\render\FarmRainRenderer.h" />
+    <ClInclude Include="application\farm\ui\FarmRepellentView.h" />
     <ClInclude Include="application\farm\system\FarmCropRecordSystem.h" />
     <ClInclude Include="application\farm\system\FarmRecordBookSystem.h" />
     <ClInclude Include="application\farm\ui\FarmRecordBookView.h" />
@@ -732,6 +743,9 @@
     <ClCompile Include="application\farm\render\FarmArrivalRenderer.cpp" />
     <ClCompile Include="application\farm\system\FarmArrivalAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmContestAudioSystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmPestAudioSystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmRainAudioSystem.cpp" />
+    <ClCompile Include="application\farm\render\FarmRainRenderer.cpp" />
     <ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
     <ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
     <ClInclude Include="application\farm\render\FarmContestRenderer.h" />

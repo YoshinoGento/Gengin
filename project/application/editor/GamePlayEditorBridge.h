@@ -353,6 +353,9 @@ enum class GamePlayEditorCommandType {
 	ResetFarmComparison,
 	ControlFarmTimeAdvance,
 	ExpandFarm,
+	PlaceFarmRepellent,
+	RemoveFarmRepellent,
+	ClaimFarmRecovery,
 };
 
 struct GamePlayEditorCommand {
@@ -362,6 +365,7 @@ struct GamePlayEditorCommand {
 	uint64_t farmGeneration = 0;
 	FarmTool farmTool = FarmTool::Hoe;
 	int expectedFarmHeight = 0;
+	int expectedRecoveryDay = 0;
 	int harvestRecordId = 0;
 	int contestDay = 0;
 	FarmProgressionMode progressionMode = FarmProgressionMode::Trial;
