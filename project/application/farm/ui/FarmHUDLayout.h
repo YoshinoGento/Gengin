@@ -10,6 +10,8 @@ inline constexpr Rect tools{380, 620, 520, 76};
 inline constexpr Rect goal{1000, 84, 256, 44};
 inline constexpr Rect fieldActions{956, 584, 232, 112};
 inline constexpr Rect waterGuidance{24, 460, 314, 86};
+inline constexpr Rect shortGoal{584, 24, 400, 52};
+inline constexpr Rect shortGoalDetail{24, 86, 314, 38};
 inline constexpr std::array<Rect, 4> panels{{status, economy, selected, tools}};
 [[nodiscard]] constexpr Rect ToolSlot(int index) noexcept {
     return {390.0f + index * 68.0f, 628, 60, 60};

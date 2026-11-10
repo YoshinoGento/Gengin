@@ -17,9 +17,12 @@ struct FarmCropQualityResult {
 	int basePrice = 0;
 	int salePrice = 0;
 	FarmCropSizeResult harvestSize{};
+	int pestPenalty = 0;
 
 	[[nodiscard]] bool IsValid() const noexcept {
-		return farm::IsPlantableCrop(crop) && basePrice > 0 && salePrice > 0 && harvestSize.IsConsistent();
+		return farm::IsPlantableCrop(crop) && basePrice > 0 && salePrice > 0 && harvestSize.IsConsistent() &&
+			score >= 0 && score <= 100 && pestPenalty >= 0 &&
+			pestPenalty <= farm::FarmPestState::kMaximumPenalty && pestPenalty <= 100 - score;
 	}
 };
 

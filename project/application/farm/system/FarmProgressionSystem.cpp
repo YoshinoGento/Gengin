@@ -14,12 +14,13 @@ farm::FarmRules FarmProgressionSystem::InitialRules(FarmProgressionMode mode) no
 	return rules;
 }
 
-void FarmProgressionSystem::Initialize(const farm::FarmRules& rules, FarmProgressionMode mode) noexcept
+void FarmProgressionSystem::Initialize(const farm::FarmRules& rules, FarmProgressionMode mode, bool enablePests) noexcept
 {
 	targetMoney_ = (std::max)(1, rules.clearMoneyTarget);
 	cleared_ = false;
 	mode_ = ValidMode(mode) ? mode : FarmProgressionMode::Trial;
 	stagePolicy_.enabled = mode_ == FarmProgressionMode::ContestSeason;
+	pestsEnabled_ = stagePolicy_.enabled && enablePests;
 }
 
 bool FarmProgressionSystem::EvaluateClear(int currentMoney) noexcept
@@ -40,7 +41,10 @@ bool FarmProgressionSystem::EvaluateSeason(const FarmContestSeasonSummary& summa
 bool FarmProgressionSystem::SetMode(FarmProgressionMode mode, int money, const FarmContestSeasonSummary& summary) noexcept {
 	if (!ValidMode(mode) || money < 0 || !summary.valid) return false;
 	// Existing farms are not re-locked by switching modes. Restart creates a new staged campaign.
-	if (mode != mode_) stagePolicy_.enabled = false;
+	if (mode != mode_) {
+		stagePolicy_.enabled = false;
+		pestsEnabled_ = false;
+	}
 	mode_ = mode;
 	cleared_ = false;
 	static_cast<void>(EvaluateClear(money));
@@ -91,19 +95,21 @@ float FarmProgressionSystem::GetProgress(int currentMoney, int day) const noexce
 
 FarmProgressionSystem::Snapshot FarmProgressionSystem::CaptureSnapshot() const noexcept
 {
-	return { targetMoney_, cleared_, mode_, stagePolicy_.enabled };
+	return { targetMoney_, cleared_, mode_, stagePolicy_.enabled, pestsEnabled_ };
 }
 
 bool FarmProgressionSystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
 {
 	if (snapshot.targetMoney <= 0 || !ValidMode(snapshot.mode) ||
 		(snapshot.mode == FarmProgressionMode::FreeFarming && snapshot.cleared) ||
-		(snapshot.stagedUnlocks && snapshot.mode != FarmProgressionMode::ContestSeason)) {
+		(snapshot.stagedUnlocks && snapshot.mode != FarmProgressionMode::ContestSeason) ||
+		(snapshot.pestsEnabled && !snapshot.stagedUnlocks)) {
 		return false;
 	}
 	targetMoney_ = snapshot.targetMoney;
 	cleared_ = snapshot.cleared;
 	mode_ = snapshot.mode;
 	stagePolicy_.enabled = snapshot.stagedUnlocks;
+	pestsEnabled_ = snapshot.pestsEnabled;
 	return true;
 }

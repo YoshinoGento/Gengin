@@ -314,7 +314,10 @@ inline void BuildQualityView(View& view, const FarmCropQualityResult& quality, c
         {176,450,400,38}, 270, CropSizeText(quality.harvestSize));
     const Label context = advice.partial ? (harvested ? Label::HintPartialRecord : Label::HintPartialEstimate)
         : (harvested ? Label::QualityRecorded : Label::QualityEstimate);
-    view.Add(context, {176,536,920,38});
+    if (quality.pestPenalty > 0)
+        view.Metric(Label::PestPenalty, {176,536,920,38}, 600,
+            "-" + std::to_string(quality.pestPenalty) + " pt");
+    else view.Add(context, {176,536,920,38});
     view.Metric(harvested ? Label::QualityFinalPrice : Label::Score, {176,492,920,38}, 600,
         std::to_string(quality.score) + " / " + std::to_string(quality.salePrice) + "G");
     view.Add(QualityHintLabel(advice.focus, harvested), {176,578,920,38});

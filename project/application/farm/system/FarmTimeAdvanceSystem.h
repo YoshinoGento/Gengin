@@ -98,7 +98,7 @@ private:
         return false;
     }
     bool Check(Context context, bool blocked) {
-        if (blocked) return Stop(StopReason::Blocked);
+        if (blocked || context.progression.PestsEnabled()) return Stop(StopReason::Blocked);
         const auto clock = context.date.CaptureSnapshot();
         if (status_.active && (gridIdentity_ != &context.grid || dateIdentity_ != &context.date ||
             generation_ != context.grid.GetGeneration() || clock.day != expectedClock_.day ||

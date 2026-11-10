@@ -17,6 +17,10 @@
 #include "editor/ParticleEffectWindow.h"
 #include "editor/VisibilityWindow.h"
 
+#if defined(_DEBUG) && defined(USE_IMGUI)
+#include "editor/FarmPestPlaytestSystem.h"
+#endif
+
 #include <memory>
 
 class BaseScene;
@@ -57,6 +61,15 @@ private:
 	void HandleFarmDocumentShortcut(editor::GamePlayEditorScene& playScene);
 	void HandleFarmHistoryShortcuts(editor::GamePlayEditorScene& playScene);
 	void BuildDefaultFarmLayout(unsigned int dockspaceId);
+#if defined(_DEBUG) && defined(USE_IMGUI)
+	void DrawFarmPestPlaytest();
+	void DrawFarmNextGoalTest();
+	editor::FarmPestPlaytestSystem farmPestPlaytest_;
+	bool showFarmPestPlaytest_ = false;
+	bool farmPestPlaytestFailed_ = false;
+	bool showFarmNextGoalTest_ = false;
+	int farmNextGoalCase_ = 0;
+#endif
 
 	EditorSettings editorSettings_;
 	CG5DemoWindow cg5DemoWindow_;

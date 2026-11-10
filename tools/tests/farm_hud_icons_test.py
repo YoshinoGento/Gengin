@@ -102,7 +102,9 @@ class HUDIconTests(unittest.TestCase):
         self.assertIn("sprite.SetTextureRect(IconUV(icon)", self.renderer)
 
     def test_icon_branch_does_not_render_button_label(self):
-        branch = self.renderer.split("if (IsValidIcon(item.icon)) {", 1)[1].split("if (button) {", 1)[0]
+        icon_only = "if (IsValidIcon(item.icon) && !item.leadingIcon) {"
+        self.assertIn(icon_only, self.renderer)
+        branch = self.renderer.split(icon_only, 1)[1].split("if (button) {", 1)[0]
         self.assertIn("IconQuad(item.icon", branch)
         self.assertNotIn("LabelQuad(", branch)
         self.assertRegex(branch, r"continue;\s*}\s*$")

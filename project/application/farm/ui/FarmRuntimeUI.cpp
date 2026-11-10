@@ -281,6 +281,8 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         Panel(View::kTerrainBottom, {0.035f, 0.055f, 0.06f, 0.96f});
     }
     if (view.fieldActions) Panel(View::kFieldActionsPanel, {0.035f, 0.055f, 0.06f, 0.96f});
+    if (view.shortGoal) Panel(HUDLayout::shortGoal, {0.045f, 0.075f, 0.065f, 0.92f});
+    if (view.shortGoalDetail) Panel(HUDLayout::shortGoalDetail, {0.045f, 0.075f, 0.065f, 0.92f});
     if (view.waterGuidance) Panel(View::kWaterGuidancePanel, {0.035f, 0.055f, 0.06f, 0.96f});
     if (view.radar.visible) DrawRadar(view.radar);
     if (view.referenceRadar.visible) DrawRadar(view.referenceRadar);

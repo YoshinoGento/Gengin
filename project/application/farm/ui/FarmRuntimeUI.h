@@ -28,7 +28,8 @@ enum class Action {
     ContestTab, ContestExplanation,
     ExhibitionOpen, ExhibitionSelect, ExhibitionWatch, ExhibitionHome, ExhibitionExit,
     MenuDetails, AudioSettings, ShopProduct,
-    HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel
+    HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel,
+    PestFocus, PestCure
 };
 struct Request { Action action = Action::None; int argument = 0; std::uint64_t inventoryGeneration = 0; };
 struct Item {
@@ -103,6 +104,8 @@ struct View {
     bool hotbarVisible = false;
     bool selectedTile = false;
     bool goalVisible = false;
+    bool shortGoal = false;
+    bool shortGoalDetail = false;
     QualityRadar radar{};
     QualityRadar referenceRadar{};
     bool contestDetail = false;

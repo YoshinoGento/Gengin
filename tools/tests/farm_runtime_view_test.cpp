@@ -6,6 +6,7 @@
 #include "farm/ui/FarmQualityView.h"
 #include "farm/ui/FarmTerrainView.h"
 #include "farm/ui/FarmHotbarView.h"
+#include "farm/ui/FarmNextGoalView.h"
 #include "farm/ui/FarmMenuView.h"
 #include "farm/system/FarmOverviewCamera.h"
 #include <cassert>
@@ -297,8 +298,10 @@ void TestComposedHUD() {
         view.IconButton(Label::Menu,HUDIcon::Menu,HUDLayout::UtilitySlot(5),{Action::Menu});
         view.IconButton(Label::ShopTitle,HUDIcon::Shop,HUDLayout::UtilitySlot(0),{Action::OpenSeedShop},enabled);
         view.IconButton(Label::HarvestDisplay,HUDIcon::Inventory,HUDLayout::UtilitySlot(1),{Action::HarvestDisplay},enabled);
+        if (enabled) BuildFarmNextGoalView(view,{FarmNextGoalKind::ProtectAndReserve,-1,30},true);
         AssertItemsDoNotOverlap(view);
         std::size_t panelsUsed = 3+(selected ? 1 : 0); // Hotbar, field actions, one caption, optional water guidance.
+        panelsUsed += (view.shortGoal ? 1 : 0) + (view.shortGoalDetail ? 1 : 0);
         std::size_t iconsUsed = 0, digitsUsed = 0;
         for (std::size_t i = 0; i < view.count; ++i) {
             const auto& item = view.items[i];
@@ -316,6 +319,14 @@ void TestComposedHUD() {
         const std::array active{true,true,view.hotbarVisible,selected,goal,selected,true,feedback};
         const auto frame = farm::kFarmOverviewFrame;
         const Rect safe{frame.left*1280,frame.top*720,(frame.right-frame.left)*1280,(frame.bottom-frame.top)*720};
+        if (view.shortGoal) {
+            assert(view.Covers(Center(HUDLayout::shortGoal)) && view.Hit(Center(HUDLayout::shortGoal)).action == Action::None);
+            for (const auto panel : panels) {
+                assert(Separated(HUDLayout::shortGoal,panel));
+                assert(Separated(HUDLayout::shortGoalDetail,panel));
+            }
+            assert(Separated(safe,HUDLayout::shortGoal) && Separated(safe,HUDLayout::shortGoalDetail));
+        }
         for (std::size_t i = 0; i < panels.size(); ++i)
             for (std::size_t j = i+1; j < panels.size(); ++j) assert(Separated(panels[i],panels[j]));
         for (const auto panel : panels) assert(Separated(safe,panel));

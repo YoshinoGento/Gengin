@@ -27,7 +27,7 @@ foreach ($case in $caseNames) {
     if ($files.Count -ne $(if ($case -eq '03_missed') { 1 } else { 2 })) { throw "Unexpected saves in $case" }
     foreach ($file in $files) {
         $save = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
-        if ($save.schemaVersion -ne 18) { throw 'Unexpected review save schema' }
+        if ($save.schemaVersion -notin @(18, 19)) { throw 'Unexpected review save schema' }
         $records += [pscustomobject]@{Case=$case; File=$file.FullName; Id=$file.BaseName; Hash=(Get-FileHash -LiteralPath $file.FullName).Hash}
     }
     if ($case -eq '02_failed') { $active = $catalog.activeDocumentId }

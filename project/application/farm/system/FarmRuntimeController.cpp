@@ -18,6 +18,9 @@
 #include "farm/ui/FarmObservationView.h"
 #include "farm/ui/FarmPlayFlowView.h"
 #include "farm/ui/FarmFieldActionView.h"
+#include "farm/ui/FarmPestView.h"
+#include "farm/ui/FarmNextGoalView.h"
+#include "farm/system/FarmPestSystem.h"
 #include "farm/ui/FarmCameraView.h"
 #include "farm/ui/FarmQualityView.h"
 #include "farm/ui/FarmContestDetailView.h"
@@ -228,8 +231,9 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             const auto forecast = tile ? s.farmGrowthSystem.Evaluate(*tile,
                 s.farmCropSelectionSystem.GetSelectedCrop(), s.farmDateSystem.GetTimeScale(),
                 s.farmIrrigationSystem.GetAvailableIrrigationStrength(s.farmGrid, index)) : FarmGrowthForecast{};
-            farmui::BuildWaterGuidanceView(view_, FarmGrowthSystem::AnalyzeWater(tile, forecast,
-                s.farmIrrigationSystem.GetWaterStatus(s.farmGrid, index)), !s.farmProgressionSystem.IsCleared(),
+            const auto water = FarmGrowthSystem::AnalyzeWater(tile, forecast,
+                s.farmIrrigationSystem.GetWaterStatus(s.farmGrid, index));
+            farmui::BuildWaterGuidanceView(view_, water, !s.farmProgressionSystem.IsCleared(),
                 s.farmToolActionSystem.CanSetIrrigation(s.farmGrid, index));
             farmui::BuildPlayCropStatusView(view_, hud.feedback != FarmHUDFeedback::None,
                 s.farmEconomySystem.GetProtectedCropCount(),
@@ -243,6 +247,31 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 s.farmToolSystem.GetCurrentTool(), s.farmCropSelectionSystem.GetSelectedCrop(), &s.farmEconomySystem);
             farmui::BuildFieldActionView(view_, evaluation, paused_, s.farmProgressionSystem.IsCleared(),
                 hud.nextAction, hud.contestSeason);
+            FarmNextGoalFacts goalFacts;
+            goalFacts.blocked = s.farmProgressionSystem.IsCleared() || s.host.IsTimelineScrubbing();
+            if (!goalFacts.blocked) {
+                if (s.farmProgressionSystem.PestsEnabled()) {
+                    const int target = FarmPestSystem::FindActive(s.farmGrid);
+                    if (const auto* affected = s.farmGrid.GetTile(target)) {
+                        goalFacts.pestTile = target;
+                        goalFacts.pestWarning = affected->pests.damageDays == 0;
+                    }
+                }
+                if (goalFacts.pestTile < 0 && hud.contestSeason)
+                    goalFacts.contest = FarmNextGoalSystem::InspectContest(s.farmEconomySystem, hud.day);
+                goalFacts.field = FarmNextGoalSystem::InspectField(tile, water.advice);
+                goalFacts.paused = paused_;
+                if (goalFacts.field == FarmWaterAdvice::Plant)
+                    goalFacts.seeds = FarmNextGoalSystem::InspectSeeds(s.farmEconomySystem, hud.selectedSeedCrop);
+                goalFacts.harvestInventoryFull =
+                    s.farmEconomySystem.GetHarvestRecordCount() >= FarmEconomySystem::kMaxHarvestRecords;
+            }
+            const auto goal = FarmNextGoalSystem::Evaluate(goalFacts);
+            if (goal.pestTile >= 0) {
+                farmui::BuildPestView(view_, goal.pestTile, index == goal.pestTile, goal.kind == FarmNextGoalKind::PestWarning);
+            } else {
+                farmui::BuildFarmNextGoalView(view_, goal, farmui::HUDLayout::shortGoal.Contains(pointer_));
+            }
         }
         return;
     }
@@ -563,6 +592,23 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         if (!flow_.BlocksSimulation() && !s.farmProgressionSystem.IsCleared()) EnterTerrain(s);
         return;
     case Action::TerrainExit: LeaveTerrain(s); return;
+    case Action::PestFocus:
+    case Action::PestCure: {
+        if (open_ || observation_ || terrain_ || flow_.BlocksSimulation() || contestNotice_ ||
+            !s.farmProgressionSystem.PestsEnabled() || s.farmProgressionSystem.IsCleared() ||
+            s.host.IsTimelineScrubbing() || s.farmIrrigationPreviewSystem.IsActive() ||
+            s.farmCropSelectionSystem.IsOpen()) return;
+        const auto* tile = s.farmGrid.GetTile(request.argument);
+        if (!tile || !tile->pests.warningDay) return;
+        if (request.action == Action::PestFocus) {
+            if (s.farmGrid.SetSelectedIndex(request.argument)) FrameFarm(s);
+        } else if (request.argument == s.farmGrid.GetSelectedIndex() &&
+            FarmPestSystem::Cure(s.farmGrid, request.argument, tile->pests.warningDay)) {
+            s.farmToolActionSystem.ClearHistory();
+            s.farmDocumentSystem.MarkDirty();
+        }
+        return;
+    }
     case Action::ApplyTool: {
         if (open_ || observation_ || terrain_ || flow_.BlocksSimulation() ||
             s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() ||
@@ -1269,6 +1315,16 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     }
     if (terrain_) return UpdateTerrain(s, input, click);
     if (!s.farmCropSelectionSystem.IsOpen()) {
+        if (input.TriggerKey(InputKey::K)) {
+            for (std::size_t i = 0; i < view_.count; ++i) {
+                const auto request = view_.items[i].request;
+                if (request.action != Action::PestFocus && request.action != Action::PestCure) continue;
+                Execute(s, request);
+                BuildView(s);
+                frameCaptured_ = true;
+                return true;
+            }
+        }
         if (click) {
             // A HUD click must never select or modify a tile hidden behind it.
             if (view_.Covers(pointer_)) { frameCaptured_ = true; return true; }

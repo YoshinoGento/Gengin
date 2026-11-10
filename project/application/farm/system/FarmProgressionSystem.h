@@ -13,15 +13,18 @@ public:
 		bool cleared = false;
 		FarmProgressionMode mode = FarmProgressionMode::Trial;
 		bool stagedUnlocks = false;
+		bool pestsEnabled = false;
 	};
 
-	void Initialize(const farm::FarmRules& rules = {}, FarmProgressionMode mode = FarmProgressionMode::Trial) noexcept;
+	void Initialize(const farm::FarmRules& rules = {}, FarmProgressionMode mode = FarmProgressionMode::Trial,
+		bool enablePests = false) noexcept;
 	[[nodiscard]] bool EvaluateClear(int currentMoney) noexcept;
 	[[nodiscard]] bool EvaluateSeason(const FarmContestSeasonSummary& summary) noexcept;
 	bool SetMode(FarmProgressionMode mode, int money, const FarmContestSeasonSummary& summary) noexcept;
 	[[nodiscard]] FarmProgressionMode GetMode() const noexcept { return mode_; }
 	[[nodiscard]] bool IsContestSeason() const noexcept { return mode_ == FarmProgressionMode::ContestSeason; }
 	[[nodiscard]] bool IsFreeFarming() const noexcept { return mode_ == FarmProgressionMode::FreeFarming; }
+	[[nodiscard]] bool PestsEnabled() const noexcept { return pestsEnabled_; }
 	[[nodiscard]] const FarmStagePolicy& StagePolicy() const noexcept { return stagePolicy_; }
 	[[nodiscard]] static farm::FarmRules InitialRules(FarmProgressionMode mode) noexcept;
 	[[nodiscard]] static bool ValidMode(FarmProgressionMode mode) noexcept {
@@ -42,4 +45,5 @@ private:
 	bool cleared_ = false;
 	FarmProgressionMode mode_ = FarmProgressionMode::Trial;
 	FarmStagePolicy stagePolicy_{};
+	bool pestsEnabled_ = false;
 };

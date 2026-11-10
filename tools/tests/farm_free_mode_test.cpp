@@ -61,7 +61,7 @@ int main() {
         Check(docs.Initialize(root.string(), grid, economy, selection, &date, &progression), "Docs init");
         Check(docs.SaveAs("FreeTest", grid, economy, selection), "Save free");
         nlohmann::json saved; Check(JsonFile::Load(docs.GetPath(), saved), "Read saved JSON");
-        Check(saved["schemaVersion"] == 18 && saved["playMode"] == "FreeFarming", "Wrong serialization");
+        Check(saved["schemaVersion"] == 19 && saved["playMode"] == "FreeFarming", "Wrong serialization");
         FarmDateSystem reloadedDate; reloadedDate.Initialize();
         FarmProgressionSystem reloadedMode; reloadedMode.Initialize();
         FarmDocumentSystem reload;
@@ -69,7 +69,7 @@ int main() {
         Check(reloadedDate.GetDay() == 32 && reloadedMode.IsFreeFarming() && !reloadedMode.IsCleared(), "Mode/date lost");
         const auto path = docs.GetPath();
         const auto id = docs.GetActiveDocumentId();
-        for (const int version : {14, 15, 16, 19}) {
+        for (const int version : {14, 15, 16, 20}) {
             auto bad = saved; bad["schemaVersion"] = version;
             Check(JsonFile::Save(path, bad), "Write invalid fixture");
             Check(!reload.Load(id, grid, economy, selection), "Unsupported free schema accepted");
@@ -82,7 +82,7 @@ int main() {
             Check(!reloadedMode.IsFreeFarming(), "Legacy16 mode changed");
         }
         Check(JsonFile::Save(path, saved) && reload.Load(id, grid, economy, selection) && reloadedMode.IsFreeFarming(), "Final free roundtrip");
-        std::cout << "PASS: FreeFarming rules, money/day limits, notices, overflow, mode transitions, schema18 roundtrip and legacy rejection\n";
+        std::cout << "PASS: FreeFarming rules, money/day limits, notices, overflow, mode transitions, schema19 roundtrip and legacy rejection\n";
         std::cout << "Boundary fixture: " << root.string() << '\n';
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

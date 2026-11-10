@@ -41,7 +41,7 @@ bool SameQuality(const FarmCropQualityResult& a, const FarmCropQualityResult& b)
 		a.terrainFit == b.terrainFit && a.nutrientBalance == b.nutrientBalance &&
 		a.nutrientKnown == b.nutrientKnown && a.score == b.score && a.basePrice == b.basePrice &&
 		a.salePrice == b.salePrice && a.harvestSize.known == b.harvestSize.known &&
-		a.harvestSize.multiplier == b.harvestSize.multiplier;
+		a.harvestSize.multiplier == b.harvestSize.multiplier && a.pestPenalty == b.pestPenalty;
 }
 }
 

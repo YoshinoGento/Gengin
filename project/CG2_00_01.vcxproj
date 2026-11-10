@@ -499,6 +499,10 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
 	<ClInclude Include="application\farm\system\FarmFeedbackSystem.h" />
 	<ClInclude Include="application\farm\system\FarmCropSelectionSystem.h" />
 	<ClInclude Include="application\farm\system\FarmCropQualitySystem.h" />
+	<ClInclude Include="application\farm\system\FarmPestSystem.h" />
+	<ClInclude Include="application\farm\ui\FarmPestView.h" />
+	<ClInclude Include="application\farm\system\FarmNextGoalSystem.h" />
+	<ClInclude Include="application\farm\ui\FarmNextGoalView.h" />
 	<ClInclude Include="application\farm\system\FarmCropSizeSystem.h" />
 	<ClInclude Include="application\farm\system\FarmContestJudgeSystem.h" />
 	<ClInclude Include="application\farm\system\FarmContestEntrySystem.h" />
@@ -608,6 +612,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
 	<ClInclude Include="application\editor\EditorSelectionSystem.h" />
 	<ClInclude Include="application\editor\EditorShell.h" />
 	<ClInclude Include="application\editor\FarmControllerWindow.h" />
+	<ClInclude Include="application\editor\FarmPestPlaytestSystem.h" />
+	<ClInclude Include="application\editor\FarmNextGoalDebugCases.h" />
 	<ClInclude Include="application\editor\FarmHierarchyWindow.h" />
 	<ClInclude Include="application\editor\ConsoleWindow.h" />
 	<ClInclude Include="application\editor\FarmHistoryWindow.h" />

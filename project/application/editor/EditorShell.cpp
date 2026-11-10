@@ -15,6 +15,12 @@
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui_internal.h"
+#include <optional>
+#endif
+#if defined(_DEBUG) && defined(USE_IMGUI)
+#include "editor/FarmNextGoalDebugCases.h"
+#include "farm/ui/FarmNextGoalView.h"
+#include <iterator>
 #endif
 
 namespace {
@@ -84,6 +90,10 @@ void EditorShell::Draw(
 		ImGui::DockSpaceOverViewport(dockspaceId, ImGui::GetMainViewport());
 	}
 	DrawEditorSettingsWindow();
+#ifdef _DEBUG
+	DrawFarmPestPlaytest();
+	DrawFarmNextGoalTest();
+#endif
 	if (!gameMode) { DrawConsole(); }
 
 	if (!gameMode && showEngineDebugWindow_ && engineDebugWindowManager_ && input) {
@@ -267,6 +277,10 @@ void EditorShell::DrawMainMenuBar() {
 		if (ImGui::MenuItem(text("Farm Inspector"), nullptr, farmControllerWindow_.IsOpen())) {
 			farmControllerWindow_.SetOpen(!farmControllerWindow_.IsOpen());
 		}
+#ifdef _DEBUG
+		ImGui::MenuItem(text("Pest Test"), nullptr, &showFarmPestPlaytest_);
+		ImGui::MenuItem(text("Next Goal Test"), nullptr, &showFarmNextGoalTest_);
+#endif
 		if (ImGui::MenuItem(text("Farm History"), nullptr, farmHistoryWindow_.IsOpen())) {
 			farmHistoryWindow_.SetOpen(!farmHistoryWindow_.IsOpen());
 		}
@@ -581,6 +595,81 @@ void EditorShell::DrawFarmHistory(editor::GamePlayEditorScene& playScene) {
 	(void)playScene;
 #endif
 }
+
+#if defined(_DEBUG) && defined(USE_IMGUI)
+void EditorShell::DrawFarmNextGoalTest() {
+	if (!showFarmNextGoalTest_) return;
+	const auto text = [this](std::string_view key) { return editor::Localize(editorSettings_.GetLanguage(), key); };
+	const auto& cases = editor::kFarmNextGoalDebugCases;
+	ImGui::SetNextWindowSize({400.0f, 250.0f}, ImGuiCond_FirstUseEver);
+	if (ImGui::Begin(text("Next Goal Test###FarmNextGoalTest"), &showFarmNextGoalTest_)) {
+		const int count = static_cast<int>(std::size(cases));
+		ImGui::SetNextItemWidth(-1.0f);
+		if (ImGui::BeginCombo("##FarmGoalCase", text(cases[farmNextGoalCase_].label))) {
+			for (int i = 0; i < count; ++i) {
+				const bool selected = i == farmNextGoalCase_;
+				if (ImGui::Selectable(text(cases[i].label), selected)) farmNextGoalCase_ = i;
+				if (selected) ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		const auto goal = FarmNextGoalSystem::Evaluate(cases[farmNextGoalCase_].facts);
+		const auto copy = farmui::DescribeFarmNextGoal(goal.kind);
+		ImGui::Separator();
+		if (copy) {
+			ImGui::TextWrapped("%s", farmui::FarmGoalDebugText(copy->title));
+			if (goal.contestDay > 0) ImGui::Text("D%d", goal.contestDay);
+			if (copy->detail) ImGui::TextWrapped("%s", farmui::FarmGoalDebugText(*copy->detail));
+		} else {
+			ImGui::TextUnformatted(text("No next goal displayed"));
+		}
+	}
+	ImGui::End();
+}
+
+void EditorShell::DrawFarmPestPlaytest() {
+	if (!showFarmPestPlaytest_) return;
+	using Test = editor::FarmPestPlaytestSystem;
+	const auto text = [this](std::string_view key) { return editor::Localize(editorSettings_.GetLanguage(), key); };
+	const auto view = farmPestPlaytest_.Read();
+	std::optional<Test::Action> action;
+	ImGui::SetNextWindowSize({360.0f, 390.0f}, ImGuiCond_FirstUseEver);
+	if (ImGui::Begin(text("Pest Test###FarmPestPlaytest"), &showFarmPestPlaytest_)) {
+		ImGui::TextWrapped("%s", text("Sample carrot only. The current farm and saves are unchanged."));
+		if (ImGui::Button(text("Reproduce warning"), {-1.0f, 0.0f})) action = Test::Action::Start;
+		if (view.phase != Test::Phase::Idle) {
+			const char* state = "Pest warning";
+			switch (view.phase) {
+			case Test::Phase::Infested: state = "Pests present"; break;
+			case Test::Phase::Cured: state = "Pests removed"; break;
+			case Test::Phase::Judged: state = "Judged"; break;
+			default: break;
+			}
+			ImGui::Text(text("Day %d / %s"), view.day, text(state));
+			ImGui::Text(text("Days damaged: %d"), view.damageDays);
+			ImGui::Text(text("Quality: %d / 100 (undamaged %d)"), view.quality.score, view.undamagedQuality);
+			ImGui::Text(text("Pest deduction: %d"), view.quality.pestPenalty);
+			const auto button = [&](const char* label, Test::Action request, bool enabled) {
+				ImGui::BeginDisabled(!enabled);
+				if (ImGui::Button(text(label), {-1.0f, 0.0f})) action = request;
+				ImGui::EndDisabled();
+			};
+			if (view.phase == Test::Phase::Judged) {
+				ImGui::Separator();
+				ImGui::Text(text("Contest: %d / 100"), view.judge.totalPoints);
+				ImGui::Text(text("Quality %d / 60 + Size %d / 40"), view.judge.qualityPoints, view.judge.sizePoints);
+			} else {
+				button("Advance one day", Test::Action::AdvanceDay, view.canAdvance);
+				button("Remove pests with net", Test::Action::Cure, view.canCure);
+				button("Harvest and judge", Test::Action::HarvestAndJudge, view.canHarvest);
+			}
+		}
+		if (farmPestPlaytestFailed_) ImGui::TextWrapped("%s", text("Pest test action failed. Reproduce the warning to retry."));
+	}
+	ImGui::End();
+	if (action) farmPestPlaytestFailed_ = !farmPestPlaytest_.Execute(*action);
+}
+#endif
 
 void EditorShell::DrawFarmController(editor::GamePlayEditorScene& playScene) {
 #ifdef USE_IMGUI

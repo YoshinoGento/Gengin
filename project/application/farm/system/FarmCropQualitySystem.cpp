@@ -86,7 +86,7 @@ FarmCropQualityResult FarmCropQualitySystem::Evaluate(
 	result.crop = tile.crop;
 	const int slot = farm::ToCropSlot(tile.crop);
 	if (slot < 0 || !std::isfinite(tile.growth) || !std::isfinite(tile.moisture) ||
-		!tile.careHistory.IsValid() || !FarmSoilSystem::Valid(tile.soilNutrients) ||
+		!tile.careHistory.IsValid() || !tile.pests.IsValid() || !FarmSoilSystem::Valid(tile.soilNutrients) ||
 		basePrices_[slot] <= 0) {
 		return result;
 	}
@@ -118,14 +118,17 @@ FarmCropQualityResult FarmCropQualitySystem::Evaluate(
 	if (!std::isfinite(totalWeight) || totalWeight <= kMinimumPositiveValue) {
 		return {};
 	}
-	const float normalizedScore = std::clamp(
+	const float baseScore = std::clamp(
 		(result.maturity * maturityWeight_ +
 			result.waterBalance * waterBalanceWeight_ +
 			result.terrainFit * terrainFitWeight_ + result.nutrientBalance * nutrientWeight_) /
 			totalWeight,
 		0.0f,
 		1.0f);
-	result.score = static_cast<int>(std::lround(normalizedScore * 100.0f));
+	const int roundedBaseScore = static_cast<int>(std::lround(baseScore * 100.0f));
+	result.pestPenalty = (std::min)(roundedBaseScore, tile.pests.damageDays * farm::FarmPestState::kQualityPointsPerDay);
+	result.score = roundedBaseScore - result.pestPenalty;
+	const float normalizedScore = (std::max)(0.0f, baseScore - result.pestPenalty / 100.0f);
 	result.basePrice = basePrices_[slot];
 	const double multiplier = static_cast<double>(minimumPriceMultiplier_) +
 		static_cast<double>(normalizedScore) *

@@ -38,7 +38,11 @@ inline void Summary(View& view, const FarmContestPresentationSystem::Frame& fram
     if (data.staged && !data.passed)
         view.Metric(Label::ContestGapShort, {680,316,552,44}, 260, std::to_string(data.shortfall)+" pt");
     else view.Add(data.staged ? Label::ContestPassedShort : Label::ContestLegacyShort, {680,316,552,44});
-    Advice(view,data.qualityAdvice,390);
+    if (data.quality.pestPenalty > 0) {
+        view.Metric(Label::PestPenalty, {680,390,552,38}, 390,
+            "-" + std::to_string(data.quality.pestPenalty) + " pt");
+        view.Add(Label::PestAdvice, {680,438,552,38});
+    } else Advice(view,data.qualityAdvice,390);
     if (data.sizeAdvice == FarmContestSizeAdvice::ImproveQuality)
         view.Add(Label::ContestQualityNeeded, {680,496,552,38});
     else if (data.sizeAdvice == FarmContestSizeAdvice::MoreSize)
@@ -64,7 +68,10 @@ inline void Quality(View& view, const FarmContestComparison& data) {
     view.Add(Label::ContestRadarScaleShort, {220,548,240,32});
     view.Metric(Label::ContestQualityScoreShort, {680,260,552,42}, 300, std::to_string(data.qualityPoints)+" / 60");
     Advice(view,data.qualityAdvice,332);
-    view.Add(Label::ContestAxesShort, {680,440,552,38});
+    if (q.pestPenalty > 0)
+        view.Metric(Label::PestPenalty, {680,440,552,38}, 390,
+            "-" + std::to_string(q.pestPenalty) + " pt");
+    else view.Add(Label::ContestAxesShort, {680,440,552,38});
     if (data.qualityAdvice.partial) view.Add(Label::ContestPartialShort, {680,496,552,38});
 }
 inline void Size(View& view, const FarmContestComparison& data) {

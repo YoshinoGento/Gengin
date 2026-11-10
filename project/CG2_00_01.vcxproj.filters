@@ -355,6 +355,18 @@
 	<ClInclude Include="application\farm\system\FarmCropSelectionSystem.h">
 	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
 	</ClInclude>
+	<ClInclude Include="application\farm\system\FarmPestSystem.h">
+	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
+	</ClInclude>
+	<ClInclude Include="application\farm\system\FarmNextGoalSystem.h">
+	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
+	</ClInclude>
+	<ClInclude Include="application\farm\ui\FarmPestView.h">
+	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\ui</Filter>
+	</ClInclude>
+	<ClInclude Include="application\farm\ui\FarmNextGoalView.h">
+	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\ui</Filter>
+	</ClInclude>
 	<ClInclude Include="application\farm\system\FarmCropQualitySystem.h">
 	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
 	</ClInclude>
@@ -410,6 +422,8 @@
 	  <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
 	</ClInclude>
 	<ClInclude Include="application\editor\FarmControllerWindow.h" />
+	<ClInclude Include="application\editor\FarmPestPlaytestSystem.h" />
+	<ClInclude Include="application\editor\FarmNextGoalDebugCases.h" />
 	<ClInclude Include="application\editor\FarmHierarchyWindow.h" />
 	<ClInclude Include="application\editor\ConsoleWindow.h" />
 	<ClInclude Include="application\editor\CG5DemoWindow.h" />

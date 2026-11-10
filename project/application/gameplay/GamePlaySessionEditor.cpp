@@ -7,6 +7,7 @@
 #include "effect/ParticleManager.h"
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmToolActionSystem.h"
+#include "farm/system/FarmPestSystem.h"
 #include "gameplay/GamePlaySessionSystem.h"
 
 #include <algorithm>
@@ -477,6 +478,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive()) return false;
 		if (!farmProgressionSystem_.SetMode(command.progressionMode, farmEconomySystem_.GetMoney(),
 			FarmContestSeasonSystem::Evaluate(farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults()))) return false;
+		if (!farmProgressionSystem_.PestsEnabled()) FarmPestSystem::DismissActive(farmGrid_);
 		farmToolActionSystem_.ClearHistory();
 		farmGrowthComparisonSystem_.Stop();
 		farmContestDaySystem_.Reset();

@@ -201,7 +201,8 @@ private:
         FarmContestPresentationSystem presentation;
         presentation.Begin(comparison,false);
         int assessments=0, verdicts=0;
-        for (int tick=0;tick<180;++tick) {
+        const int revealTicks = static_cast<int>(std::ceil(FarmContestPresentationSystem::kRevealSeconds / kTickSeconds));
+        for (int tick = 0; tick <= revealTicks; ++tick) {
             presentation.Update(kTickSeconds);
             const auto cue=presentation.ConsumeCue();
             if (cue==Cue::Assess) ++assessments;

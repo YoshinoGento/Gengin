@@ -20,6 +20,7 @@
 #include "3d/LineDrawer.h"
 #include "level/LevelLoader.h"
 #include "farm/system/FarmTerrainQuerySystem.h"
+#include "farm/system/FarmPestSystem.h"
 #include <dinput.h>
 #include "3d/Skybox.h"
 #include "2d/TextureManager.h"
@@ -448,7 +449,7 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 	farmCropSelectionSystem_.Initialize();
 	farmFeedbackSystem_.Initialize();
 	farmHarvestVisualSystem_.Clear();
-	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason);
+	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason, true);
 	farmStageAccessSystem_.Bind(farmDateSystem_, farmProgressionSystem_.StagePolicy());
 	farmEconomySystem_.BindStageAccess(farmStageAccessSystem_);
 	farmToolActionSystem_.BindStageAccess(farmStageAccessSystem_);
@@ -875,9 +876,11 @@ void GamePlaySessionSystem::FixedUpdate(float fixedDeltaTime) {
 			farmDocumentSystem_.MarkDirty();
 		}
 		farmGrowthComparisonSystem_.ObserveAfterStep(farmGrid_, fixedDeltaTime, farmDateSystem_.GetTimeScale());
+		const int previousDay = farmDateSystem_.GetDay();
 		farmContestDaySystem_.Advance(farmDateSystem_, fixedDeltaTime, farmEconomySystem_.GetContestResults(),
 			farmProgressionSystem_.IsContestSeason() ? FarmContestEntrySystem::kContestDays.back() + 1 : 0,
 			!farmProgressionSystem_.IsFreeFarming());
+		ApplyFarmDayEvents(previousDay);
 		static_cast<void>(farmProgressionSystem_.EvaluateSeason(FarmContestSeasonSystem::Evaluate(
 			farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults())));
 		if (!farmDocumentSystem_.IsDirty()) farmDocumentSystem_.MarkDirty();
@@ -1911,6 +1914,19 @@ FarmHUDViewData GamePlaySessionSystem::BuildFarmHUDViewData() const {
 	return viewData;
 }
 
+void GamePlaySessionSystem::ApplyFarmDayEvents(int previousDay) {
+	const int day = farmDateSystem_.GetDay();
+	if (!farmProgressionSystem_.PestsEnabled() || day <= previousDay) return;
+	// A tile-only undo must not resurrect a crop with yesterday's exposure.
+	farmToolActionSystem_.ClearHistory();
+	const auto result = FarmPestSystem::AdvanceDays(farmGrid_, previousDay, day, true);
+	if (!result.changed) return;
+	farmDocumentSystem_.MarkDirty();
+#ifndef USE_IMGUI
+	if (result.warningStarted) farmRuntimeController_.PauseForPestWarning();
+#endif
+}
+
 void GamePlaySessionSystem::HandleFarmDateDebugInput() {
 	if (farmContestDaySystem_.PendingDay()) return;
 	Input* input = framework_ ? framework_->GetInput() : nullptr;
@@ -1932,7 +1948,9 @@ void GamePlaySessionSystem::HandleFarmDateDebugInput() {
 		farmDocumentSystem_.MarkDirty();
 	}
 	if (input->TriggerKey(InputKey::Y)) {
+		const int previousDay = farmDateSystem_.GetDay();
 		farmDateSystem_.AdvanceOneDay();
+		ApplyFarmDayEvents(previousDay);
 		farmDocumentSystem_.MarkDirty();
 	}
 }
@@ -2126,7 +2144,7 @@ bool GamePlaySessionSystem::ResetFarmSessionState()
 	farmIrrigationSystem_.Initialize();
 	farmToolActionSystem_.Initialize();
 	farmCropSelectionSystem_.Initialize();
-	farmProgressionSystem_.Initialize(rules, mode);
+	farmProgressionSystem_.Initialize(rules, mode, true);
 	farmFeedbackSystem_.Initialize(false);
 	farmHarvestVisualSystem_.Clear();
 	farmIrrigationSystem_.Rebuild(farmGrid_);

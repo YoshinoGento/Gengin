@@ -125,6 +125,7 @@ private:
 	bool TryGetInteractionBrushPosition(Vector3& outBrushPosition) const;
 	FarmHUDViewData BuildFarmHUDViewData() const override;
 	void HandleFarmDateDebugInput();
+	void ApplyFarmDayEvents(int previousDay);
 	void HandleFarmHistoryInput();
 	bool HandleFarmInput();
 	void RouteFarmToolFeedback(const FarmToolActionResult& result) override;
