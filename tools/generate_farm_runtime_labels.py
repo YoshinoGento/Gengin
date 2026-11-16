@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import hashlib
 from tempfile import NamedTemporaryFile
 from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
@@ -450,8 +451,8 @@ labels.extend([
     ["DevelopmentSales", "累計売上"],
     ["DevelopmentNext", "次のランクまで"],
     ["DevelopmentMax", "最高ランクに到達"],
-    ["DevelopmentRule", "売上500G・1500Gで拡張を解放"],
-    ["DevelopmentExpand", "５マス広げる（無料）"],
+    ["DevelopmentRule", "売上と進行に応じ、資金で農地を拡張"],
+    ["DevelopmentExpand", "５マス拡張の確認へ"],
     ["DevelopmentCustom", "この形の農場は拡張対象外"],
     ["DevelopmentFull", "農地は最大まで拡張済み"],
     ["DevelopmentLocked", "未解放、または現在は操作できません"],
@@ -503,8 +504,83 @@ labels.extend([
     ["RecoveryHelp", "種がないとき：再開支援"],
     ["PreviousTile", "前のマス"],
     ["NextTile", "次のマス"],
+    ["DevelopmentSalesGoal", "累計売上 / 必要売上"],
+    ["DevelopmentDay", "解放日"],
+    ["DevelopmentDayReady", "解放済み（日付）"],
+    ["DevelopmentNoDay", "この農場には日付の制限はありません"],
+    ["DevelopmentCost", "拡張費"],
+    ["DevelopmentReserve", "残しておく種２個分の資金"],
+    ["DevelopmentWaitDay", "解放日以降に拡張できます。入賞は不要です"],
+    ["DevelopmentNeedSales", "必要売上まで、収穫した野菜を売りましょう"],
+    ["DevelopmentNeedFunds", "拡張費と種２個分の資金を用意しましょう"],
+    ["DevelopmentConfirm", "資金を使って農地を広げますか？"],
+    ["DevelopmentAfter", "拡張後の所持金"],
+    ["DevelopmentKeep", "今ある作物・水路はそのまま残ります"],
+    ["DevelopmentChanged", "状態が変わりました。条件を再確認してください"],
+    ["DevelopmentPay", "支払って５マス広げる"],
 ])
 
+labels.extend([
+    ["Experience", "システム体験"], ["ExperienceCrops", "栽培と売買"],
+    ["ExperienceEnvironment", "水と環境"], ["ExperienceSeason", "大会と成長"],
+    ["ExperienceSupport", "記録と支援"], ["ExperienceBegin", "この体験を始める"],
+    ["ExperienceOperation", "体験の操作を開く"], ["ExperienceFree", "フリーモードの体験用農場"],
+    ["ExperienceSeedTool", "種まき道具を選ぶ"], ["ExperienceHarvestTool", "収穫道具を選ぶ"],
+    ["ExperiencePestFocus", "害虫の畑を選ぶ"],
+    ["ExperienceContest", "大会ルールの体験用農場"], ["ExperienceConfirm", "準備済みの農場へ切り替えますか？"],
+    ["ExperienceDiscard", "今の未保存の変更は失われます"],
+    ["ExperienceKeep", "保存済みの農場には上書きしません"],
+    ["ExperienceMissing", "体験データを開けません。現在の農場を保持しました"],
+    ["ExperiencePlant", "種まき・栽培"], ["ExperiencePlantGoal", "３種類の種から野菜を育てる"],
+    ["ExperienceHarvest", "収穫"], ["ExperienceHarvestGoal", "成熟した３種類の野菜を収穫する"],
+    ["ExperienceSoil", "土づくり・品質"], ["ExperienceSoilGoal", "種まき前に土の栄養を補給する"],
+    ["ExperienceTrade", "売買・保護"], ["ExperienceTradeGoal", "保護した野菜を残して、在庫を売却する"],
+    ["ExperienceWater", "水源・水路・高低差"], ["ExperienceWaterGoal", "水路と高さを工夫し、畑に水を届ける"],
+    ["ExperienceRain", "雨・給水"], ["ExperienceRainGoal", "雨が降っている農場で水分管理を試す"],
+    ["ExperiencePests", "害虫・駆除"], ["ExperiencePestsGoal", "発生した害虫を駆除して、被害を抑える"],
+    ["ExperienceRepellent", "防虫・被害の広がり"], ["ExperienceRepellentGoal", "防虫植物で新しい害虫の発生を防ぐ"],
+    ["ExperienceTime", "時間送り・次の目標"], ["ExperienceTimeGoal", "収穫や出来事までの待ち時間を短くする"],
+    ["ExperienceJudging", "品評会・出品予約"], ["ExperienceJudgingGoal", "用意した野菜を選び、審査に出す"],
+    ["ExperienceResults", "審査結果・講評"], ["ExperienceResultsGoal", "品質・大きさの結果と次の目標を見る"],
+    ["ExperienceDevelopment", "解放・土地拡張"], ["ExperienceDevelopmentGoal", "作物と水路を残して、農地を５マス広げる"],
+    ["ExperienceBook", "作物図鑑"], ["ExperienceBookGoal", "収穫した野菜の自己ベストを調べる"],
+    ["ExperienceCompare", "生育比較"], ["ExperienceCompareGoal", "水分が違う２つの畑で育ち方を比べる"],
+    ["ExperienceRecovery", "資金・種切れの救済"], ["ExperienceRecoveryGoal", "支援の種を受け取り、栽培を再開する"],
+    ["ExperienceRecords", "保存・配置の記録"], ["ExperienceRecordsGoal", "新しい記録として保存し、再び開く"],
+    ["ExperienceIntroduction", "水路と土を整え、よい野菜を育てるゲームです"],
+    ["ExperiencePlantStep", "まず：種を選び、耕したマスにまく"],
+    ["ExperiencePlantWatch", "注目：芽の見た目と成長率"],
+    ["ExperienceHarvestStep", "まず：収穫道具で育った野菜を収穫"],
+    ["ExperienceHarvestWatch", "注目：収穫物の数・品質・重さ"],
+    ["ExperienceSoilStep", "まず：選択中の畑に堆肥を混ぜる"],
+    ["ExperienceSoilWatch", "注目：土の養分。品質は栽培して確認"],
+    ["ExperienceTradeStep", "まず：収穫物一覧で売却を選ぶ"],
+    ["ExperienceTradeWatch", "注目：保護した野菜と売却後の所持金"],
+    ["ExperienceWaterStep", "まず：水路・地形で給水経路を確認"],
+    ["ExperienceWaterWatch", "注目：水の届くマスと畑の水分"],
+    ["ExperienceRainStep", "まず：畑の給水を「切」にする"],
+    ["ExperienceRainWatch", "注目：雨の見た目・音と畑の水分"],
+    ["ExperiencePestsStep", "まず：害虫の畑を選び、駆除する"],
+    ["ExperiencePestsWatch", "注目：害虫の印。受けた被害は残る"],
+    ["ExperienceRepellentStep", "まず：作物の隣の空きマスに植える"],
+    ["ExperienceRepellentWatch", "注目：上下左右を保護。駆除とは別"],
+    ["ExperienceTimeStep", "まず：変化があるまで時間送り"],
+    ["ExperienceTimeWatch", "注目：自動で止まった理由と次の目標"],
+    ["ExperienceJudgingStep", "まず：出品内容を確認して審査へ"],
+    ["ExperienceJudgingWatch", "注目：品質と大きさによる得点"],
+    ["ExperienceResultsStep", "まず：結果・品質・大きさを切り替え"],
+    ["ExperienceResultsWatch", "注目：入賞までの差と改善する項目"],
+    ["ExperienceDevelopmentStep", "まず：拡張の費用を確認して購入"],
+    ["ExperienceDevelopmentWatch", "注目：増えた農地と残りの所持金"],
+    ["ExperienceBookStep", "まず：作物図鑑を開く"],
+    ["ExperienceBookWatch", "注目：種類ごとの最高品質・最大重量"],
+    ["ExperienceCompareStep", "まず：２つの畑をＡ・Ｂに登録し開始"],
+    ["ExperienceCompareWatch", "注目：時間経過による成長の差"],
+    ["ExperienceRecoveryStep", "まず：再開支援で種を１個受け取る"],
+    ["ExperienceRecoveryWatch", "注目：ニンジンの種が増え、栽培可能"],
+    ["ExperienceRecordsStep", "まず：新しい記録として保存"],
+    ["ExperienceRecordsWatch", "注目：読み込むと畑や所持品が戻る"],
+])
 goal_debug_labels = labels[next(i for i, row in enumerate(labels) if row[0] == "PestWarning"):]
 assert len({name for name, _ in labels}) == len(labels)
 atlas_width = cell_w * columns
@@ -545,7 +621,16 @@ try:
     staged_asset.replace(asset)
 finally:
     staged_asset.unlink(missing_ok=True)
-header = "#pragma once\n#include <array>\n#include <string_view>\nnamespace farmui {\nenum class Label {\n"
+atlas_bytes = asset.read_bytes()
+fingerprint = 14695981039346656037
+for byte in atlas_bytes:
+    fingerprint = ((fingerprint ^ byte) * 1099511628211) & 0xffffffffffffffff
+contract = "FarmRuntimeAtlas:sha256:" + hashlib.sha256(atlas_bytes).hexdigest()
+header = "#pragma once\n#include <array>\n#include <cstdint>\n#include <string_view>\nnamespace farmui {\n"
+header += f'inline constexpr char kAtlasContract[] = "{contract}";\n'
+header += f"inline constexpr std::uint64_t kAtlasFingerprint = {fingerprint}ULL;\n"
+header += f"inline constexpr std::uint64_t kAtlasByteCount = {len(atlas_bytes)}ULL;\n"
+header += "enum class Label {\n"
 header += "".join("    " + name + ",\n" for name, _ in labels) + "};\n"
 header += "struct AtlasRect { float x, y, width, height; };\n"
 header += f"inline constexpr std::array<AtlasRect, {len(rects)}> kLabels = {{{{\n"

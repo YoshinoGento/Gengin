@@ -99,6 +99,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
+    if (open_ && page_ == kExperiencePage) { BuildExperienceMenu(); return; }
     contestOutcome_.Observe(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
         s.farmProgressionSystem.IsContestSeason(), s.farmProgressionSystem.StagePolicy().enabled);
     const auto previousPhase = flow_.GetPhase();
@@ -130,6 +131,8 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         }
         farmui::BuildContestOutcomeView(view_, outcome, s.farmEconomySystem.GetContestResults(),
             pending_ == Action::SeasonRetry, seasonRetryFailed_);
+        if (s.farmDocumentSystem.IsPrepared() && pending_ == Action::None)
+            view_.Add(Label::Experience, {80, 660, 350, 44}, {Action::ExperienceOpen});
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
@@ -229,6 +232,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         view_.goalVisible = !hud.freeFarming;
         view_.feedback = hud.feedback != FarmHUDFeedback::None;
         view_.IconButton(Label::Menu, farmui::HUDIcon::Menu, farmui::HUDLayout::UtilitySlot(5), {Action::Menu});
+        BuildExperienceHUD(s);
         if (s.farmIrrigationPreviewSystem.IsActive()) {
             view_.Add(Label::Confirm, {1040, 544, 216, 44}, {Action::Confirm}, s.farmIrrigationPreviewSystem.CanConfirm(s.farmGrid));
             view_.Add(Label::Cancel, {1040, 596, 216, 44}, {Action::Cancel});
@@ -302,6 +306,14 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             if (view_.items[i].request.action==Action::MenuDetails) view_.items[i].label=Label::TradeBack;
     }
     if (pending_ != Action::None) {
+        if (pending_ == Action::ExpandFarm) {
+            const auto current = FarmDevelopmentSystem::Inspect(s.farmGrid, s.farmEconomySystem,
+                s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() || s.host.IsTimelineScrubbing());
+            farmui::BuildDevelopmentConfirmation(view_, pendingExpansion_,
+                current.canExpand && current.quote == pendingExpansion_.quote);
+            if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
+            return;
+        }
         view_.Add(pending_ == Action::ChangePlayMode ? Label::ModeConfirm :
             pending_ == Action::SubmitContest ? Label::ContestSubmitConfirm :
             pending_ == Action::ReturnTitle ? Label::ReturnTitleConfirm : Label::ConfirmDestructive, {256, 250, 760, 54});
@@ -406,8 +418,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         farmui::BuildRecordBookView(view_, FarmRecordBookSystem::Inspect(s.farmEconomySystem));
     } else if (page_ == kDevelopmentPage) {
         farmui::BuildDevelopmentView(view_, FarmDevelopmentSystem::Inspect(s.farmGrid, s.farmEconomySystem,
-            s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() || s.host.IsTimelineScrubbing()),
-            s.farmGrid.GetGeneration());
+            s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() || s.host.IsTimelineScrubbing()));
     } else if (page_ == kStageGuidePage) {
         farmui::BuildStageGuideView(view_, s.farmStageAccessSystem.Get());
     } else if (page_ == kContestPreviewPage) {
@@ -524,6 +535,7 @@ void FarmRuntimeController::CommitScreenTransition(const FarmRuntimeContext& s) 
 }
 
 void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request request, bool allowTransition) {
+    if (HandleExperienceRequest(s, request)) return;
     if (request.action == Action::TimeAdvance || request.action == Action::TimeCancel || request.action == Action::TimeFocus) {
         editor::GamePlayEditorCommand command{};
         command.type = GamePlayEditorCommandType::ControlFarmTimeAdvance;
@@ -577,13 +589,14 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     }
     if (request.action == Action::ExpandFarm) {
         if (!open_ || page_ != kDevelopmentPage || pending_ != Action::None) return;
-        editor::GamePlayEditorCommand command{};
-        command.type = GamePlayEditorCommandType::ExpandFarm;
-        command.farmGeneration = request.farmGeneration;
-        command.expectedFarmHeight = request.argument;
-        const bool expanded = s.gamePlayEditorBridge.Execute(command);
-        status_ = expanded ? Label::DevelopmentDone : Label::Failure;
-        if (expanded) FrameFarm(s);
+        const auto offer = FarmDevelopmentSystem::Inspect(s.farmGrid, s.farmEconomySystem,
+            s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() || s.host.IsTimelineScrubbing());
+        if (!offer.canExpand || request.farmGeneration != offer.quote.farmGeneration ||
+            request.inventoryGeneration != offer.quote.inventoryGeneration || request.argument != offer.height) {
+            status_ = Label::DevelopmentChanged; return;
+        }
+        pendingExpansion_ = offer;
+        pending_ = Action::ExpandFarm; focusedItem_ = -1;
         return;
     }
     using C = GamePlayEditorCommandType;
@@ -765,7 +778,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     case Action::Close:
         if (open_ && page_ == kHarvestDisplayPage && pending_ == Action::None &&
             allowTransition && DeferScreenTransition(s, request)) return;
-        saleReview_.Cancel(); open_ = false; pending_ = Action::None; return;
+        saleReview_.Cancel(); open_ = false; pending_ = Action::None; pendingExpansion_ = {}; return;
     case Action::StageGuide:
         if (pending_ != Action::None) return;
         open_ = true; page_ = kStageGuidePage; focusedItem_ = -1; return;
@@ -782,7 +795,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         return;
     case Action::Cancel:
         if (pending_ != Action::None) {
-            pending_ = Action::None; focusedItem_ = -1;
+            pending_ = Action::None; pendingExpansion_ = {}; focusedItem_ = -1;
             if (page_ == kContestOutcomePage && flow_.GetPhase() == FarmPlayFlow::Phase::Result) open_ = false;
             return;
         }
@@ -814,6 +827,21 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     case Action::Accept: {
         const Action action = pending_; pending_ = Action::None;
         if (action == Action::None) return;
+        if (action == Action::ExpandFarm) {
+            editor::GamePlayEditorCommand command{};
+            command.type = GamePlayEditorCommandType::ExpandFarm;
+            const auto& quote = pendingExpansion_.quote;
+            command.farmGeneration = quote.farmGeneration;
+            command.inventoryGeneration = quote.inventoryGeneration;
+            command.expectedFarmHeight = quote.height;
+            command.expectedDevelopmentMoney = quote.money;
+            command.expectedDevelopmentCost = quote.cost;
+            const bool expanded = s.gamePlayEditorBridge.Execute(command);
+            pendingExpansion_ = {}; focusedItem_ = -1;
+            status_ = expanded ? Label::DevelopmentDone : Label::DevelopmentChanged;
+            if (expanded) FrameFarm(s);
+            return;
+        }
         if (action == Action::SeasonRetry) {
             if (!s.host.RetryCompletedSeason()) {
                 seasonRetryFailed_ = true; pending_ = Action::SeasonRetry; focusedItem_ = -1; return;

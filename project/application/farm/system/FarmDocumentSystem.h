@@ -50,6 +50,9 @@ public:
 		const std::string& documentId, farm::FarmGrid& grid,
 		FarmEconomySystem& economySystem,
 		FarmCropSelectionSystem& cropSelectionSystem);
+	// Loads a trusted bundled template as an unsaved copy; never writes the catalog.
+	bool LoadPrepared(const std::string& path, farm::FarmGrid& grid,
+		FarmEconomySystem& economySystem, FarmCropSelectionSystem& cropSelectionSystem);
 	bool ArchiveCompletedSeason(const farm::FarmGrid& grid, const FarmEconomySystem& economySystem,
 		const FarmCropSelectionSystem& cropSelectionSystem);
 	void BeginUnsavedSession();
@@ -61,6 +64,7 @@ public:
 	void MarkDirty() noexcept;
 
 	[[nodiscard]] bool IsDirty() const noexcept { return dirty_; }
+	[[nodiscard]] bool IsPrepared() const noexcept { return prepared_; }
 	[[nodiscard]] bool FileExists() const noexcept { return fileExists_; }
 	[[nodiscard]] bool HasDocuments() const noexcept { return !documents_.empty(); }
 	[[nodiscard]] bool HasError() const noexcept { return status_ == FarmDocumentStatus::Error; }
@@ -72,6 +76,8 @@ public:
 	[[nodiscard]] const std::vector<FarmDocumentEntry>& GetDocuments() const noexcept { return documents_; }
 
 private:
+	bool LoadPath(const std::string& path, const std::string& expectedId, bool prepared,
+		farm::FarmGrid& grid, FarmEconomySystem& economySystem, FarmCropSelectionSystem& cropSelectionSystem);
 	FarmProgressionSystem& Progression() noexcept { return progressionSystem_ ? *progressionSystem_ : fallbackProgression_; }
 	FarmProgressionSystem fallbackProgression_{};
 	FarmProgressionSystem* progressionSystem_ = nullptr; // Borrowed, same lifetime requirement as the clock.
@@ -103,5 +109,6 @@ private:
 	FarmEconomySystem::Snapshot defaultEconomySnapshot_{};
 	FarmCropSelectionSystem::Snapshot defaultCropSelectionSnapshot_{};
 	bool dirty_ = false;
+	bool prepared_ = false;
 	bool fileExists_ = false;
 };

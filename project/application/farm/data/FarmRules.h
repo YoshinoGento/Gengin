@@ -50,7 +50,8 @@ struct FarmRules {
 	float tomatoMaximumSizeMultiplier = 2.0f;
 	float pumpkinMaximumSizeMultiplier = 3.0f;
 	float maxMoisture = 1.0f;
-	float irrigationMoistureRecoveryPerSecond = 1.0f / 8.0f;
+	// Moderate soil intake leaves time to react; canal stock/transfer remain independently conserved.
+	float irrigationMoistureRecoveryPerSecond = 1.0f / 20.0f;
 	float irrigationSourceStrength = 1.0f;
 	float irrigationCanalTransferEfficiency = 0.90f;
 	float irrigationSourceRefillPerSecond = 0.5f;

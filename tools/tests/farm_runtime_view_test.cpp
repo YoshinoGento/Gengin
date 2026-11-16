@@ -1,4 +1,8 @@
 #include "farm/ui/FarmRuntimeUI.h"
+#include "farm/ui/FarmExperienceView.h"
+#include "farm/ui/FarmRuntimeAtlas.h"
+#include <fstream>
+#include <sstream>
 #include "farm/ui/FarmObservationView.h"
 #include "farm/ui/FarmPlayFlowView.h"
 #include "farm/ui/FarmFieldActionView.h"
@@ -304,6 +308,7 @@ void TestComposedHUD() {
         FarmToolActionResult evaluation; evaluation.status = FarmToolActionStatus::Applied;
         BuildFieldActionView(view,evaluation,false,!enabled);
         view.IconButton(Label::Menu,HUDIcon::Menu,HUDLayout::UtilitySlot(5),{Action::Menu});
+        BuildExperienceHUD(view, 0, enabled);
         view.IconButton(Label::ShopTitle,HUDIcon::Shop,HUDLayout::UtilitySlot(0),{Action::OpenSeedShop},enabled);
         view.IconButton(Label::HarvestDisplay,HUDIcon::Inventory,HUDLayout::UtilitySlot(1),{Action::HarvestDisplay},enabled);
         if (enabled) {
@@ -390,6 +395,67 @@ void TestCaptionLayout() {
 }
 
 int main() {
+    {
+        std::ifstream atlas("project/Resources/ui/farm_runtime_menu.png", std::ios::binary);
+        assert(MatchesRuntimeAtlas(atlas));
+        atlas.clear();
+        atlas.seekg(0);
+        const std::string bytes((std::istreambuf_iterator<char>(atlas)), {});
+        std::string changed = bytes;
+        changed[changed.size() / 2] ^= 1;
+        std::istringstream wrong(changed), truncated(bytes.substr(0, bytes.size() - 1));
+        std::istringstream extra(bytes + "x"), empty;
+        std::ifstream missing("generated/codex_checks/nonexistent_atlas_for_test.png");
+        assert(!MatchesRuntimeAtlas(wrong));
+        assert(!MatchesRuntimeAtlas(truncated));
+        assert(!MatchesRuntimeAtlas(extra));
+        assert(!MatchesRuntimeAtlas(empty));
+        assert(!MatchesRuntimeAtlas(missing));
+        std::istringstream failed(bytes);
+        failed.setstate(std::ios::badbit);
+        assert(!MatchesRuntimeAtlas(failed));
+        std::cout << "Atlas contract: valid / changed / truncated / extra / empty / missing / I/O error PASS\n";
+    }
+    for (int selected = 0; selected < FarmExperienceSystem::kCount; ++selected)
+    for (bool confirming : {false,true}) for (bool failed : {false,true}) {
+        View experience;
+        BuildExperienceView(experience, selected, confirming, failed);
+        assert(experience.modal && experience.menuShell && experience.count < View::kCapacity);
+        AssertItemsDoNotOverlap(experience);
+        const auto occurrences = [&](Label label) {
+            int count = 0;
+            for (std::size_t i = 0; i < experience.count; ++i)
+                if (experience.items[i].label == label) ++count;
+            return count;
+        };
+        assert(occurrences(Label::ExperienceIntroduction) == (confirming ? 0 : 1));
+        for (int topic = 0; topic < FarmExperienceSystem::kCount; ++topic) {
+            const int expected = !confirming && topic == selected ? 1 : 0;
+            assert(occurrences(kExperienceGoals[topic]) == expected);
+            assert(occurrences(kExperienceFirstSteps[topic]) == expected);
+            assert(occurrences(kExperienceObservations[topic]) == expected);
+        }
+        if (!confirming) {
+            assert(experience.Hit({800, 520}).action == Action::ExperienceBegin);
+            for (int row = 0; row < FarmExperienceSystem::kPageSize; ++row) {
+                const auto hit = experience.Hit({300, 250.0f + row * 78});
+                assert(hit.action == Action::ExperienceSelect);
+                assert(hit.argument == selected / FarmExperienceSystem::kPageSize * FarmExperienceSystem::kPageSize + row);
+            }
+        }
+        for (std::size_t i = 0; i < experience.count; ++i) {
+            const auto& item = experience.items[i];
+            assert(item.rect.x >= 0 && item.rect.y >= 0 && item.rect.x + item.rect.width <= 1280 && item.rect.y + item.rect.height <= 720);
+            AssertReadable(item); AssertHalfOpenControl(item);
+            if (confirming && item.enabled && item.request.action != Action::None)
+                assert(item.request.action == Action::ExperienceConfirm || item.request.action == Action::ExperienceCancel);
+        }
+    }
+    for (int invalid : {-1, FarmExperienceSystem::kCount, (std::numeric_limits<int>::max)()}) {
+        View experience;
+        BuildExperienceView(experience, invalid, false, false);
+        assert(experience.count == 0 && !experience.modal);
+    }
     for (int reason = 0; reason <= static_cast<int>(FarmTimeAdvanceSystem::StopReason::PestWarning); ++reason) {
         for (const bool active : {false, true}) {
             View timeView;
@@ -445,20 +511,35 @@ int main() {
     }
     for (int flags=0;flags<32;++flags) {
         FarmDevelopmentSystem::View state;
-        state.rank=3; state.tiles=30; state.height=6; state.sales=2147483647;
+        state.rank=3; state.tiles=20; state.height=4; state.sales=2147483647;
         state.remainingSales=1000;
-        state.standardFarm=(flags&1)!=0; state.maximumRank=(flags&2)!=0;
-        state.maximumArea=(flags&4)!=0; state.canExpand=(flags&8)!=0;
+        state.standardFarm=(flags&1)!=0; state.maximumRank=true;
+        state.maximumArea=(flags&2)!=0; state.stageReady=(flags&4)!=0;
+        state.salesReady=(flags&8)!=0; state.affordable=(flags&16)!=0;
+        state.canExpand=state.standardFarm && !state.maximumArea && state.stageReady && state.salesReady && state.affordable;
+        state.requiredSales=500; state.cost=800; state.unlockDay=11;
+        state.money=2147483647; state.moneyAfter=state.money-state.cost; state.seedReserve=2147483647;
+        state.quote={123,456,4,state.money,state.cost};
         View menu;
-        BuildMenuShell(menu,15,false,(flags&16)!=0,false,Label::Ready);
-        BuildDevelopmentView(menu,state,123);
+        BuildMenuShell(menu,15,false,false,false,Label::Ready);
+        BuildDevelopmentView(menu,state);
         AssertItemsDoNotOverlap(menu);
         for (std::size_t i=0;i<menu.count;++i) {
             AssertReadable(menu.items[i]); AssertHalfOpenControl(menu.items[i]);
         }
         const auto hit=menu.Hit({200,510});
         assert(hit.action==(state.canExpand ? Action::ExpandFarm : Action::None));
-        if (state.canExpand) assert(hit.argument==6 && hit.farmGeneration==123 && hit.inventoryGeneration==0);
+        if (state.canExpand) assert(hit.argument==4 && hit.farmGeneration==123 && hit.inventoryGeneration==456);
+        for (bool current : {false,true}) {
+            View confirm; BuildMenuShell(confirm,15,false,true,false,Label::Ready);
+            BuildDevelopmentConfirmation(confirm,state,current);
+            AssertItemsDoNotOverlap(confirm);
+            for (std::size_t i=0;i<confirm.count;++i) {
+                AssertReadable(confirm.items[i]); AssertHalfOpenControl(confirm.items[i]);
+            }
+            assert(confirm.Hit({200,530}).action==(current ? Action::Accept : Action::None));
+            assert(confirm.Hit({700,530}).action==Action::Cancel);
+        }
     }
     for (int flags=0;flags<64;++flags) {
         FarmRecordBookSystem::View state;

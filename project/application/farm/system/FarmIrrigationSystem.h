@@ -78,10 +78,10 @@ private:
 	[[nodiscard]] int FindWetCanal(const FarmGrid& grid, int tileIndex) const noexcept;
 	std::vector<float> waterBefore_, waterDelta_, soilDemand_, canalDemand_;
 	std::vector<int> soilCanals_;
-	float refillPerSecond_ = 0.5f;
-	float transferPerSecond_ = 0.4f;
-	float recoveryPerSecond_ = 0.125f;
-	float maxDeltaTime_ = 0.25f;
+	float refillPerSecond_ = FarmRules{}.irrigationSourceRefillPerSecond;
+	float transferPerSecond_ = FarmRules{}.irrigationWaterTransferPerSecond;
+	float recoveryPerSecond_ = FarmRules{}.irrigationMoistureRecoveryPerSecond;
+	float maxDeltaTime_ = FarmRules{}.maxUpdateDeltaTime;
 	std::vector<std::uint8_t> supplied_;
 	std::vector<std::uint8_t> irrigationRange_;
 	std::vector<float> supplyStrengths_;
@@ -93,8 +93,8 @@ private:
 	int waterSourceCount_ = 0;
 	int suppliedCanalCount_ = 0;
 	int irrigationRangeTileCount_ = 0;
-	float sourceStrength_ = 1.0f;
-	float canalTransferEfficiency_ = 0.90f;
+	float sourceStrength_ = FarmRules{}.irrigationSourceStrength;
+	float canalTransferEfficiency_ = FarmRules{}.irrigationCanalTransferEfficiency;
 };
 
 } // namespace farm

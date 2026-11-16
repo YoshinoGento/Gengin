@@ -81,8 +81,11 @@ public:
 
 	void Initialize(const farm::FarmRules& rules = {});
 	void BindStageAccess(const FarmStageAccessSystem& access) noexcept { stageAccess_=&access; }
+	[[nodiscard]] FarmStageAccess GetStageAccess() const noexcept {
+		return stageAccess_ ? stageAccess_->Get() : FarmStageAccess{};
+	}
 	[[nodiscard]] bool IsCropUnlocked(farm::CropType crop) const noexcept {
-		return (stageAccess_ ? stageAccess_->Get() : FarmStageAccess{}).Allows(crop);
+		return GetStageAccess().Allows(crop);
 	}
 
 	[[nodiscard]] bool AddHarvest(farm::CropType crop, int quantity = 1) noexcept;
@@ -139,6 +142,12 @@ public:
 	bool RestoreSnapshot(const Snapshot& snapshot) noexcept;
 
 private:
+	friend class FarmDevelopmentSystem;
+	// Development validates affordability and commits the grid first, on the same thread.
+	void CommitDevelopmentPayment(int amount) noexcept {
+		money_ -= amount;
+		++inventoryGeneration_;
+	}
 	friend class FarmRecoverySystem;
 	[[nodiscard]] bool GrantRecoverySeed(farm::CropType crop, int quantity, int day) noexcept;
 	int lastRecoveryDay_ = 0;

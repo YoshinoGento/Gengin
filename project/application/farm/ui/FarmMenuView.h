@@ -54,6 +54,7 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         button(Label::Development,Action::Development,0,500);
         button(Label::CropBook,Action::CropBook,1,500);
         button(Label::Recovery,Action::Recovery,0,564);
+        button(Label::Experience,Action::ExperienceOpen,1,564);
     } else if (s.page == 1) {
         view.Add(Label::MenuTerrainWork,{176,130,920,38});
         button(Label::Overview,Action::TerrainField,0,188,s.unlocked);

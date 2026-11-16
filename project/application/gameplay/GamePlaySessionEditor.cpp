@@ -3,6 +3,7 @@
 #include "farm/system/FarmDevelopmentSystem.h"
 #include "farm/system/FarmRepellentSystem.h"
 #include "farm/system/FarmRecoverySystem.h"
+#include "farm/system/FarmExperienceSystem.h"
 
 #include "3d/Object3d.h"
 #include "base/FrameClock.h"
@@ -513,8 +514,9 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 		return true;
 	case GamePlayEditorCommandType::ExpandFarm:
 		if (timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() || layoutLibraryFrame_) return false;
-		if (!FarmDevelopmentSystem::Expand(farmGrid_, farmEconomySystem_, command.farmGeneration,
-			command.expectedFarmHeight)) return false;
+		if (!FarmDevelopmentSystem::Expand(farmGrid_, farmEconomySystem_,
+			{command.farmGeneration, command.inventoryGeneration, command.expectedFarmHeight,
+			command.expectedDevelopmentMoney, command.expectedDevelopmentCost})) return false;
 		farmToolActionSystem_.ClearHistory();
 		farmGrowthComparisonSystem_.Reset();
 		farmHarvestVisualSystem_.Clear();
@@ -793,6 +795,11 @@ bool GamePlaySessionSystem::Execute(const FarmDocumentCommand& command) {
 			farmGrid_, farmEconomySystem_,
 			farmCropSelectionSystem_);
 		break;
+	case FarmDocumentCommandType::LoadExperience:
+		executed = FarmExperienceSystem::Load(command.experienceIndex, farmDocumentSystem_,
+			farmGrid_, farmEconomySystem_, farmCropSelectionSystem_);
+		if (executed) farmToolSystem_.SetTool(FarmExperienceSystem::kEntries[command.experienceIndex].tool);
+		break;
 	case FarmDocumentCommandType::Load:
 		executed = farmDocumentSystem_.Load(
 			command.documentId, farmGrid_, farmEconomySystem_,
@@ -816,7 +823,7 @@ bool GamePlaySessionSystem::Execute(const FarmDocumentCommand& command) {
 
 	if (executed) {
 		farmToolActionSystem_.ClearHistory();
-		if (command.type == FarmDocumentCommandType::NewDocument ||
+		if (command.type == FarmDocumentCommandType::NewDocument || command.type == FarmDocumentCommandType::LoadExperience ||
 			command.type == FarmDocumentCommandType::Load) {
 			farmContestDaySystem_.Reset();
 			farmIrrigationPreviewSystem_.Cancel();

@@ -73,8 +73,8 @@ void RangeAndActions() {
     Check(restored->state==soil.state && restored->heightLevel==soil.heightLevel &&
         restored->moisture==soil.moisture && restored->soilNutrients==soil.soilNutrients &&
         !restored->irrigationEnabled && R::CanPlace(restored), "removal changed soil");
-    auto e=economy.CaptureSnapshot(); e.lifetimeSales=1500; Check(economy.RestoreSnapshot(e), "rank");
-    Check(FarmDevelopmentSystem::Expand(grid,economy,grid.GetGeneration(),4) && grid.GetTile(8)->repellentPlant,
+    auto e=economy.CaptureSnapshot(); e.lifetimeSales=1500; e.money=5000; Check(economy.RestoreSnapshot(e), "rank");
+    Check(FarmDevelopmentSystem::Expand(grid,economy,FarmDevelopmentSystem::Inspect(grid,economy).quote) && grid.GetTile(8)->repellentPlant,
         "expansion lost plants");
 }
 void PestsAndPreview() {

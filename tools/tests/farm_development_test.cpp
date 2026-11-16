@@ -9,6 +9,18 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <cstdlib>
+
+// Fault injection is test-only: each vector allocation in Expand must be atomic.
+int allocationsUntilFailure = -1;
+void* operator new(std::size_t size) {
+    if (allocationsUntilFailure == 0) throw std::bad_alloc{};
+    if (allocationsUntilFailure > 0) --allocationsUntilFailure;
+    if (void* result = std::malloc(size == 0 ? 1 : size)) return result;
+    throw std::bad_alloc{};
+}
+void operator delete(void* value) noexcept { std::free(value); }
+void operator delete(void* value, std::size_t) noexcept { std::free(value); }
 
 // Pure mesh tests do not create a graphics device.
 void LineDrawer::DrawLine(const Vector3&, const Vector3&, const Vector4&) {}
@@ -21,6 +33,13 @@ void Check(bool ok, const char* message) { if (!ok) throw std::runtime_error(mes
 void Sales(FarmEconomySystem& economy, int sales) {
     auto snapshot = economy.CaptureSnapshot(); snapshot.lifetimeSales = sales;
     Check(economy.RestoreSnapshot(snapshot), "sales fixture");
+}
+void Money(FarmEconomySystem& economy, int money) {
+    auto snapshot = economy.CaptureSnapshot(); snapshot.money = money;
+    Check(economy.RestoreSnapshot(snapshot), "money fixture");
+}
+bool Expand(farm::FarmGrid& grid, FarmEconomySystem& economy) {
+    return D::Expand(grid,economy,D::Inspect(grid,economy).quote);
 }
 FarmCropQualityResult Quality(farm::CropType crop) {
     FarmCropQualityResult q;
@@ -73,15 +92,19 @@ void Expansion() {
     farm::FarmTile source; source.feature=farm::FarmTileFeature::WaterSource; source.waterAmount=.7f;
     Check(grid.SetTile(18,crop) && grid.SetTile(19,source) && grid.SetSelectedIndex(19), "tile fixture");
     farm::FarmGrid::Snapshot before; grid.CaptureSnapshot(before);
-    Check(!D::Expand(grid,economy,grid.GetGeneration(),4), "unearned expansion");
+    Check(!Expand(grid,economy), "unearned expansion");
     Sales(economy,500);
     Check(!D::Inspect(grid,economy,true).canExpand && D::Inspect(grid,economy).remainingSales==1000, "view guards");
-    const auto oldGeneration=grid.GetGeneration(); const int money=economy.GetMoney();
-    Check(D::Expand(grid,economy,oldGeneration,4) && grid.GetHeight()==5 && grid.GetSelectedIndex()==19, "first expansion");
-    Check(!D::Expand(grid,economy,oldGeneration,4) && !D::Expand(grid,economy,grid.GetGeneration(),5), "duplicate/unearned row");
+    Check(!Expand(grid,economy), "unaffordable expansion");
+    Money(economy,5000);
+    const auto quote=D::Inspect(grid,economy).quote;
+    const int money=economy.GetMoney();
+    Check(D::Expand(grid,economy,quote) && grid.GetHeight()==5 && grid.GetSelectedIndex()==19 &&
+        economy.GetMoney()==money-D::kExpansionCosts[0], "first expansion");
+    Check(!D::Expand(grid,economy,quote) && !Expand(grid,economy), "duplicate/unearned row");
     Sales(economy,1500);
-    Check(D::Expand(grid,economy,grid.GetGeneration(),5) && grid.GetHeight()==6 && economy.GetMoney()==money, "second expansion charged money");
-    Check(!D::Expand(grid,economy,grid.GetGeneration(),6), "maximum area exceeded");
+    Check(Expand(grid,economy) && grid.GetHeight()==6 && economy.GetMoney()==money-2400, "second expansion payment");
+    Check(!Expand(grid,economy), "maximum area exceeded");
     for (int i=0;i<30;++i)
         Check(Same(*grid.GetTile(i),i<20 ? before.tiles[i] : farm::FarmTile{}), "expansion changed existing cells/defaults");
     Check(!grid.RestoreSnapshot(before), "ordinary Undo changed dimensions");
@@ -97,13 +120,65 @@ void Expansion() {
         Check(!grid.ReplaceSnapshot(bad) && grid.GetGeneration()==generation && Same(*grid.GetTile(18),crop), "invalid replace mutated grid");
     }
     farm::FarmGrid custom; Check(custom.Initialize(3,3), "custom");
-    Check(!D::Expand(custom,economy,custom.GetGeneration(),3), "custom size expansion");
+    Check(!Expand(custom,economy), "custom size expansion");
     farm::FarmIrrigationSystem irrigation; irrigation.Initialize(); irrigation.Rebuild(grid);
     farm::FarmTile soil; soil.state=farm::FarmTileState::Tilled;
     farm::FarmTile canal; canal.feature=farm::FarmTileFeature::Canal; canal.waterAmount=.7f;
     Check(grid.SetTile(24,canal) && grid.SetTile(29,soil), "new canal/soil");
     irrigation.Rebuild(grid);
     Check(irrigation.UpdateWater(grid,.25f,1) && grid.GetTile(29)->moisture>0, "new row not irrigated");
+}
+void PurchaseGuards() {
+    farm::FarmGrid grid; Check(grid.Initialize(5,4), "guard grid");
+    FarmEconomySystem economy; economy.Initialize(); Sales(economy,1500); Money(economy,6000);
+    FarmDateSystem date; date.Initialize(); FarmStagePolicy policy{true};
+    FarmStageAccessSystem access; access.Bind(date,policy); economy.BindStageAccess(access);
+    for (int day : {1,10}) {
+        Check(date.RestoreSnapshot({day,0,1}), "date fixture");
+        const auto view=D::Inspect(grid,economy);
+        Check(view.unlockDay==11 && !view.stageReady && !Expand(grid,economy), "early first expansion");
+    }
+    Check(date.RestoreSnapshot({11,0,1}), "day11");
+    auto offer=D::Inspect(grid,economy);
+    Check(offer.canExpand && offer.seedReserve==180 && offer.moneyAfter==5400, "day11 offer");
+    const auto generation=grid.GetGeneration();
+    for (int allocation=0;allocation<3;++allocation) {
+        allocationsUntilFailure=allocation;
+        const bool expanded=D::Expand(grid,economy,offer.quote);
+        allocationsUntilFailure=-1;
+        Check(!expanded && grid.GetGeneration()==generation && grid.GetHeight()==4 &&
+            economy.GetMoney()==6000 && economy.GetInventoryGeneration()==offer.quote.inventoryGeneration,
+            "allocation failure charged or mutated");
+    }
+    Check(D::Inspect(grid,economy).quote==offer.quote && economy.GetMoney()==6000, "inspect/cancel mutated state");
+    auto bad=offer.quote; --bad.cost;
+    Check(!D::Expand(grid,economy,bad), "tampered quote");
+    Check(economy.BuySeed(farm::CropType::Carrot).Succeeded() && !D::Expand(grid,economy,offer.quote), "stale purchase accepted");
+    offer=D::Inspect(grid,economy);
+    Check(economy.RestoreSnapshot(economy.CaptureSnapshot()) && !D::Expand(grid,economy,offer.quote), "stale inventory accepted");
+    offer=D::Inspect(grid,economy);
+    Check(date.RestoreSnapshot({10,0,1}) && !D::Expand(grid,economy,offer.quote), "clock rewind ignored");
+    Check(date.RestoreSnapshot({11,0,1}), "restore day11");
+    Money(economy,779); Check(!Expand(grid,economy), "seed reserve not enforced");
+    Money(economy,780); offer=D::Inspect(grid,economy);
+    Check(D::Expand(grid,economy,offer.quote) && economy.GetMoney()==180 &&
+        economy.GetInventoryGeneration()!=offer.quote.inventoryGeneration && economy.GetLifetimeSales()==1500,
+        "exact first cost and reserve");
+    Check(economy.BuySeed(farm::CropType::Tomato).Succeeded() &&
+        economy.BuySeed(farm::CropType::Tomato).Succeeded() && economy.GetMoney()==0, "reserve cannot buy two seeds");
+    Money(economy,6000);
+    Check(date.RestoreSnapshot({20,0,1}) && !Expand(grid,economy) &&
+        D::Inspect(grid,economy).unlockDay==21, "early second expansion");
+    Check(date.RestoreSnapshot({21,0,1}), "day21");
+    Money(economy,2079); Check(!Expand(grid,economy), "second reserve ignored");
+    Money(economy,2080); Check(Expand(grid,economy) && economy.GetMoney()==280, "exact second cost");
+    Check(date.RestoreSnapshot({1,0,1}) && grid.GetHeight()==6 && D::Inspect(grid,economy).maximumArea,
+        "old expanded farm shrank");
+    Check(grid.Initialize(5,4), "free fixture"); policy.enabled=false; Money(economy,5000);
+    Check(D::Inspect(grid,economy).unlockDay==0 && Expand(grid,economy), "free/legacy date gate");
+    auto snapshot=economy.CaptureSnapshot(); snapshot.money=INT_MAX; snapshot.seedPrices.fill(INT_MAX);
+    Check(economy.RestoreSnapshot(snapshot) && D::Inspect(grid,economy).seedReserve==INT_MAX &&
+        !Expand(grid,economy), "reserve overflow");
 }
 void Save() {
     farm::FarmGrid grid; Check(grid.Initialize(5,4), "save grid");
@@ -118,7 +193,8 @@ void Save() {
     Check(docs.SaveAs("Initial",grid,economy,selection), "initial save");
     const auto initialId=docs.GetActiveDocumentId();
     Sales(economy,1500);
-    Check(D::Expand(grid,economy,grid.GetGeneration(),4) && D::Expand(grid,economy,grid.GetGeneration(),5), "save expansion");
+    Money(economy,5000);
+    Check(Expand(grid,economy) && Expand(grid,economy), "save expansion");
     farm::FarmTile tile; tile.state=farm::FarmTileState::Tilled; tile.soilNutrients=.9f;
     Check(grid.SetTile(29,tile) && grid.SetSelectedIndex(29) && docs.SaveAs("Expanded",grid,economy,selection), "expanded save");
     const auto id=docs.GetActiveDocumentId(), path=docs.GetPath();
@@ -126,7 +202,7 @@ void Save() {
     Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==25 && saved["economy"]["lifetimeSales"]==1500, "schema25");
     Check(docs.Load(initialId,grid,economy,selection) && grid.GetHeight()==4 && economy.GetLifetimeSales()==0, "smaller save load");
     Check(docs.Load(id,grid,economy,selection) && grid.GetHeight()==6 && grid.GetSelectedIndex()==29 &&
-        Same(*grid.GetTile(29),tile) && economy.GetLifetimeSales()==1500, "expanded save load");
+        Same(*grid.GetTile(29),tile) && economy.GetLifetimeSales()==1500 && economy.GetMoney()==2600, "expanded save load");
     for (int kind=0;kind<11;++kind) {
         auto bad=saved;
         if(kind==0) bad["economy"].erase("lifetimeSales");
@@ -145,7 +221,8 @@ void Save() {
             grid.GetHeight()==6 && economy.GetLifetimeSales()==1500 && Same(*grid.GetTile(29),tile), "invalid load not atomic");
     }
     auto legacy=saved; legacy["schemaVersion"]=20; legacy["economy"].erase("lifetimeSales");
-    Check(JsonFile::Save(path,legacy) && docs.Load(id,grid,economy,selection) && economy.GetLifetimeSales()==0, "legacy revenue invented");
+    Check(JsonFile::Save(path,legacy) && docs.Load(id,grid,economy,selection) && economy.GetLifetimeSales()==0 &&
+        grid.GetHeight()==6 && economy.GetMoney()==2600, "legacy land or money changed");
     Check(JsonFile::Save(path,saved) && docs.Load(id,grid,economy,selection), "restore fixture");
     farm::FarmGrid fresh; Check(fresh.Initialize(5,4), "fresh grid");
     FarmEconomySystem freshEconomy; freshEconomy.Initialize();
@@ -187,7 +264,7 @@ void MeshBounds() {
 }
 }
 int main() try {
-    Economy(); Expansion(); Save(); MeshBounds();
+    Economy(); Expansion(); PurchaseGuards(); Save(); MeshBounds();
     std::cout << "farm_development_test: PASS\n";
     return 0;
 } catch(const std::exception& e) { std::cerr << "farm_development_test: " << e.what() << '\n'; return 1; }

@@ -30,7 +30,8 @@ enum class Action {
     MenuDetails, AudioSettings, ShopProduct,
     HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel,
     PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook,
-    Repellent, RepellentSelect, RepellentPlace, RepellentRemove, Recovery, RecoveryClaim
+    Repellent, RepellentSelect, RepellentPlace, RepellentRemove, Recovery, RecoveryClaim,
+    ExperienceOpen, ExperiencePage, ExperienceSelect, ExperienceBegin, ExperienceConfirm, ExperienceCancel, ExperienceAction
 };
 struct Request {
     Action action = Action::None;

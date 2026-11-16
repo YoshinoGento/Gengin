@@ -501,17 +501,21 @@ int main(int argc,char* argv[]) {
                 for (const float speed : {1.0f, 2.0f, 4.0f}) {
                     SeasonRun run(farm::CropType::Carrot, care, speed, true, seconds);
                     const auto result = run.Run(false);
+                    std::cout << "stage_" << kCareNames[static_cast<std::size_t>(care)] << ',' << seconds << ',' << speed;
+                    for (const auto points : result.eventPoints) std::cout << ',' << points;
+                    std::cout << ',' << result.minimumMoney << '\n';
                     Require(result.harvested == 6 && result.minimumMoney >= 0, "staged core loop");
                     for (std::size_t period = 0; period < result.eventPoints.size(); ++period) {
                         const int target = kFarmStageRulesV1[period].passingPoints;
                         if (care == Care::Managed || (care == Care::IntakeOneSecond && seconds <= 2 && speed <= 2))
                             Require(result.eventPoints[period] >= target + 8, "managed route has insufficient score margin");
-                        if (care == Care::Dry || care == Care::Canal)
+                        // Day 10 teaches connected canals/height/compost, not rapid intake switching.
+                        // Later crops retain the need to control overwatering.
+                        if (care == Care::Canal && period == 0)
+                            Require(result.eventPoints[period] >= target, "starter canal layout cannot pass");
+                        if (care == Care::Dry || (care == Care::Canal && period > 0))
                             Require(result.eventPoints[period] < target, "neglect meets staged target");
                     }
-                    std::cout << "stage_" << kCareNames[static_cast<std::size_t>(care)] << ',' << seconds << ',' << speed;
-                    for (const auto points : result.eventPoints) std::cout << ',' << points;
-                    std::cout << ',' << result.minimumMoney << '\n';
                     ++stagedCases;
                 }
             }

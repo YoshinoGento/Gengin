@@ -438,7 +438,7 @@ bool ParseMetadata(
 		output.displayName = metadata["displayName"].get<std::string>();
 		output.savedAt = metadata["savedAt"].get<std::string>();
 		std::string normalizedName;
-		if (!IsSafeDocumentId(output.id) || output.id != expectedId ||
+		if (!IsSafeDocumentId(output.id) || (!expectedId.empty() && output.id != expectedId) ||
 			!NormalizeDisplayName(output.displayName, normalizedName, error)) {
 			if (error.empty()) {
 				error = "Farm document ID does not match its filename.";
@@ -996,6 +996,7 @@ bool FarmDocumentSystem::Initialize(
 	directoryPath_ = directoryPath;
 	saveDirectoryPath_ = (std::filesystem::path(directoryPath_) / "saves").string();
 	catalogPath_ = (std::filesystem::path(directoryPath_) / "farm_documents.json").string();
+	prepared_ = false;
 	path_.clear();
 	activeDocumentId_.clear();
 	displayName_ = std::string(kUntitledFarmName);
@@ -1102,6 +1103,7 @@ bool FarmDocumentSystem::ArchiveCompletedSeason(const farm::FarmGrid& grid,
 }
 
 void FarmDocumentSystem::BeginUnsavedSession() {
+	prepared_ = false;
 	activeDocumentId_.clear(); path_.clear(); displayName_ = std::string(kUntitledFarmName);
 	fileExists_ = false; dirty_ = true;
 	// Keep the on-disk catalog on the archive until the new farm is explicitly named/saved.
@@ -1149,6 +1151,20 @@ bool FarmDocumentSystem::Load(
 
 	const std::filesystem::path documentPath =
 		std::filesystem::path(saveDirectoryPath_) / (documentId + ".json");
+	return LoadPath(documentPath.string(), documentId, false, grid, economySystem, cropSelectionSystem);
+}
+
+bool FarmDocumentSystem::LoadPrepared(const std::string& path, farm::FarmGrid& grid,
+	FarmEconomySystem& economySystem, FarmCropSelectionSystem& cropSelectionSystem) {
+	std::error_code error;
+	const auto bytes = std::filesystem::file_size(path, error);
+	if (error || bytes > 1024 * 1024) { SetError("Prepared farm is missing or too large."); return false; }
+	return LoadPath(path, "", true, grid, economySystem, cropSelectionSystem);
+}
+
+bool FarmDocumentSystem::LoadPath(const std::string& path, const std::string& documentId, bool prepared,
+	farm::FarmGrid& grid, FarmEconomySystem& economySystem, FarmCropSelectionSystem& cropSelectionSystem) {
+	const std::filesystem::path documentPath(path);
 	nlohmann::json document;
 	if (!JsonFile::Load(documentPath.string(), document)) {
 		SetError("Could not read the selected Farm document.");
@@ -1265,6 +1281,14 @@ bool FarmDocumentSystem::Load(
 	loadedProgression.pestSpread = pestSpread;
 	static_cast<void>(Progression().RestoreSnapshot(loadedProgression));
 
+	if (prepared) {
+		BeginUnsavedSession();
+		prepared_ = true;
+		displayName_ = metadata.displayName;
+		MarkDirty();
+		return true;
+	}
+	prepared_ = false;
 	activeDocumentId_ = metadata.id;
 	displayName_ = metadata.displayName;
 	path_ = documentPath.string();
@@ -1399,6 +1423,7 @@ bool FarmDocumentSystem::Delete(const std::string& documentId) {
 	};
 
 	if (deletingActiveDocument) {
+		prepared_ = false;
 		activeDocumentId_.clear();
 		displayName_ = std::string(kUntitledFarmName);
 		path_.clear();
@@ -1465,6 +1490,7 @@ bool FarmDocumentSystem::Reset(
 	Progression().Initialize(progressionRules, defaultMode_, defaultMode_ == FarmProgressionMode::ContestSeason, true, true);
 	static_cast<void>(Progression().SetMode(defaultMode_, economySystem.GetMoney(),
 		FarmContestSeasonSystem::Evaluate(Date().GetDay(), economySystem.GetContestResults())));
+	prepared_ = false;
 	activeDocumentId_.clear();
 	path_.clear();
 	displayName_ = std::string(kUntitledFarmName);

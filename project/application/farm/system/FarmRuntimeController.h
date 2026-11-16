@@ -11,6 +11,7 @@
 #include "farm/system/FarmContestAudioSystem.h"
 #include "farm/system/FarmPestAudioSystem.h"
 #include "farm/system/FarmExhibitionSystem.h"
+#include "farm/system/FarmDevelopmentSystem.h"
 
 struct FarmRuntimeContext;
 class Input;
@@ -64,6 +65,13 @@ public:
     void OpenLayoutLibrary(const FarmRuntimeContext& context);
     void UpdateFollowCamera(const FarmRuntimeContext& context) { FrameFarm(context, true); }
 private:
+    static constexpr int kExperiencePage = 19;
+    bool HandleExperienceRequest(const FarmRuntimeContext& context, farmui::Request request);
+    void BuildExperienceMenu();
+    void BuildExperienceHUD(const FarmRuntimeContext& context);
+    int experienceSelection_ = 0;
+    int activeExperience_ = -1;
+    bool experienceConfirm_ = false;
     static constexpr int kHarvestInventoryPage = 8;
     void BuildSaleOverview(const FarmRuntimeContext& context);
     bool HandleSaleRequest(const FarmRuntimeContext& context, farmui::Request request);
@@ -103,6 +111,7 @@ private:
     Vector2 pointer_{-1, -1};
     farmui::Action pending_ = farmui::Action::None;
     farmui::Request pendingSubmission_{};
+    FarmDevelopmentSystem::View pendingExpansion_{};
     farmui::Request pendingScreenTransition_{};
     bool pointerTriggered_ = false;
     int pendingContestDay_ = 0;

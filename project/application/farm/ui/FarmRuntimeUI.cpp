@@ -1,6 +1,9 @@
 #include "farm/ui/FarmRuntimeUI.h"
 #include "farm/ui/FarmSeedShopView.h"
+#include "farm/ui/FarmRuntimeAtlas.h"
+#include "base/Logger.h"
 #include <algorithm>
+#include <fstream>
 #include <gdiplus.h>
 #pragma comment(lib, "gdiplus.lib")
 
@@ -10,6 +13,14 @@ bool RuntimeUI::Initialize(SpriteCommon* common) {
 }
 InitializationTask RuntimeUI::InitializeIncrementally(SpriteCommon* common) {
     if (!common) co_return false;
+    {
+        std::ifstream file("Resources/ui/farm_runtime_menu.png", std::ios::binary);
+        if (!MatchesRuntimeAtlas(file)) {
+            Logger::Error("Farm UI atlas does not match this executable. Rebuild and copy EXE + Resources together.");
+            Logger::Error(kAtlasContract);
+            co_return false;
+        }
+    }
     for (auto& sprite : panels_) {
         if (!sprite.Initialize(common, "Resources/ui/hud_panel_fill.png")) co_return false;
         co_await std::suspend_always{};

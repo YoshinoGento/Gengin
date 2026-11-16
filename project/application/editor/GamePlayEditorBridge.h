@@ -365,6 +365,8 @@ struct GamePlayEditorCommand {
 	uint64_t farmGeneration = 0;
 	FarmTool farmTool = FarmTool::Hoe;
 	int expectedFarmHeight = 0;
+	int expectedDevelopmentMoney = 0;
+	int expectedDevelopmentCost = 0;
 	int expectedRecoveryDay = 0;
 	int harvestRecordId = 0;
 	int contestDay = 0;
@@ -376,6 +378,7 @@ struct GamePlayEditorCommand {
 
 enum class FarmDocumentCommandType {
 	NewDocument,
+	LoadExperience,
 	Load,
 	Save,
 	SaveAs,
@@ -385,6 +388,7 @@ enum class FarmDocumentCommandType {
 
 struct FarmDocumentCommand {
 	FarmDocumentCommandType type = FarmDocumentCommandType::Save;
+	int experienceIndex = -1;
 	std::string documentId;
 	std::string displayName;
 };
