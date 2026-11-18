@@ -1,5 +1,5 @@
 {
-  "provenance": "Original, deterministic short wooden/plucked judging cues. No external samples.",
+  "provenance": "Original deterministic judging, snare-roll and celebration cues. No external samples.",
   "rate": 24000,
   "channels": 1,
   "bits": 16,
@@ -21,6 +21,18 @@
       "frames": 15600,
       "pcm_bytes": 31200,
       "sha256": "675ec9780339c308f5e5a0e4c06302790bef4717d65d5eb1d9b8092afac8771d"
+    },
+    {
+      "file": "clear.wav",
+      "frames": 110400,
+      "pcm_bytes": 220800,
+      "sha256": "cbefbb339fcd78b63e2cae2d574f67fac0c1c15e1746cbe9bbeee4b348d07569"
+    },
+    {
+      "file": "drumroll.wav",
+      "frames": 24000,
+      "pcm_bytes": 48000,
+      "sha256": "459c1940cbe51ea7d12702cbac9dadde025171e25556a967108c9b7c6ec14c29"
     }
   ]
 }

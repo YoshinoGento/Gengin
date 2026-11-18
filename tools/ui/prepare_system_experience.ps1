@@ -27,6 +27,18 @@ $atlasHash = (Get-FileHash -LiteralPath (Join-Path $resources 'ui/farm_runtime_m
 $contract = 'FarmRuntimeAtlas:sha256:' + $atlasHash
 $binary = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $release 'CG2_00_01.exe')))
 if (!$binary.Contains($contract)) { throw 'EXE and farm UI atlas do not match. Rebuild Release before packaging.' }
+$speechDirectory = Join-Path $resources 'farm/contest/audio/cheers'
+$speechManifest = Join-Path $speechDirectory 'manifest.json'
+$speechContract = 'FarmContestSpeech:sha256:' + (Get-FileHash -LiteralPath $speechManifest).Hash.ToLowerInvariant()
+if (!$binary.Contains($speechContract)) { throw 'EXE and speech timing do not match. Rebuild Release before packaging.' }
+$speech = Get-Content -LiteralPath $speechManifest -Raw -Encoding utf8 | ConvertFrom-Json
+if ($speech.clips.Count -ne 32) { throw 'Expected all32 cheer clips' }
+foreach ($clip in $speech.clips) {
+    if ($clip.file -notmatch '^[A-Za-z0-9_]+\.wav$' -or
+        (Get-FileHash -LiteralPath (Join-Path $speechDirectory $clip.file)).Hash.ToLowerInvariant() -ne $clip.sha256) {
+        throw 'Speech file differs from its measured metadata'
+    }
+}
 $binary = $null
 New-Item -ItemType Directory -Path $target | Out-Null
 $extensions = @('.obj','.png','.json','.txt','.wav','.hlsl','.hlsli')
@@ -47,6 +59,13 @@ Copy-Item -LiteralPath (Join-Path $release 'CG2_00_01.exe') -Destination (Join-P
 $copiedHash = (Get-FileHash -LiteralPath (Join-Path $target 'Resources/ui/farm_runtime_menu.png') -Algorithm SHA256).Hash.ToLowerInvariant()
 $copiedBinary = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $target 'SuiroNogyo.exe')))
 if ($copiedHash -ne $atlasHash -or !$copiedBinary.Contains($contract)) { throw 'Build/assets changed during packaging. Do not use this incomplete runtime.' }
+if (!$copiedBinary.Contains($speechContract) -or
+    (Get-FileHash -LiteralPath (Join-Path $target 'Resources/farm/contest/audio/cheers/manifest.json')).Hash -ne
+    (Get-FileHash -LiteralPath $speechManifest).Hash) { throw 'Speech changed during packaging' }
+foreach ($clip in $speech.clips) {
+    $copied = Join-Path $target ('Resources/farm/contest/audio/cheers/' + $clip.file)
+    if ((Get-FileHash -LiteralPath $copied).Hash.ToLowerInvariant() -ne $clip.sha256) { throw 'Copied speech hash mismatch' }
+}
 $copiedBinary = $null
 foreach ($name in @('dxcompiler.dll','dxil.dll')) { Copy-Item -LiteralPath (Join-Path $release $name) -Destination $target }
 Get-ChildItem -LiteralPath $release -Filter '*.cso' -File | Copy-Item -Destination $target

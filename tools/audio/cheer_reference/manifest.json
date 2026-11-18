@@ -1,0 +1,23 @@
+{
+  "status": "User approved these two synthetic spectators as the reference performance direction. Approval does not establish full-pack pronunciation or in-game mix acceptance.",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "license": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign/blob/main/LICENSE",
+  "source": "https://huggingface.co/spaces/Qwen/Qwen3-TTS",
+  "synthetic": true,
+  "clips": [
+    {
+      "side": "L",
+      "text": "鍋に入らないぞ！",
+      "direction": "Native Japanese male spectator in his forties at a bodybuilding competition. Deep, rough, chesty voice, projecting a loud exuberant SHOUT across the hall. Explosive attack and a strong sustained final vowel, excited and warmly admiring. A spontaneous short crowd heckle, not an announcer, not narration, not reading. Speak only the supplied Japanese words, no added words, music or sound effects.",
+      "file": "PumpkinPot_L_raw.wav",
+      "sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee"
+    },
+    {
+      "side": "R",
+      "text": "鍋のほうを育ててこい！",
+      "direction": "Native Japanese male spectator in his twenties enthusiastically answering his friend at a bodybuilding competition. A brighter, higher, slightly hoarse voice. SHOUT the playful punchline with an excited laughing smile and forceful projection, rushing into the answer, stress the final command and sustain its final vowel. Spontaneous crowd banter, not a presenter or text reader. Speak only the supplied Japanese words, no added words, music or sound effects.",
+      "file": "PumpkinPot_R_raw.wav",
+      "sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32"
+    }
+  ]
+}

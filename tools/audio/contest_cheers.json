@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 3,
+  "credit": "Qwen3-TTS",
+  "terms": "https://github.com/QwenLM/Qwen3-TTS/blob/main/LICENSE",
+  "maximumVoiceSeconds": 4.5,
+  "audition": {
+    "pair": "PumpkinPot",
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "referenceDirectory": "tools/audio/cheer_reference",
+    "license": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+  },
+  "voices": {
+    "L": {"speaker": "観客・左", "reference": "PumpkinPot_L_raw.wav", "pan": -0.35},
+    "R": {"speaker": "観客・右", "reference": "PumpkinPot_R_raw.wav", "pan": 0.35}
+  },
+  "pairs": [
+    {"id":"Perfect", "replyGap":0.32, "L":["百点","満点！"], "R":["表彰状、","畑にも一枚！"], "speech":{"R":{"segments":["表彰状！","はたけにも、いちまい！"],"pauseSeconds":0.18}}},
+    {"id":"PumpkinPot", "replyGap":0.34, "L":["鍋に","入らないぞ！"], "R":["鍋のほうを","育ててこい！"]},
+    {"id":"PumpkinFestival", "replyGap":0.40, "L":["お前ひとつで","収穫祭！"], "R":["煮物にするには","会議が必要だ！"], "speech":{"L":{"segments":["お前ひとつで、シュウカクサイ！"],"pauseSeconds":0},"R":{"segments":["ニモノにするには、会議が必要だ！"],"pauseSeconds":0}}},
+    {"id":"CarrotCurry", "replyGap":0.32, "L":["カレーの主役が","来たぞ！"], "R":["ルーのほうが","付け合わせだ！"]},
+    {"id":"CarrotBundle", "replyGap":0.36, "L":["一本で一束を","名乗っていいぞ！"], "R":["一本なのに","団体戦の迫力！"], "speech":{"L":{"segments":["いっぽんで、ひとたばを、名乗っていいぞ！"],"pauseSeconds":0}}},
+    {"id":"TomatoCenter", "replyGap":0.34, "L":["ヘタまで","主役の風格！"], "R":["サラダのセンター、","決まりました！"], "speech":{"R":{"segments":["サラダのセンター！","決まりました！"],"pauseSeconds":0.18}}},
+    {"id":"TomatoLunch", "replyGap":0.34, "L":["弁当箱に","収まる気ゼロ！"], "R":["弁当箱のほうを","大きくしてこい！"]},
+    {"id":"TurnipStar", "replyGap":0.36, "L":["その丸み、","堂々の登場！"], "R":["主役の器は","伊達じゃない！"], "speech":{"R":{"segments":["主役の器は、だてじゃない！"],"pauseSeconds":0}}},
+    {"id":"LargeDelivery", "replyGap":0.32, "L":["収穫じゃない、","搬出だ！"], "R":["袋じゃない、","台車を持ってこい！"], "speech":{"L":{"segments":["しゅうかくじゃない！","ハンシュツだ！"],"pauseSeconds":0.16},"R":{"segments":["ふくろじゃない！","台車を持ってこい！"],"pauseSeconds":0.16}}},
+    {"id":"LargeShop", "replyGap":0.32, "L":["一個で売り場を","借りるな！"], "R":["売り場のほうを","広げてこい！"]},
+    {"id":"QualityMuseum", "replyGap":0.40, "L":["野菜売り場から","美術館に移籍だ！"], "R":["切る前に","記念写真だ！"], "speech":{"L":{"segments":["野菜売り場から、美術館に、イセキだ！"],"pauseSeconds":0}}},
+    {"id":"QualityKnife", "replyGap":0.34, "L":["包丁が","緊張してるぞ！"], "R":["今日は切るな、","飾っとけ！"], "speech":{"R":{"segments":["きょうは切るな！","かざっとけ！"],"pauseSeconds":0.16}}},
+    {"id":"NutrientSoil", "replyGap":0.38, "L":["土まで","ドヤ顔してるぞ！"], "R":["その土、履歴書に","書けるぞ！"], "speech":{"L":{"segments":["土まで、ドヤ顔してるぞ！"],"pauseSeconds":0},"R":{"segments":["そのつち！","りれきしょに、かけるぞ！"],"pauseSeconds":0.24}}},
+    {"id":"WaterCare", "replyGap":0.36, "L":["水の加減に","職人がいる！"], "R":["その仕上がりに","拍手を送れ！"]},
+    {"id":"Portrait", "replyGap":0.36, "L":["表彰台が","似合ってるぞ！"], "R":["まず一枚、","記念写真だ！"], "speech":{"R":{"segments":["まず、いちまい！","記念写真だ！"],"pauseSeconds":0.16}}},
+    {"id":"Guests", "replyGap":0.34, "L":["入賞野菜の","お通りだ！"], "R":["来賓席、","ひとつ空けとけ！"], "speech":{"R":{"segments":["らいひんせき！","ひとつ、あけとけ！"],"pauseSeconds":0.18}}}
+  ]
+}

@@ -184,6 +184,31 @@ def signs():
     im.save(OUT/'review.png',optimize=True)
 
 
+def crop_name_signs():
+    font_path = ROOT / 'project/Resources/fonts/NotoSansJP-VF.ttf'
+    font = ImageFont.truetype(str(font_path), 94)
+    font.set_variation_by_axes([700])
+    for name, text in (('turnip', 'カブ'), ('carrot', 'ニンジン'), ('tomato', 'トマト'), ('pumpkin', 'かぼちゃ')):
+        # Aspect matches the shared sign mesh after the fixed world-space scale.
+        im = Image.new('RGB', (720, 128), (231, 199, 146))
+        d = ImageDraw.Draw(im)
+        for y in range(3, 128, 8):
+            d.line((0, y, 720, y+3), fill=(222, 186, 131), width=1)
+        d.rectangle((5, 5, 714, 122), outline=(139, 99, 53), width=2)
+        box = d.textbbox((360, 60), text, font=font, anchor='mm')
+        assert box[0] >= 16 and box[1] >= 8 and box[2] <= 704 and box[3] <= 120
+        d.text((360, 60), text, font=font, anchor='mm', fill=(42, 34, 22))
+        im.save(OUT/('name_'+name+'.png'), optimize=True)
+
+
+def crop_name_face():
+    m = Mesh()
+    # Front faces negative Z; UVs stay left-to-right when viewed from the audience.
+    m.quad(((-.72,.32,-.023),(.72,.32,-.023),(.72,-.32,-.023),(-.72,-.32,-.023)),
+           3, 'name_face', ((0,0),(1,0),(1,1),(0,1)))
+    return save(m, 'name_face', True)
+
+
 def crop_copy(name, material):
     # Voxelize bodies for the ceremony only; leaf geometry keeps its authored silhouette.
     source=(ROOT/'project/Resources/farm'/(name+'.obj')).read_text(encoding='utf-8')
@@ -212,8 +237,8 @@ def crop_copy(name, material):
 
 def build():
     OUT.mkdir(parents=True,exist_ok=True)
-    atlas(); signs()
-    counts={'venue':save(scenery(),'venue'),**props()}
+    atlas(); signs(); crop_name_signs()
+    counts={'venue':save(scenery(),'venue'),**props(),'name_face':crop_name_face()}
     for name,material in (('crop_turnip',18),('crop_turnip_leaves',19),('crop_carrot',16),
                           ('crop_carrot_leaves',19),('crop_tomato',17),('crop_tomato_stems',19),
                           ('crop_pumpkin',20),('crop_pumpkin_vines',19)):

@@ -305,9 +305,9 @@ labels.extend([
     ["OutcomeKeepFarm", "農場はそのまま、次の大会へ進めます"],
     ["OutcomeContinue", "農場を続ける"],
     ["OutcomeFinal", "３０日間の品評会を終えて"],
-    ["OutcomeFinalPassed", "最終大会：入賞"],
-    ["OutcomeFinalFailed", "最終大会：入賞ならず"],
-    ["OutcomeFinalMissed", "最終大会：未出品"],
+    ["OutcomeFinalPassed", "今シーズンの成績"],
+    ["OutcomeFinalFailed", "挑戦終了：最終大会は目標点未満"],
+    ["OutcomeFinalMissed", "挑戦終了：最終大会に未出品"],
     ["OutcomeFinalLegacy", "最終大会：出品済み"],
     ["OutcomeNoRank", "出品がないため、総合評価はありません"],
     ["OutcomeRankNote", "総合ランクは３大会の合計点で決まります"],
@@ -349,12 +349,30 @@ labels.extend([
     ["ContestWeightRuleShort", "重さはゲーム内の換算値です"],
 ])
 labels.extend([
-    ["ExhibitionTitle", "ゲームオーバー演出デモ版"], ["ExhibitionEntry", "ゲームオーバー演出デモ版"],
-    ["ExhibitionGoal", "品評会の結果で、ゲームオーバー演出を確認"],
+    ["ExhibitionTitle", "大会演出の確認"], ["ExhibitionEntry", "大会演出の確認"],
+    ["ExhibitionGoal", "品評会の結果を選ぶ"],
     ["ExhibitionRecorded", "育成操作なしで、３種類の結果を再生できます"],
     ["ExhibitionWatch", "演出を見る"], ["ExhibitionAgain", "もう一度見る"],
     ["ExhibitionHome", "デモメニューへ"],
     ["ExhibitionMissing", "デモ用データを読み込めません"],
+    ["ClearGalleryTitle", "クリア演出コレクション"],
+    ["ClearGalleryHome", "ほかのセリフを見る"],
+    ["GalleryPerfect", "かぼちゃ：満点"],
+    ["GalleryPumpkinPot", "かぼちゃ：鍋"],
+    ["GalleryPumpkinFestival", "かぼちゃ：収穫祭"],
+    ["GalleryCarrotCurry", "ニンジン：カレー"],
+    ["GalleryCarrotBundle", "ニンジン：団体戦"],
+    ["GalleryTomatoCenter", "トマト：センター"],
+    ["GalleryTomatoLunch", "トマト：弁当箱"],
+    ["GalleryPumpkinStar", "かぼちゃ：主役"],
+    ["GalleryLargeDelivery", "かぼちゃ：搬出"],
+    ["GalleryLargeShop", "ニンジン：売り場"],
+    ["GalleryQualityMuseum", "トマト：美術館"],
+    ["GalleryQualityKnife", "ニンジン：包丁"],
+    ["GalleryNutrientSoil", "ニンジン：土"],
+    ["GalleryWaterCare", "かぼちゃ：水加減"],
+    ["GalleryPortrait", "トマト：記念写真"],
+    ["GalleryGuests", "トマト：来賓席"],
 ])
 labels.extend([
     ["MenuFarm", "農作業"], ["MenuTerrain", "水路・地形"], ["MenuRecords", "セーブ"],
@@ -581,29 +599,73 @@ labels.extend([
     ["ExperienceRecordsStep", "まず：新しい記録として保存"],
     ["ExperienceRecordsWatch", "注目：読み込むと畑や所持品が戻る"],
 ])
+labels.extend([
+    ["CampaignTab", "大会・クリア"],
+    ["CampaignStart", "大会を初日から始める"],
+    ["CampaignExhibit", "展示：クリア直前から"],
+    ["FinalSubmission", "展示：最終出品・クリア"],
+    ["FinalFailure", "展示：目標点未満"],
+    ["FinalMissed", "展示：未出品で終了"],
+    ["CampaignGoal", "目標：３０日目の品評会で８５点以上"],
+    ["CampaignStep", "まず：畑を耕し、堆肥と種を準備"],
+    ["CampaignWatch", "１０・２０日目も出品し、最後を目指す"],
+    ["CampaignFresh", "新規大会：１日目・３００Ｇから"],
+    ["FinalSubmissionGoal", "最終出品からクリアまでを体験"],
+    ["FinalSubmissionStep", "まず：出品内容を確認し、提出する"],
+    ["FinalSubmissionWatch", "展示用の作物で、通常と同じ審査"],
+    ["FinalFailureGoal", "点数が足りない場合の結果を確認"],
+    ["FinalFailureStep", "まず：予約済みの作物を提出する"],
+    ["FinalFailureWatch", "クリアと区別し、再挑戦へ進める"],
+    ["FinalMissedGoal", "提出せず期限を過ぎた場合を確認"],
+    ["FinalMissedStep", "開始すると大会の終了結果を表示"],
+    ["FinalMissedWatch", "農場を見るか、再挑戦を選べる"],
+])
+labels.extend([
+    ["FinalClearTitle", "大会クリア"], ["FinalClearBegin", "大会クリアへ"],
+    ["FinalClearSkip", "演出を省略"], ["FinalClearContinue", "成績一覧へ"],
+])
+labels.extend([
+    ["CheerAudienceLeft", "左の観客"], ["CheerAudienceRight", "右の観客"],
+])
+cheer_data = json.loads((ROOT / "tools/audio/contest_cheers.json").read_text(encoding="utf-8"))
+assert cheer_data["schemaVersion"] == 3
+for pair in cheer_data["pairs"]:
+    for side in ("L", "R"):
+        assert len(pair[side]) == 2
+        labels.extend([f"Cheer{pair['id']}{side}{i}", line] for i, line in enumerate(pair[side]))
+clear_font = ImageFont.truetype(str(font_path), 72)
+clear_font.set_variation_by_axes([700])
+def label_font(name):
+    return clear_font if name == "FinalClearTitle" else font
+
 goal_debug_labels = labels[next(i for i, row in enumerate(labels) if row[0] == "PestWarning"):]
 assert len({name for name, _ in labels}) == len(labels)
 atlas_width = cell_w * columns
 measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
 rects = []
 x = y = 0
+row_height = cell_h
 # Variable-width shelves retain stable label IDs without allocating a second texture.
 for name, text in labels:
-    width = int(measure.textlength(text, font=font)) + 4
+    width = int(measure.textlength(text, font=label_font(name))) + 4
+    label_height = 88 if name == "FinalClearTitle" else 38
     assert width <= cell_w, (name, width)
     if x + width > atlas_width:
-        x, y = 0, y + cell_h
-    rects.append((x, y, width, 38))
+        x, y = 0, y + row_height
+        row_height = cell_h
+    row_height = max(row_height, label_height+4)
+    rects.append((x, y, width, label_height))
     x += width + 4
-ascii_y = y + cell_h
-height = ascii_y + 128
+ascii_y = y + row_height
+bubble_y = ascii_y + 128
+height = bubble_y + 140
 assert height <= 4096, "Split the label atlas before adding more rows"
 atlas = Image.new("RGBA", (atlas_width, height))
 draw = ImageDraw.Draw(atlas)
-for (_, text), (x, y, _, _) in zip(labels, rects):
-    draw.text((x + 2, y + 4), text, fill="white", font=font, anchor="lt")
+for (name, text), (x, y, _, _) in zip(labels, rects):
+    draw.text((x + 2, y + 4), text, fill="white", font=label_font(name), anchor="lt")
 for (name, text), (x, y, width, height_) in zip(labels, rects):
-    left, top, right, bottom = draw.textbbox((x + 2, y + 4), text, font=font, anchor="lt")
+    left, top, right, bottom = draw.textbbox((x + 2, y + 4), text, font=label_font(name), anchor="lt")
     assert x <= left <= right <= x + width and y <= top <= bottom <= y + height_, name
     assert atlas.getchannel("A").crop((x, y, x + width, y + height_)).getbbox(), name
 ascii_font = ImageFont.truetype(str(font_path), 24)
@@ -612,6 +674,18 @@ for i in range(95):
     x, y = (i % 40) * 32, ascii_y + (i // 40) * 40
     # A shared baseline keeps decimal points and punctuation below the digits.
     draw.text((x, y + 28), chr(32 + i), font=ascii_font, fill="white", anchor="ls")
+# Authored UI masks share the existing atlas and descriptor. Tails point to offscreen spectators.
+for side in range(2):
+    x = side * 360
+    left = x + (16 if side == 0 else 0)
+    outline, fill = (32, 51, 44, 255), (249, 250, 245, 255)
+    draw.rounded_rectangle((left, bubble_y, left + 335, bubble_y + 131), radius=6, fill=fill, outline=outline, width=3)
+    if side == 0:
+        draw.polygon([(x+18,bubble_y+80),(x,bubble_y+111),(x+18,bubble_y+104)], fill=outline)
+        draw.polygon([(x+19,bubble_y+85),(x+7,bubble_y+105),(x+19,bubble_y+101)], fill=fill)
+    else:
+        draw.polygon([(x+333,bubble_y+80),(x+351,bubble_y+111),(x+333,bubble_y+104)], fill=outline)
+        draw.polygon([(x+332,bubble_y+85),(x+344,bubble_y+105),(x+332,bubble_y+101)], fill=fill)
 asset = ROOT / "project/Resources/ui/farm_runtime_menu.png"
 asset.parent.mkdir(parents=True, exist_ok=True)
 with NamedTemporaryFile(dir=asset.parent, suffix=".png", delete=False) as temporary:
@@ -633,6 +707,7 @@ header += f"inline constexpr std::uint64_t kAtlasByteCount = {len(atlas_bytes)}U
 header += "enum class Label {\n"
 header += "".join("    " + name + ",\n" for name, _ in labels) + "};\n"
 header += "struct AtlasRect { float x, y, width, height; };\n"
+header += f"inline constexpr std::array<AtlasRect, 2> kCheerBubbleUV = {{{{{{0, {bubble_y}, 352, 132}}, {{360, {bubble_y}, 352, 132}}}}}};\n"
 header += f"inline constexpr std::array<AtlasRect, {len(rects)}> kLabels = {{{{\n"
 header += "".join("    {" + ", ".join(str(v) + ".0f" for v in r) + "},\n" for r in rects) + "}};\n"
 header += f"inline constexpr float kAtlasWidth = {atlas.width}.0f;\n"

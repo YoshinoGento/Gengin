@@ -4,7 +4,7 @@
 #include <filesystem>
 
 void FarmExhibitionSystem::Initialize(const std::string& directory, const std::string& startup) {
-    Close(); selected_ = 0; records_ = {}; startup_ = false;
+    Close(); selected_ = 0; records_ = {}; showcases_ = {}; startup_ = false; repeatFirstCheer_ = false; clearGallery_ = false;
     constexpr std::array<const char*, kCaseCount> names{{"failed.json", "passed.json", "missed.json"}};
     constexpr std::array<FarmContestGoalStatus, kCaseCount> expected{{
         FarmContestGoalStatus::Failed, FarmContestGoalStatus::Passed, FarmContestGoalStatus::Missed}};
@@ -19,11 +19,18 @@ void FarmExhibitionSystem::Initialize(const std::string& directory, const std::s
         nlohmann::json config;
         startup_ = !JsonFile::Load(startup, config) || !config.is_object() ||
             !config.contains("enabled") || !config["enabled"].is_boolean() || config["enabled"].get<bool>();
+        repeatFirstCheer_ = startup_ && config.is_object() && config.contains("repeatFirstCheer") &&
+            config["repeatFirstCheer"].is_boolean() && config["repeatFirstCheer"].get<bool>();
+        clearGallery_ = startup_ && config.is_object() && config.contains("clearGallery") &&
+            config["clearGallery"].is_boolean() && config["clearGallery"].get<bool>();
     }
+    if (clearGallery_)
+        for (int i=0; i<CaseCount(); ++i) showcases_[i] = FarmContestShowcaseSystem::Build(i);
     if (startup_) Open();
 }
 bool FarmExhibitionSystem::Available(int index) const noexcept {
-    return index >= 0 && index < kCaseCount && records_[index].valid;
+    if (index < 0 || index >= CaseCount()) return false;
+    return clearGallery_ ? showcases_[index].valid : records_[index].valid;
 }
 void FarmExhibitionSystem::Open() noexcept { Home(); }
 void FarmExhibitionSystem::Home() noexcept {
@@ -35,10 +42,15 @@ bool FarmExhibitionSystem::Select(int index) noexcept {
     selected_ = index; return true;
 }
 farm::CropType FarmExhibitionSystem::Crop() const noexcept {
-    return Available(selected_) ? records_[selected_].results.back().harvest.quality.crop : farm::CropType::None;
+    if (!Available(selected_)) return farm::CropType::None;
+    return clearGallery_ ? showcases_[selected_].quality.crop : records_[selected_].results.back().harvest.quality.crop;
 }
 bool FarmExhibitionSystem::Begin(float maximumSize) noexcept {
     if (!Active() || !Available(selected_) || !Complete()) return false;
+    if (clearGallery_) {
+        if (!presentation_.BeginPreview(showcases_[selected_], static_cast<FarmContestCheerSystem::Pair>(selected_))) return false;
+        phase_ = Phase::Result; beginning_ = true; return true;
+    }
     const auto& record = records_[selected_];
     if (selected_ == static_cast<int>(Case::Missed)) {
         presentation_.Close(); outcome_.Reset();
@@ -48,6 +60,8 @@ bool FarmExhibitionSystem::Begin(float maximumSize) noexcept {
     } else {
         const auto comparison = FarmContestComparisonSystem::Build(2, record.day, record.results, true, maximumSize);
         if (!comparison.valid) return false;
+        // Only the opt-in audition copy repeats its first eligible pair; normal play keeps rotation.
+        if (repeatFirstCheer_) presentation_ = {};
         presentation_.Begin(comparison, false); phase_ = Phase::Result;
     }
     beginning_ = true; return true;

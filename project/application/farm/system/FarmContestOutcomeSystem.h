@@ -6,7 +6,9 @@
 // Session-only acknowledgement and timing; authoritative scores remain in the economy.
 class FarmContestOutcomeSystem final {
 public:
+    enum class Ending { Pending, Cleared, Failed, Missed, LegacyCompleted };
     struct Frame {
+        Ending ending = Ending::Pending;
         FarmContestSeasonSummary season{};
         FarmContestGoals goals{};
         int missedDay = 0;
@@ -34,6 +36,7 @@ public:
         const int oldMissed = frame_.missedDay;
         frame_.season = season;
         frame_.goals = FarmContestGoalSystem::Evaluate(day, results, staged);
+        frame_.ending = EvaluateEnding(season, frame_.goals);
         frame_.missedDay = 0;
         // A loaded later-day farm gets the latest missed deadline, not a backlog of popups.
         if (!season.finalized) {
@@ -88,6 +91,16 @@ public:
         return 0;
     }
     [[nodiscard]] const Frame& GetFrame() const noexcept { return frame_; }
+    [[nodiscard]] static Ending EvaluateEnding(const FarmContestSeasonSummary& season,
+        const FarmContestGoals& goals) noexcept {
+        if (!season.valid || !season.finalized) return Ending::Pending;
+        if (season.events.back() == FarmContestEventStatus::Missed) return Ending::Missed;
+        switch (goals.back().status) {
+        case FarmContestGoalStatus::Passed: return Ending::Cleared;
+        case FarmContestGoalStatus::Failed: return Ending::Failed;
+        default: return Ending::LegacyCompleted;
+        }
+    }
 private:
     [[nodiscard]] float Phase(float start, float end) const noexcept {
         const float t = std::clamp((elapsed_ - start) / (end - start), 0.0f, 1.0f);

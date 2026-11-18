@@ -1346,6 +1346,8 @@ int main() {
         assert(entry.modal && entry.Covers({640, 300}));
         if (phase == FarmPlayFlow::Phase::Briefing) {
             assert(entry.briefing);
+            assert(entry.Hit({200, 400}).action == Action::CampaignStart);
+            assert(entry.Hit({700, 400}).action == Action::CampaignExhibit);
             assert(entry.Hit({200, 590}).action == Action::FlowContinue);
             assert(entry.Hit({700, 660}).action == Action::Restart);
             assert(entry.Hit({700, 590}).action == Action::FlowRecords);

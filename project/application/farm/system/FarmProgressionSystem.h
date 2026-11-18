@@ -41,6 +41,8 @@ public:
 			mode == FarmProgressionMode::FreeFarming;
 	}
 
+	// Legacy save field: true means session-ended, not necessarily a successful contest.
+	// Contest success is derived by FarmContestOutcomeSystem from the recorded final entry.
 	[[nodiscard]] bool IsCleared() const noexcept { return cleared_; }
 	[[nodiscard]] int GetTargetMoney() const noexcept { return targetMoney_; }
 	[[nodiscard]] int GetRemainingMoney(int currentMoney) const noexcept;

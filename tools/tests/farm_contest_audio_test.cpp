@@ -24,7 +24,7 @@ int main() {
     const auto otherVoice=backend.Play(other,paused); Check(static_cast<bool>(otherVoice));
     const auto baseline=backend.GetStatistics();
     using Cue=FarmContestPresentationSystem::Cue;
-    for (auto cue : {Cue::Assess,Cue::Recorded,Cue::Passed,Cue::Failed,Cue::None,static_cast<Cue>(1000)}) {
+    for (auto cue : {Cue::Assess,Cue::Recorded,Cue::Passed,Cue::Failed,Cue::Clear,Cue::Drumroll,Cue::Silence,Cue::None,static_cast<Cue>(1000)}) {
         Check(FarmContestAudioSystem::VolumeFor(cue,-500)==0);
         Check(FarmContestAudioSystem::VolumeFor(cue,0)==0);
         Check(FarmContestAudioSystem::VolumeFor(cue,500)==FarmContestAudioSystem::VolumeFor(cue,100));
@@ -51,8 +51,9 @@ int main() {
         Check(backend.GetStatistics().decodedPcmBytes==baseline.decodedPcmBytes);
         for(int run=0;run<3;++run) {
             Check(sound.Initialize(&backend,"project/Resources/farm/contest/audio"));
-            Check(backend.GetStatistics().loadedClipCount==baseline.loadedClipCount+3);
-            Check(backend.GetStatistics().decodedPcmBytes==baseline.decodedPcmBytes+72960*2);
+            Check(sound.CheersReady());
+            Check(backend.GetStatistics().loadedClipCount==baseline.loadedClipCount+5+farm::cheerassets::kClips.size());
+            Check(backend.GetStatistics().decodedPcmBytes==baseline.decodedPcmBytes+(72960+220800+48000+farm::cheerassets::kPcmBytes)*2);
             sound.Begin(0); sound.Update(Cue::Passed,true,true);
             Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
             sound.Begin(-500); sound.Update(Cue::Failed,true,true);
@@ -60,14 +61,32 @@ int main() {
             sound.Begin(40);
             sound.Update(static_cast<Cue>(1000),true,true);
             Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
-            for(auto cue:{Cue::Assess,Cue::Recorded,Cue::Passed,Cue::Failed}) {
+            for(auto cue:{Cue::Assess,Cue::Recorded,Cue::Passed,Cue::Failed,Cue::Clear,Cue::Drumroll}) {
                 sound.Update(cue,true,true);
                 Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
                 sound.Update(Cue::None,true,false);
-                Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+                Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
                 sound.Update(Cue::None,true,true);
+                Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
+                sound.Update(Cue::Silence,true,true);
                 Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
             }
+            sound.Update(Cue::Drumroll,true,true);
+            sound.Update(Cue::None,true,false);
+            for(int i=0;i<115;++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10)); backend.Update(.01f);
+            }
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
+            sound.Update(Cue::None,true,true);
+            for(int i=0;i<115;++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10)); backend.Update(.01f);
+            }
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+            sound.Update(Cue::Drumroll,true,true); sound.Update(Cue::Clear,true,true);
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
+            sound.Update(Cue::None,true,false); sound.Update(Cue::Silence,true,false);
+            sound.Update(Cue::None,true,true);
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
             for(int i=0;i<100;++i) sound.Update(Cue::Assess,true,true);
             Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
             sound.Update(Cue::Failed,false,true);
@@ -89,7 +108,66 @@ int main() {
     }
     Check(backend.GetStatistics().loadedClipCount==baseline.loadedClipCount);
     Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+    {
+        using Cheer=FarmContestCheerSystem;
+        using Pair=Cheer::Pair;
+        using Side=Cheer::Side;
+        FarmContestAudioSystem sound;
+        Check(sound.Initialize(&backend,"project/Resources/farm/contest/audio"));
+        Cheer::Frame left{Pair::PumpkinPot,Side::Left,1,1,true,1};
+        auto right=left; right.side=Side::Right;
+        for(int percent:{0,-1,40,100,1000}) {
+            sound.Begin(percent);
+            sound.Update(Cue::Clear,true,true,left);
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+(percent>0?2:0));
+            for(int i=0;i<50;++i) sound.Update(Cue::None,true,true,left);
+            Check(backend.GetStatistics().activeVoiceCount<=baseline.activeVoiceCount+(percent>0?2:0));
+            sound.Update(Cue::None,true,true,right);
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+(percent>0?2:0));
+            sound.Update(Cue::Silence,true,false,right);
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount && backend.IsVoiceActive(otherVoice));
+        }
+        sound.Begin(40); sound.Update(Cue::Clear,true,true,left);
+        sound.Update(Cue::None,true,false,left);
+        const int speechTicks=static_cast<int>(std::ceil((Cheer::VoiceSeconds(Pair::PumpkinPot,Side::Left)+.30f)/.01f));
+        for(int i=0;i<speechTicks;++i) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); backend.Update(.01f); }
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+2);
+        sound.Update(Cue::None,true,true,left);
+        for(int i=0;i<speechTicks;++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10)); backend.Update(.01f);
+            sound.Update(Cue::None,true,true,left);
+        }
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1); // Speech ended, not restarted.
+        sound.Update(Cue::None,true,true,right);
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+2);
+        sound.Update(Cue::None,false,true,right);
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+        for(int pair=0;pair<static_cast<int>(Pair::Count);++pair) for(auto side:{Side::Left,Side::Right}) {
+            sound.Begin(40);
+            sound.Update(Cue::None,true,true,{static_cast<Pair>(pair),side,1,1,true,1});
+            Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
+            sound.Stop(); Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+        }
+        sound.Begin(40);
+        sound.Update(Cue::None,true,true,{Pair::Count,Side::Left,1,1,true,1});
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+        auto silent=left; silent.voiceReady=false;
+        sound.Update(Cue::None,true,true,silent);
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount);
+        const auto partial=std::filesystem::path("generated/codex_checks/contest_speech_partial");
+        std::filesystem::create_directories(partial/"cheers");
+        for(const auto file:{"assess.wav","passed.wav","failed.wav","clear.wav","drumroll.wav","cheers/Perfect_L.wav"})
+            std::filesystem::copy_file(std::filesystem::path("project/Resources/farm/contest/audio")/file,partial/file,
+                std::filesystem::copy_options::overwrite_existing);
+        Check(sound.Initialize(&backend,partial.string()) && !sound.CheersReady());
+        Check(backend.GetStatistics().loadedClipCount==baseline.loadedClipCount+5);
+        sound.Begin(40); sound.Update(Cue::Clear,true,true,left);
+        Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount+1);
+    }
+    Check(backend.GetStatistics().loadedClipCount==baseline.loadedClipCount);
+    Check(backend.GetStatistics().decodedPcmBytes==baseline.decodedPcmBytes);
+    Check(backend.GetStatistics().activeVoiceCount==baseline.activeVoiceCount && backend.IsVoiceActive(otherVoice));
     Check(backend.StopVoice(otherVoice)); Check(backend.UnloadAudio(other));
     backend.Finalize();
-    std::cout << "PASS: contest XAudio2 null/partial failure, silence, focus, cap, close, completion, reentry, ownership\n";
+    std::cout << "PASS: contest XAudio2 two spectator voices,32clips,subtitle trigger,mute,pause/resume,no repeated speech,skip,optional fallback,ownership and existing cues\n";
 }

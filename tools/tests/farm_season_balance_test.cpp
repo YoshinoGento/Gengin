@@ -197,19 +197,22 @@ private:
         if (staged_) Require(comparison.passed==(comparison.total>=kFarmStageRulesV1[index].passingPoints),
             "grown verdict mismatch");
         using Cue=FarmContestPresentationSystem::Cue;
-        const Cue expected=!staged_ ? Cue::Recorded : comparison.passed ? Cue::Passed : Cue::Failed;
+        const bool finalClear=staged_ && comparison.passed && index==2;
+        const Cue expected=finalClear ? Cue::Clear : !staged_ ? Cue::Recorded : comparison.passed ? Cue::Passed : Cue::Failed;
         FarmContestPresentationSystem presentation;
         presentation.Begin(comparison,false);
-        int assessments=0, verdicts=0;
-        const int revealTicks = static_cast<int>(std::ceil(FarmContestPresentationSystem::kRevealSeconds / kTickSeconds));
+        int assessments=0, verdicts=0,rolls=0;
+        const float seconds=finalClear ? FarmContestPresentationSystem::kClearSeconds : FarmContestPresentationSystem::kRevealSeconds;
+        const int revealTicks = static_cast<int>(std::ceil(seconds / kTickSeconds))+1;
         for (int tick = 0; tick <= revealTicks; ++tick) {
             presentation.Update(kTickSeconds);
             const auto cue=presentation.ConsumeCue();
             if (cue==Cue::Assess) ++assessments;
+            else if(cue==Cue::Drumroll) { Require(finalClear,"drumroll only for final clear"); ++rolls; }
             else if (cue!=Cue::None) { Require(cue==expected,"wrong grown verdict sound"); ++verdicts; }
             Require(presentation.ConsumeCue()==Cue::None,"duplicate grown sound");
         }
-        Require(assessments==1 && verdicts==1,"grown judging cue sequence");
+        Require(assessments==(finalClear?0:1) && verdicts==1 && rolls==(finalClear?1:0),"grown judging cue sequence");
         const auto frame=presentation.GetFrame();
         Require(frame.verdictVisible && frame.adviceReveal==1 && frame.displayedTotal==comparison.total,
             "grown judging did not complete");

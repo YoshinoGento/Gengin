@@ -618,6 +618,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     case Action::ContestExplanation: contestPresentation_.ToggleExplanation(); return;
     case Action::ContestOutcomeReveal: contestOutcome_.Reveal(); focusedItem_ = -1; return;
     case Action::ContestDetailClose:
+        if (!contestPresentation_.Complete()) return;
         if (contestPresentation_.GetFrame().unsubmitted && !contestOutcome_.GetFrame().season.finalized) {
             (void)contestOutcome_.AcknowledgeMissed(contestPresentation_.GetFrame().comparison.day);
             contestPresentation_.Close(); open_=false; contestNotice_=false; focusedItem_=-1; return;
@@ -1280,7 +1281,8 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     if (exhibition_.Active()) return UpdateExhibition(s, input);
     if (!s.host.IsViewportFocused()) {
         arrivalAudio_.Update(StartFrame(),flow_.GetPhase()==FarmPlayFlow::Phase::Starting,false);
-        contestAudio_.Update(contestPresentation_.ConsumeCue(),contestPresentation_.Active(),false);
+        // A newly submitted celebration stays pending while its presentation clock is paused.
+        contestAudio_.Update(FarmContestPresentationSystem::Cue::None,contestPresentation_.Active(),false);
         s.farmIrrigationPreviewSystem.EndTerrainStroke();
         frameCaptured_ = true; return true;
     }
@@ -1316,7 +1318,8 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
                 else if (!contestPresentation_.Back()) Execute(s, {Action::ContestDetailClose});
             }
         }
-        contestAudio_.Update(contestPresentation_.ConsumeCue(),contestPresentation_.Active(),true);
+        contestAudio_.Update(contestPresentation_.ConsumeCue(),contestPresentation_.Active(),true,
+            contestPresentation_.GetFrame().cheer);
         BuildView(s); frameCaptured_ = true; return true;
     }
     if (view_.contestOutcome) {

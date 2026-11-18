@@ -1,0 +1,21 @@
+観客の掛け声音声: Qwen3-TTS (Qwen Team / Alibaba Cloud)
+
+承認済みの2台詞:
+Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+
+残り30台詞:
+Qwen/Qwen3-TTS-12Hz-1.7B-Base
+https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base
+上記VoiceDesignで作成した左右2人の合成音声を基準に、PC内で生成しています。
+実在人物の録音や、特定の声優・人物の模倣ではありません。
+
+公式プロジェクト・モデル表記: Apache-2.0
+https://github.com/QwenLM/Qwen3-TTS
+https://github.com/QwenLM/Qwen3-TTS/blob/main/LICENSE
+ゲームには生成済みWAVのみを含め、モデル・生成エンジンは配布しません。
+
+32台詞はゲーム用のオリジナル文言。字幕と音声は同じJSONから生成。
+音量正規化、前後の無音短縮、短いフェード、左右への定位を加工しています。
+発声そのものの速度・音程は変更していません。
+生成情報・各ファイルのハッシュは同じフォルダのmanifest.jsonを参照。

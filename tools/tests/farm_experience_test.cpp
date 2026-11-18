@@ -3,6 +3,8 @@
 #include "farm/system/FarmRecoverySystem.h"
 #include "farm/system/FarmToolActionSystem.h"
 #include "farm/system/FarmSimulationStepSystem.h"
+#include "farm/system/FarmContestOutcomeSystem.h"
+#include "farm/system/FarmContestSubmissionSystem.h"
 #include "io/JsonFile.h"
 #include <chrono>
 #include <filesystem>
@@ -42,6 +44,40 @@ farm::FarmTile Crop(int kind, float growth, float moisture) {
     tile.careHistory.goodSeconds = 20 * growth; tile.careHistory.efficiencySeconds = 20 * growth;
     tile.careHistory.nutrientGrowth = growth; tile.careHistory.nutrientSupply = growth * 0.8f;
     return tile;
+}
+// Authored exhibition crops exercise real harvest/reservation/submission, not natural-play balance.
+void PrepareCampaign(Fixture& f, Topic topic) {
+    Check(f.grid.Initialize(5, 4), "fresh campaign grid");
+    f.date.Initialize(); f.economy.Initialize();
+    f.progression.Initialize({}, FarmProgressionMode::ContestSeason, true, true, true);
+    Check(f.selection.SetSelectedCrop(farm::CropType::Carrot), "initial crop");
+    if (topic == Topic::CampaignStart) return;
+    FarmToolActionSystem tools; tools.Initialize(); tools.BindStageAccess(f.access);
+    for (int stage = 0; stage < 3; ++stage) {
+        if (stage == 2 && topic == Topic::FinalMissed) break;
+        const int day = FarmContestEntrySystem::kContestDays[stage];
+        Check(f.date.RestoreSnapshot({day, 0, 1}), "exhibit date");
+        auto tile = Crop(stage, 1, stage == 1 ? .55f : .65f);
+        if (stage == 2 && topic == Topic::FinalFailure) tile.careHistory.efficiencySeconds *= .3f;
+        Check(f.grid.SetTile(6, tile) && f.grid.SelectTile(6), "exhibit crop");
+        Check(tools.ApplyToolDetailed(f.grid, FarmTool::Harvest, tile.crop, f.economy, day).Succeeded(), "exhibit harvest");
+        const auto* record = f.economy.GetHarvestRecord(f.economy.GetHarvestRecordCount() - 1);
+        Check(record != nullptr, "exhibit record");
+        const int id = record->id;
+        Check(tools.CommitHarvestProtection(f.economy, id, true, f.economy.GetInventoryGeneration()) &&
+            tools.CommitContestReservation(f.economy, id, true, f.economy.GetInventoryGeneration()), "exhibit reservation");
+        if (stage < 2) Check(FarmContestSubmissionSystem::Submit(f.economy, day, id,
+            f.economy.GetInventoryGeneration()), "earlier exhibit submission");
+    }
+    if (topic == Topic::FinalMissed) {
+        Check(f.date.RestoreSnapshot({31, 0, 1}), "missed deadline");
+        static_cast<void>(f.progression.EvaluateSeason(FarmContestSeasonSystem::Evaluate(31, f.economy.GetContestResults())));
+    }
+    for (int i = 0; i < 3; ++i) Check(f.grid.SetTile(6 + i, Crop(i, 1, .65f)), "display crops");
+    auto progression = f.progression.CaptureSnapshot();
+    progression.pestSpread.lastProcessedDay = f.date.GetDay();
+    Check(f.progression.RestoreSnapshot(progression), "exhibit pest clock");
+    Check(f.selection.SetSelectedCrop(farm::CropType::Pumpkin), "final crop");
 }
 // These are deliberately prepared examples, not claimed natural-play measurements.
 void Prepare(Fixture& f, int index) {
@@ -101,6 +137,47 @@ void Prepare(Fixture& f, int index) {
 void ValidateAction(Fixture& f, int index) {
     FarmToolActionSystem tools; tools.Initialize(); tools.BindStageAccess(f.access);
     switch (static_cast<Topic>(index)) {
+    case Topic::CampaignStart:
+        Check(f.date.GetDay() == 1 && f.economy.GetMoney() == 300 && !f.progression.IsCleared() &&
+            f.progression.StagePolicy().enabled && f.progression.PestsEnabled() &&
+            f.progression.WeatherVersion() == 1 && f.grid.GetTileCount() == 20 &&
+            !f.economy.IsCropUnlocked(farm::CropType::Pumpkin), "fresh staged campaign");
+        Check(f.grid.SelectTile(6) && tools.ApplyToolDetailed(f.grid, FarmTool::Hoe, farm::CropType::Carrot,
+            f.economy, 1).Succeeded() && tools.CompostSelectedTile(f.grid) &&
+            f.economy.BuySeed(farm::CropType::Carrot).Succeeded() &&
+            tools.ApplyToolDetailed(f.grid, FarmTool::Seed, farm::CropType::Carrot, f.economy, 1).Succeeded(), "new game first crop");
+        break;
+    case Topic::FinalSubmission: case Topic::FinalFailure: {
+        Check(f.date.GetDay() == 30 && !f.progression.IsCleared(), "final is not pre-cleared");
+        const int id = f.economy.GetContestReservationId();
+        const auto generation = f.economy.GetInventoryGeneration();
+        Check(FarmContestSubmissionSystem::Submit(f.economy, 30, id, generation), "normal final submission");
+        Check(!FarmContestSubmissionSystem::Submit(f.economy, 30, id, generation), "duplicate final submission");
+        Check(f.progression.EvaluateSeason(FarmContestSeasonSystem::Evaluate(30, f.economy.GetContestResults())), "final session stop");
+        FarmContestOutcomeSystem outcome;
+        outcome.Observe(30, f.economy.GetContestResults(), true, true);
+        const auto expected = static_cast<Topic>(index) == Topic::FinalSubmission ?
+            FarmContestOutcomeSystem::Ending::Cleared : FarmContestOutcomeSystem::Ending::Failed;
+        Check(outcome.GetFrame().ending == expected, "separate success and failure");
+        auto results = f.economy.GetContestResults();
+        for (int score : {84, 85}) {
+            results.back().qualityPoints = score - 40; results.back().sizePoints = 40;
+            outcome.Observe(30, results, true, true);
+            Check(outcome.GetFrame().ending == (score == 85 ? FarmContestOutcomeSystem::Ending::Cleared :
+                FarmContestOutcomeSystem::Ending::Failed), "84/85 boundary");
+        }
+        outcome.Observe(30, results, true, false);
+        Check(outcome.GetFrame().ending == FarmContestOutcomeSystem::Ending::LegacyCompleted, "legacy not falsely cleared");
+        outcome.Observe(30, results, false, false);
+        Check(outcome.GetFrame().ending == FarmContestOutcomeSystem::Ending::Pending, "free has no ending");
+        break;
+    }
+    case Topic::FinalMissed: {
+        FarmContestOutcomeSystem outcome;
+        outcome.Observe(f.date.GetDay(), f.economy.GetContestResults(), true, true);
+        Check(f.progression.IsCleared() && outcome.GetFrame().ending == FarmContestOutcomeSystem::Ending::Missed,
+            "missed is not success"); break;
+    }
     case Topic::Plant: case Topic::Records:
         Check(tools.ApplyToolDetailed(f.grid, FarmTool::Seed, farm::CropType::Carrot, f.economy, f.date.GetDay()).Succeeded(), "plant action"); break;
     case Topic::Harvest:
@@ -127,7 +204,8 @@ void ValidateAction(Fixture& f, int index) {
 int main(int argc, char** argv) {
     try {
         const bool generate = argc == 4 && std::string_view(argv[1]) == "--generate";
-        Check(generate || argc == 1, "usage: farm_experience_test [--generate exportedRoot outputRoot]");
+        const bool generateCampaign = argc == 2 && std::string_view(argv[1]) == "--generate-campaign";
+        Check(generate || generateCampaign || argc == 1, "usage: farm_experience_test [--generate exportedRoot outputRoot | --generate-campaign]");
         const auto temp = fs::path("generated/codex_checks") / ("experience_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         const auto assets = generate ? fs::path(argv[3]) : fs::path("project/Resources/farm/experience");
         fs::create_directories(assets);
@@ -136,9 +214,11 @@ int main(int argc, char** argv) {
         for (int i = 0; i < FarmExperienceSystem::kCount; ++i) {
             const auto name = FarmExperienceSystem::kEntries[i].file;
             const auto output = assets / (std::string(name) + ".json");
-            if (generate) {
+            const bool campaign = i >= static_cast<int>(Topic::CampaignStart);
+            if (generate || (generateCampaign && campaign)) {
                 Fixture prepared(temp / "export" / name);
-                Check(prepared.Load(FindSave(argv[2], source[i])), "load source"); Prepare(prepared, i);
+                if (campaign) PrepareCampaign(prepared, static_cast<Topic>(i));
+                else { Check(prepared.Load(FindSave(argv[2], source[i])), "load source"); Prepare(prepared, i); }
                 Check(prepared.documents.SaveAs(std::string("体験用 ") + name, prepared.grid, prepared.economy, prepared.selection), "serialize prepared");
                 nlohmann::json json;
                 Check(JsonFile::Load(prepared.documents.GetPath(), json), "read prepared");
@@ -178,8 +258,8 @@ int main(int argc, char** argv) {
             Check(switching.Load(assets / (std::string(FarmExperienceSystem::kEntries[index].file) + ".json")), "switch differently sized farms");
             Check(switching.grid.GetTileCount() == (index == 11 ? 25 : 20), "switch dimensions");
         }
-        Check(!FarmExperienceSystem::Valid(-1) && !FarmExperienceSystem::Valid(16) && FarmExperienceSystem::Path(-1).empty(), "catalog bounds");
-        std::cout << "PASS: 16 experiences, production actions, immutable originals, save-copy/load\n";
+        Check(!FarmExperienceSystem::Valid(-1) && !FarmExperienceSystem::Valid(FarmExperienceSystem::kCount) && FarmExperienceSystem::Path(-1).empty(), "catalog bounds");
+        std::cout << "PASS: " << FarmExperienceSystem::kCount << " experiences, production actions, immutable originals, save-copy/load\n";
         return 0;
     } catch (const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

@@ -23,7 +23,11 @@ struct FarmContestStageLayout {
     static constexpr Vector4 kCeremonyLightColor{1.f,.96f,.88f,1.f};
     static constexpr float kCeremonyLightIntensity=1.35f, kCeremonyShadowStrength=.82f;
     static constexpr Vector3 kCeremonyFocus{-3.3f,1.2f,0};
-    static constexpr float kCeremonySpecimenHeight=2.40f, kCeremonyPitch=.205f;
+    static constexpr float kCeremonySpecimenHeight=2.40f, kCeremonyPitch=.13f;
+    static constexpr float kResultLeft=920;
+    // Rigid plaque on the table front, left of the rosette; shared by wood and printed face.
+    static constexpr Vector3 kNamePosition{-3.85f,.60f,-1.28f};
+    static constexpr Vector3 kNameScale{1.5f,.6f,1.f};
     [[nodiscard]] static title::Frame CeremonySky(const FarmContestPresentationSystem::Frame& frame) noexcept {
         title::Frame sky;
         sky.skyTop = {.10f,.43f,.75f,1};
@@ -37,8 +41,9 @@ struct FarmContestStageLayout {
     }
     [[nodiscard]] static CeremonyCamera CeremonyView(const FarmContestPresentationSystem::Frame& frame) noexcept {
         const float settle = frame.adviceReveal;
-        const float distance = 17.5f - 4.5f * frame.specimenReveal + .7f * settle;
-        return {{0,4.6f-.5f*frame.specimenReveal+.1f*settle,-distance}, kCeremonyPitch};
+        const float distance = 14.f - 4.5f * frame.specimenReveal + .4f * settle;
+        const float clear=frame.finalClear ? 1-frame.resultReveal : 0;
+        return {{-1.3f-1.6f*clear,4.1f-.5f*frame.specimenReveal+.1f*settle+.12f*clear,-distance-.4f*clear}, kCeremonyPitch};
     }
     [[nodiscard]] static Pose CeremonySpecimen(farm::CropType crop, float multiplier) noexcept {
         auto pose = Specimen(crop,multiplier,(std::max)(3.f,multiplier),0,Page::Result);

@@ -17,11 +17,15 @@ void Layout(const FarmExhibitionSystem& system) {
     for (std::size_t i=0; i<view.count; ++i) {
         const auto& item=view.items[i]; const auto& r=item.rect;
         Check(r.x>=0 && r.y>=0 && r.x+r.width<=1280 && r.y+r.height<=720, "screen bounds");
+        if(system.ClearGallery() && system.GetPhase()==FarmExhibitionSystem::Phase::Menu)
+            Check(r.x>=150 && r.x+r.width<=1130,"gallery contained by modal background");
         const float available=item.value.empty()?r.width-20:item.valueOffset-30;
-        Check(available/farmui::kLabels[static_cast<std::size_t>(item.label)].width>=20.f/26.f, "readable label");
+        const float fontSize=item.label==farmui::Label::FinalClearTitle ? 72.f : 26.f;
+        Check(available/farmui::kLabels[static_cast<std::size_t>(item.label)].width>=20.f/fontSize, "readable label");
         Check(item.request.action!=farmui::Action::SeasonRetry && item.request.action!=farmui::Action::Save &&
             item.request.action!=farmui::Action::Restart && item.request.action!=farmui::Action::SubmitContest, "no farm mutation controls");
         for (std::size_t j=i+1; j<view.count; ++j) {
+            if(item.opacity==0 || view.items[j].opacity==0) continue;
             const auto& b=view.items[j].rect;
             Check(r.x+r.width<=b.x || b.x+b.width<=r.x || r.y+r.height<=b.y || b.y+b.height<=r.y, "no overlapping labels");
         }
@@ -53,14 +57,17 @@ int main() {
             Check(!system.SelectPage(1), "analysis unavailable during reveal");
             system.Update(std::numeric_limits<float>::quiet_NaN()); system.Update(-1);
             Check(!system.Complete(), "invalid delta ignored");
-            int assess=0,verdict=0;
-            for(int i=0; i<720; ++i) {
+            int assess=0,verdict=0,rolls=0;
+            const int ticks=static_cast<int>(std::ceil((FarmContestPresentationSystem::kClearSeconds+1)/dt));
+            for(int i=0; i<ticks; ++i) {
                 Layout(system); ++frames; system.Update(dt);
                 const auto cue=system.ConsumeCue();
                 if(cue==Cue::Assess) ++assess;
+                else if(cue==Cue::Drumroll) ++rolls;
                 else if(cue!=Cue::None) ++verdict;
             }
-            Check(system.Complete() && verdict==1 && assess==(testCase==2?0:1), "once-only complete cues");
+            Check(system.Complete() && verdict==1 && assess==(testCase==0?1:0) && rolls==(testCase==1?1:0), "once-only drumroll then verdict cues");
+            Check(system.ContestFrame().finalClear==(testCase==1), "exhibition pass uses integrated clear");
             if(testCase<2) {
                 const auto comparison=system.ContestFrame().comparison;
                 Check(comparison.total==(testCase==0?45:98) && comparison.target==85, "genuine score parity");
@@ -80,8 +87,81 @@ int main() {
     }
     system.Close(); Check(!system.Active(), "close restores ordinary owner");
     const auto startup=(temp/"enabled.json").string();
+    {std::ofstream file(startup); file << R"({"enabled":true,"clearGallery":true})";}
+    system.Initialize(fixture,startup);
+    Check(system.ClearGallery() && system.CaseCount()==16, "clear gallery opt-in");
+    Check(!system.Select(-1) && !system.Select(16), "bounded gallery selection");
+    Check(!FarmContestShowcaseSystem::Build(-1).valid && !FarmContestShowcaseSystem::Build(16).valid,
+        "bounded specimen catalog");
+    using Crop=farm::CropType;
+    constexpr std::array<Crop,16> expectedCrops{{
+        Crop::Pumpkin,Crop::Pumpkin,Crop::Pumpkin,Crop::Carrot,
+        Crop::Carrot,Crop::Tomato,Crop::Tomato,Crop::Pumpkin,
+        Crop::Pumpkin,Crop::Carrot,Crop::Tomato,Crop::Carrot,
+        Crop::Carrot,Crop::Pumpkin,Crop::Tomato,Crop::Tomato
+    }};
+    for(int pair=0; pair<system.CaseCount(); ++pair) {
+        system.Home(); Check(system.Select(pair), "all16 gallery specimens valid"); Layout(system);
+        for(int repeat=0; repeat<2; ++repeat) {
+            Check(system.Begin(3), "gallery start/replay");
+            Check(system.ConsumeBeginning() && !system.ConsumeBeginning(), "gallery audio reset once");
+            bool left=false,right=false;
+            const auto comparison=system.ContestFrame().comparison;
+            Check(comparison.valid && comparison.passed && comparison.total>=85 && comparison.total<=100,
+                "genuine passing gallery scores");
+            Check(comparison.quality.crop==FarmContestShowcaseSystem::kSpecimens[pair].crop &&
+                system.Crop()==comparison.quality.crop, "selected gallery crop");
+            Check(system.Crop()==expectedCrops[pair], "independent playable gallery crop contract");
+            Check(system.Crop()==Crop::Carrot || system.Crop()==Crop::Tomato || system.Crop()==Crop::Pumpkin,
+                "legacy test crop excluded from all gallery entries");
+            Check(FarmContestCheerSystem::Eligible(static_cast<FarmContestCheerSystem::Pair>(pair),
+                comparison.quality,comparison.total,comparison.qualityPoints), "gallery claim eligibility");
+            for(int tick=0; tick<static_cast<int>((FarmContestPresentationSystem::kClearSeconds+1)*60); ++tick) {
+                system.Update(1.f/60); Layout(system); ++frames;
+                const auto frame=system.ContestFrame();
+                if(frame.cheer.side!=FarmContestCheerSystem::Side::None) {
+                    Check(static_cast<int>(frame.cheer.pair)==pair, "explicit selected pair retained");
+                    if(frame.cheer.side==FarmContestCheerSystem::Side::Left) { Check(!right,"left before right"); left=true; }
+                    if(frame.cheer.side==FarmContestCheerSystem::Side::Right) { Check(left,"response follows call"); right=true; }
+                }
+            }
+            Check(left && right && system.Complete(), "all32 lines reachable and complete");
+            for(int page=0; page<3; ++page) { Check(system.SelectPage(page),"gallery detail tabs"); Layout(system); }
+            Check(system.SelectPage(0),"return to result before replay");
+        }
+        Check(system.Begin(3),"gallery skip begins"); system.Reveal();
+        Check(system.ContestFrame().cheer.side==FarmContestCheerSystem::Side::None,"skip clears speech frame");
+        system.Back(); Check(system.GetPhase()==System::Phase::Menu,"gallery back to choices");
+    }
+    FarmContestPresentationSystem preview;
+    auto wrong=FarmContestShowcaseSystem::Build(3);
+    Check(!preview.BeginPreview(wrong,FarmContestCheerSystem::Pair::PumpkinPot),"wrong crop rejected");
+    Check(!preview.BeginPreview(wrong,FarmContestCheerSystem::Pair::None),"invalid forced pair rejected");
+    {std::ofstream file(startup); file << R"({"enabled":false,"clearGallery":true})";}
+    system.Initialize(fixture,startup);
+    Check(!system.ClearGallery() && !system.Active() && system.CaseCount()==3,"disabled config has no gallery");
+    {std::ofstream file(startup); file << R"({"enabled":true,"clearGallery":"wrong"})";}
+    system.Initialize(fixture,startup); Check(!system.ClearGallery(),"invalid gallery option rejected");
     {std::ofstream file(startup); file << R"({"enabled":true})";}
     system.Initialize(fixture,startup); Check(system.Active() && system.Startup(), "exhibition startup");
+    {std::ofstream file(startup); file << R"({"enabled":true,"repeatFirstCheer":true})";}
+    system.Initialize(fixture,startup);
+    Check(system.Select(1), "select audition success");
+    for (int repeat=0; repeat<3; ++repeat) {
+        Check(system.Begin(3), "audition replay");
+        for(int tick=0; tick<20; ++tick) system.Update(.1f);
+        Check(system.ContestFrame().cheer.pair==FarmContestCheerSystem::Pair::PumpkinPot,
+            "audition repeats approved pair");
+        system.Reveal(); system.Home();
+    }
+    {std::ofstream file(startup); file << R"({"enabled":true,"repeatFirstCheer":"invalid"})";}
+    system.Initialize(fixture,startup); Check(system.Select(1), "invalid audition option safe");
+    Check(system.Begin(3), "ordinary rotation starts");
+    for(int tick=0; tick<20; ++tick) system.Update(.1f);
+    const auto firstPair=system.ContestFrame().cheer.pair;
+    system.Reveal(); system.Home(); Check(system.Begin(3), "ordinary rotation replays");
+    for(int tick=0; tick<20; ++tick) system.Update(.1f);
+    Check(system.ContestFrame().cheer.pair!=firstPair, "reinitialize clears audition option");
     {std::ofstream file(startup); file << R"({"enabled":false})";}
     system.Initialize(fixture,startup);
     Check(!system.Active() && !system.Startup() && system.GetPhase()==System::Phase::Closed,

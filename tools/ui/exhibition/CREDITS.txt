@@ -20,6 +20,9 @@ Noto Serif JPは生成済みタイトル画像のみ使用し、ライセンス�
 開始時の水滴音と画面遷移音はプロジェクト内の音声合成で生成。
 詳細: Resources/farm/arrival/CREDITS.txt、Resources/transition/audio/AUDIO_CREDITS.txt。
 審査音もプロジェクト内で合成。Resources/farm/contest/audio/manifest.jsonに生成情報があります。
+観客の掛け声音声: Qwen3-TTS（全16組32台詞）。
+架空の観客2人を演技指定で作り、その合成音声を基準に全台詞を生成しています。
+利用規約・加工内容: Resources/farm/contest/audio/cheers/CREDITS.txt。
 
 DirectXTex / Dear ImGui / nlohmann JSON: MIT。
 Assimp 5.3.0: 公式ソースからRelease用にビルド、BSD-3-Clauseおよび関連個別条件。

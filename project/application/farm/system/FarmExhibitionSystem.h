@@ -1,6 +1,7 @@
 #pragma once
 #include "farm/system/FarmContestPresentationSystem.h"
 #include "farm/system/FarmContestOutcomeSystem.h"
+#include "farm/system/FarmContestShowcaseSystem.h"
 #include <string>
 
 // Presentation-only copies: this System never owns or mutates the active farm.
@@ -23,6 +24,8 @@ public:
     void ToggleExplanation() noexcept { presentation_.ToggleExplanation(); }
     [[nodiscard]] bool Active() const noexcept { return phase_ != Phase::Closed; }
     [[nodiscard]] bool Startup() const noexcept { return startup_; }
+    [[nodiscard]] bool ClearGallery() const noexcept { return clearGallery_; }
+    [[nodiscard]] int CaseCount() const noexcept { return clearGallery_ ? static_cast<int>(showcases_.size()) : kCaseCount; }
     [[nodiscard]] Phase GetPhase() const noexcept { return phase_; }
     [[nodiscard]] int Selection() const noexcept { return selected_; }
     [[nodiscard]] bool Available(int index) const noexcept;
@@ -35,9 +38,10 @@ public:
 private:
     struct Record { FarmEconomySystem::ContestResults results{}; int day = 0; bool valid = false; };
     std::array<Record, kCaseCount> records_{};
+    std::array<FarmContestComparison, static_cast<std::size_t>(FarmContestCheerSystem::Pair::Count)> showcases_{};
     FarmContestPresentationSystem presentation_;
     FarmContestOutcomeSystem outcome_;
     Phase phase_ = Phase::Closed;
     int selected_ = 0;
-    bool startup_ = false, beginning_ = false;
+    bool startup_ = false, beginning_ = false, repeatFirstCheer_ = false, clearGallery_ = false;
 };

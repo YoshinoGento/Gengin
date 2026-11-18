@@ -753,6 +753,9 @@
     <ClInclude Include="application\farm\render\FarmContestRenderer.h" />
     <ClInclude Include="application\farm\render\FarmContestStageLayout.h" />
     <ClInclude Include="application\farm\system\FarmContestPresentationSystem.h" />
+    <ClInclude Include="application\farm\system\FarmContestCheerSystem.h" />
+    <ClInclude Include="application\farm\data\FarmContestCheerAssets.h" />
+    <ClInclude Include="application\farm\ui\FarmContestCheerView.h" />
     <ClInclude Include="application\farm\system\FarmContestOutcomeSystem.h" />
     <ClInclude Include="application\farm\ui\FarmContestOutcomeView.h" />
     <ClInclude Include="application\farm\ui\FarmContestDetailView.h" />
@@ -910,6 +913,7 @@
     <ClCompile Include="application\farm\system\FarmRuntimeExhibition.cpp" />
     <ClCompile Include="application\farm\system\FarmExhibitionSystem.cpp" />
     <ClInclude Include="application\farm\system\FarmExhibitionSystem.h" />
+    <ClInclude Include="application\farm\system\FarmContestShowcaseSystem.h" />
     <ClInclude Include="application\farm\ui\FarmExhibitionView.h" />
   </ItemGroup>
 </Project>

@@ -8,7 +8,8 @@
 class FarmExperienceSystem final {
 public:
     enum class Topic { Plant, Harvest, Soil, Trade, Water, Rain, Pests, Repellent,
-        Time, Judging, Results, Development, Book, Compare, Recovery, Records, Count };
+        Time, Judging, Results, Development, Book, Compare, Recovery, Records,
+        CampaignStart, FinalSubmission, FinalFailure, FinalMissed, Count };
     struct Entry { const char* file; FarmTool tool; bool contest; };
     static constexpr int kCount = static_cast<int>(Topic::Count);
     static constexpr int kPageSize = 4;
@@ -21,7 +22,9 @@ public:
         {"time", FarmTool::Seed, true}, {"judging", FarmTool::Harvest, true},
         {"results", FarmTool::Harvest, true}, {"development", FarmTool::Hoe, true},
         {"book", FarmTool::Harvest, false}, {"compare", FarmTool::Water, false},
-        {"recovery", FarmTool::Hoe, false}, {"records", FarmTool::Seed, false}
+        {"recovery", FarmTool::Hoe, false}, {"records", FarmTool::Seed, false},
+        {"campaign_start", FarmTool::Hoe, true}, {"final_submission", FarmTool::Harvest, true},
+        {"final_failure", FarmTool::Harvest, true}, {"final_missed", FarmTool::Harvest, true}
     }};
     static constexpr bool Valid(int index) noexcept { return index >= 0 && index < kCount; }
     static std::string Path(int index) {

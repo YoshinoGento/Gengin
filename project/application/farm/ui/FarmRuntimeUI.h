@@ -31,7 +31,8 @@ enum class Action {
     HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel,
     PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook,
     Repellent, RepellentSelect, RepellentPlace, RepellentRemove, Recovery, RecoveryClaim,
-    ExperienceOpen, ExperiencePage, ExperienceSelect, ExperienceBegin, ExperienceConfirm, ExperienceCancel, ExperienceAction
+    ExperienceOpen, ExperiencePage, ExperienceSelect, ExperienceBegin, ExperienceConfirm, ExperienceCancel, ExperienceAction,
+    CampaignStart, CampaignExhibit
 };
 struct Request {
     Action action = Action::None;
@@ -86,6 +87,12 @@ struct QualityRadar {
         return {center.x + directions[axis].x * distance, center.y + directions[axis].y * distance};
     }
 };
+struct SpeechBubble {
+    bool visible = false;
+    Rect rect{};
+    bool tailLeft = true;
+    float opacity = 0;
+};
 struct View {
     static constexpr std::size_t kCapacity = 40;
     std::array<Item, kCapacity> items{};
@@ -117,6 +124,7 @@ struct View {
     QualityRadar referenceRadar{};
     bool contestDetail = false;
     FarmContestPresentationSystem::Frame contestFrame{};
+    SpeechBubble cheerBubble{};
     bool contestOutcome = false;
     bool seasonOutcome = false;
     bool outcomePositive = false;

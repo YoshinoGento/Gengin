@@ -1,6 +1,7 @@
 #include "farm/ui/FarmRuntimeUI.h"
 #include "farm/ui/FarmSeedShopView.h"
 #include "farm/ui/FarmRuntimeAtlas.h"
+#include "farm/render/FarmContestStageLayout.h"
 #include "base/Logger.h"
 #include <algorithm>
 #include <fstream>
@@ -235,11 +236,14 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     } else if (view.contestDetail) {
         const auto& frame = view.contestFrame;
         const bool ceremony=frame.page==FarmContestPresentationSystem::Page::Result || frame.unsubmitted;
-        Panel({0,0,1280,78},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
+        Panel({0,0,1280,frame.finalClear ? 46.f+32.f*frame.clearReveal : 78.f},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
         Panel({0,648,1280,72},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
-        if (ceremony) {
-            Panel({658,160,590,440},{.035f,.065f,.055f,.92f});
-            Panel({658,160,4,440},{.70f,.64f,.40f,1});
+        const float resultOpacity=frame.resultReveal;
+        if (ceremony && resultOpacity>0) {
+            const float left=frame.unsubmitted ? 658.f : FarmContestStageLayout::kResultLeft;
+            const float height=frame.unsubmitted ? 440.f : 260.f;
+            Panel({left,160,1248-left,height},{.035f,.065f,.055f,.97f*resultOpacity});
+            Panel({left,160,4,height},{.70f,.64f,.40f,resultOpacity});
         }
         const auto& result = frame.comparison;
         const Vector4 neutral{.55f,.72f,.78f,1};
@@ -247,12 +251,13 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             Vector4{.38f,.8f,.64f,1} : Vector4{.94f,.64f,.3f,1};
         const float blend = frame.verdictReveal;
         const Vector4 accent{neutral.x+(finalColor.x-neutral.x)*blend,
-            neutral.y+(finalColor.y-neutral.y)*blend, neutral.z+(finalColor.z-neutral.z)*blend,1};
-        if (!frame.unsubmitted) {
-            const float y=ceremony ? 292.f : 224.f;
-            Panel({680,y,552,4},{.20f,.25f,.24f,1});
-            Panel({680,y,552*frame.totalReveal*result.total*.01f,4},accent);
-            if (result.staged) Panel({680+552*result.target*.01f,y-4,2,12},{.85f,.89f,.87f,1});
+            neutral.y+(finalColor.y-neutral.y)*blend, neutral.z+(finalColor.z-neutral.z)*blend,resultOpacity};
+        if (!frame.unsubmitted && resultOpacity>0) {
+            const float y=ceremony ? 316.f : 224.f;
+            const float x=ceremony ? 944.f : 680.f, width=ceremony ? 288.f : 552.f;
+            Panel({x,y,width,4},{.20f,.25f,.24f,resultOpacity});
+            Panel({x,y,width*frame.totalReveal*result.total*.01f,4},accent);
+            if (result.staged) Panel({x+width*result.target*.01f,y-4,2,12},{.85f,.89f,.87f,resultOpacity});
         }
     } else if (view.contestOutcome) {
         const float reveal = std::clamp(view.outcomeReveal, 0.0f, 1.0f);
@@ -307,6 +312,16 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             figure.SetPosition({target.x + 15, view.counterSelection == static_cast<int>(i) ? 156.0f : 168.0f});
             figure.SetSize({210, 280}); figure.SetColor({1,1,1,1}); figure.Update(); figure.Draw();
         }
+    }
+    if (view.cheerBubble.visible && labelCount_ < labels_.size()) {
+        const auto& bubble = view.cheerBubble;
+        const auto& uv = kCheerBubbleUV[bubble.tailLeft ? 0 : 1];
+        auto& sprite = labels_[labelCount_++];
+        sprite.SetTextureRect({uv.x,uv.y},{uv.width,uv.height});
+        sprite.SetPosition({bubble.rect.x,bubble.rect.y});
+        sprite.SetSize({bubble.rect.width,bubble.rect.height});
+        sprite.SetColor({1,1,1,std::clamp(bubble.opacity,0.f,1.f)*opacity_});
+        sprite.Update(); sprite.Draw();
     }
     const float viewOpacity = opacity_;
     for (std::size_t i = 0; i < (std::min)(view.count, view.items.size()); ++i) {
@@ -372,6 +387,12 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         }
         if (!item.value.empty()) labelRect.width = item.valueOffset - 10 - (labelRect.x-item.rect.x);
         const Vector4 darkInk{0.015f, 0.025f, 0.02f, 1};
+        if (item.label==Label::FinalClearTitle) {
+            auto shadow=labelRect; shadow.x+=2; shadow.y+=3;
+            LabelQuad(item.label,shadow,{.05f,.08f,.04f,.9f});
+            LabelQuad(item.label,labelRect,{1.f,.87f,.47f,1});
+            continue;
+        }
         LabelQuad(item.label, labelRect, item.darkInk ? darkInk : !item.enabled ? Vector4{0.42f, 0.46f, 0.45f, 1} :
             item.warning ? Vector4{1.0f, 0.72f, 0.32f, 1} : Vector4{0.96f, 0.98f, 0.96f, 1});
         if (!item.value.empty()) ValueText(item.value, {item.rect.x + item.valueOffset,

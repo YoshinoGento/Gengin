@@ -117,6 +117,10 @@ void Run() {
         system.Reset(); system.Observe(31,results,true,staged);
         const auto frame=system.GetFrame();
         Check(frame.season.finalized && !frame.missedDay,"final replaces missed notices");
+        using Ending = FarmContestOutcomeSystem::Ending;
+        const auto expectedEnding = !(mask & 4) ? Ending::Missed : !staged ? Ending::LegacyCompleted :
+            points >= 85 ? Ending::Cleared : Ending::Failed;
+        Check(frame.ending == expectedEnding, "ending classification");
         Check((frame.season.rating==FarmContestRating::Unrated)==(mask==0),"all missed is unrated");
         if (!staged) Check(frame.goals.back().status==FarmContestGoalStatus::Unknown,"legacy verdict");
         for (bool confirm : {false,true}) for (bool failed : {false,true}) {
@@ -128,6 +132,11 @@ void Run() {
         for (int tick=0;tick<120;++tick) system.Update(1.0f/60);
         Check(system.GetFrame().controlsReveal==1,"season finish");
         farmui::View complete{}; farmui::BuildContestOutcomeView(complete,system.GetFrame(),results,false,false); CheckView(complete);
+        Check(complete.outcomePositive == (expectedEnding == Ending::Cleared), "success effect only for clear");
+        const auto verdict = expectedEnding == Ending::Cleared ? farmui::Label::OutcomeFinalPassed :
+            expectedEnding == Ending::Failed ? farmui::Label::OutcomeFinalFailed :
+            expectedEnding == Ending::Missed ? farmui::Label::OutcomeFinalMissed : farmui::Label::OutcomeFinalLegacy;
+        Check(complete.items[1].label == verdict, "ending label agreement");
         Check(complete.Hit({900,624}).action==farmui::Action::SeasonRetry,"retry missing after timeline");
         for (int i=0;i<3;++i) Check((complete.Hit({1000,230+86.0f*i}).action==farmui::Action::ContestDetail)==((mask&(1<<i))!=0),"detail availability");
         ++combinations;

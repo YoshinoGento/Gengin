@@ -30,12 +30,13 @@ inline void BuildContestOutcomeView(View& view, const FarmContestOutcomeSystem::
     view.outcomeVerdictReveal = frame.verdictReveal;
     view.outcomeRowReveal = frame.rowReveal;
     const bool controlsReady = frame.controlsReveal >= 1;
-    view.outcomePositive = frame.goals.back().status == FarmContestGoalStatus::Passed;
+    using Ending = FarmContestOutcomeSystem::Ending;
+    view.outcomePositive = frame.ending == Ending::Cleared;
     view.Add(Label::OutcomeFinal, {80,48,1120,40});
     view.items[view.count-1].opacity = frame.reveal;
-    const bool missed = frame.season.events.back() == FarmContestEventStatus::Missed;
+    const bool missed = frame.ending == Ending::Missed;
     const Label verdict = missed ? Label::OutcomeFinalMissed : view.outcomePositive ? Label::OutcomeFinalPassed :
-        frame.goals.back().status == FarmContestGoalStatus::Failed ? Label::OutcomeFinalFailed : Label::OutcomeFinalLegacy;
+        frame.ending == Ending::Failed ? Label::OutcomeFinalFailed : Label::OutcomeFinalLegacy;
     view.Add(verdict, {80,110,750,56});
     view.items[view.count-1].opacity = frame.verdictReveal;
     if (frame.season.submitted > 0) {

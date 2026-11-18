@@ -38,9 +38,17 @@ InitializationTask FarmContestRenderer::InitializeIncrementally(Object3dCommon* 
         if (!signs_[i].IsValid() || signs_[i]==textures->GetFallback2D()) co_return false;
         co_await std::suspend_always{};
     }
+    constexpr std::array<const char*,farm::kFarmCropTypeCount> nameTextures{{"turnip","carrot","tomato","pumpkin"}};
+    for (std::size_t i=0;i<cropNames_.size();++i) {
+        cropNames_[i]=textures->LoadTexture2D(std::string("Resources/farm/contest/ceremony/name_")+nameTextures[i]+".png");
+        if (!cropNames_[i].IsValid() || cropNames_[i]==textures->GetFallback2D()) co_return false;
+        co_await std::suspend_always{};
+    }
     if (!sky_.Initialize(common->GetDxCommon(),textures)) co_return false;
     co_await std::suspend_always{};
-    constexpr std::array<const char*,PartCount> partNames{{"venue","board","sign","award","tails","review","glints","contact","water"}};
+    if (!celebration_.Initialize(common->GetDxCommon())) co_return false;
+    co_await std::suspend_always{};
+    constexpr std::array<const char*,PartCount> partNames{{"venue","board","sign","award","tails","review","glints","contact","water","board","name_face"}};
     for (std::size_t i=0;i<PartCount+ceremonyMeshes_.size();++i) {
         const std::string name = i<PartCount ? partNames[i] : std::filesystem::path(paths[i-PartCount]).stem().string();
         const std::string path = "farm/contest/ceremony/"+name+".obj";
@@ -50,11 +58,12 @@ InitializationTask FarmContestRenderer::InitializeIncrementally(Object3dCommon* 
         if (!mesh || mesh->HasSkinCluster()) co_return false;
         if (i<PartCount) {
             auto& object=ceremony_[i]; object.Initialize(common); object.SetModel(mesh);
-            object.SetTexture(i==Review ? review : i==Sign ? signs_[0] : palette);
+            object.SetTexture(i==Review ? review : i==Sign ? signs_[0] : i==NameFace ? cropNames_[0] : palette);
             object.SetEnableLighting(i!=Glints); object.SetCullMode(0);
             object.SetOutdoorAmbient({.82f,.90f,1.f,1.f});
             object.SetShininess(i==Water ? 96.f : 32.f);
             object.SetSurfaceDetail({i==Water ? .22f : .025f,0,0,0});
+            if (i==NameFace) object.SetSpecularType(Object3d::SpecularType::None);
         } else ceremonyMeshes_[i-PartCount]=mesh;
         co_await std::suspend_always{};
     }
@@ -79,7 +88,7 @@ void FarmContestRenderer::Draw(const FarmContestPresentationSystem::Frame& frame
             FarmContestStageLayout::kCeremonyFocus);
         if (common_->BeginShadowPass()) {
             for (std::size_t i=0;i<PartCount;++i)
-                if (visible_[i] && i!=Water && i!=Glints && i!=Contact) ceremony_[i].DrawShadow();
+                if (visible_[i] && i!=Water && i!=Glints && i!=Contact && i!=NameFace) ceremony_[i].DrawShadow();
             if (cropVisible_) for (auto& crop:ceremonyCrops_) crop.DrawShadow();
             common_->EndShadowPass();
         }
@@ -89,6 +98,7 @@ void FarmContestRenderer::Draw(const FarmContestPresentationSystem::Frame& frame
         for (std::size_t i=0;i<PartCount;++i) if (visible_[i]) ceremony_[i].Draw();
         if (cropVisible_) for (auto& crop:ceremonyCrops_) crop.Draw();
         common_->EndObjectPass();
+        celebration_.Draw(frame.celebrationActive,frame.celebrationSeconds,camera_);
         return;
     }
     common_->SetShadowStrength(0);
@@ -148,6 +158,11 @@ void FarmContestRenderer::PrepareCeremony(const FarmContestPresentationSystem::F
     const int slot=farm::ToCropSlot(result.quality.crop);
     cropVisible_=!frame.unsubmitted && result.valid && slot>=0 && slot<farm::kFarmCropTypeCount;
     if (cropVisible_) {
+        visible_[NameBoard]=visible_[NameFace]=true;
+        ceremony_[NameFace].SetTexture(cropNames_[slot]);
+        // Both instances use the same immutable world transform, never a camera-facing billboard.
+        draw(ceremony_[NameBoard],FarmContestStageLayout::kNamePosition,FarmContestStageLayout::kNameScale);
+        draw(ceremony_[NameFace],FarmContestStageLayout::kNamePosition,FarmContestStageLayout::kNameScale);
         const auto pose=FarmContestStageLayout::CeremonySpecimen(result.quality.crop,result.quality.harvestSize.multiplier);
         auto& body=ceremonyCrops_[0]; auto& leaves=ceremonyCrops_[1];
         body.SetModel(ceremonyMeshes_[slot*2]); leaves.SetModel(ceremonyMeshes_[slot*2+1]);

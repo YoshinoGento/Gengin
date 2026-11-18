@@ -1,0 +1,661 @@
+{
+    "cropSelection": {
+        "crop": "Pumpkin"
+    },
+    "date": {
+        "day": 30,
+        "elapsedSecondsInDay": 0.0,
+        "timeScale": 1.0
+    },
+    "document": {
+        "displayName": "体験用 final_submission",
+        "id": "farm_1794796370153_0",
+        "savedAt": "2026-11-16 11:32:50"
+    },
+    "economy": {
+        "contestReservationId": 3,
+        "contestResults": [
+            {
+                "contestDay": 10,
+                "harvestedDay": 10,
+                "quality": {
+                    "basePrice": 170,
+                    "crop": "Carrot",
+                    "maturity": 1.0,
+                    "nutrientBalance": 0.800000011920929,
+                    "nutrientKnown": true,
+                    "pestPenalty": 0,
+                    "salePrice": 248,
+                    "score": 96,
+                    "sizeKnown": true,
+                    "sizeMultiplier": 1.7000000476837158,
+                    "terrainFit": 1.0,
+                    "waterBalance": 1.0
+                },
+                "qualityPoints": 58,
+                "recordId": 1,
+                "rulesVersion": 1,
+                "sizePoints": 32
+            },
+            {
+                "contestDay": 20,
+                "harvestedDay": 20,
+                "quality": {
+                    "basePrice": 260,
+                    "crop": "Tomato",
+                    "maturity": 1.0,
+                    "nutrientBalance": 0.800000011920929,
+                    "nutrientKnown": true,
+                    "pestPenalty": 0,
+                    "salePrice": 380,
+                    "score": 96,
+                    "sizeKnown": true,
+                    "sizeMultiplier": 1.7000000476837158,
+                    "terrainFit": 1.0,
+                    "waterBalance": 1.0
+                },
+                "qualityPoints": 58,
+                "recordId": 2,
+                "rulesVersion": 1,
+                "sizePoints": 32
+            }
+        ],
+        "cropCounts": [
+            0,
+            0,
+            0,
+            1
+        ],
+        "cropValues": [
+            0,
+            0,
+            0,
+            613
+        ],
+        "harvestRecords": [
+            {
+                "harvestedDay": 30,
+                "id": 3,
+                "quality": {
+                    "basePrice": 420,
+                    "crop": "Pumpkin",
+                    "maturity": 1.0,
+                    "nutrientBalance": 0.800000011920929,
+                    "nutrientKnown": true,
+                    "pestPenalty": 0,
+                    "salePrice": 613,
+                    "score": 96,
+                    "sizeKnown": true,
+                    "sizeMultiplier": 2.5,
+                    "terrainFit": 1.0,
+                    "waterBalance": 1.0
+                },
+                "quantity": 1,
+                "saleProtected": true
+            }
+        ],
+        "lastHarvestQuality": {
+            "basePrice": 420,
+            "crop": "Pumpkin",
+            "maturity": 1.0,
+            "nutrientBalance": 0.800000011920929,
+            "nutrientKnown": true,
+            "pestPenalty": 0,
+            "salePrice": 613,
+            "score": 96,
+            "sizeKnown": true,
+            "sizeMultiplier": 2.5,
+            "terrainFit": 1.0,
+            "waterBalance": 1.0
+        },
+        "lastRecoveryDay": 0,
+        "lifetimeSales": 0,
+        "money": 300,
+        "nextHarvestRecordId": 4,
+        "seedCounts": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "soldCropRecords": [
+            {
+                "bestQuality": 0,
+                "crop": "Carrot",
+                "harvested": false,
+                "sizeKnown": false,
+                "sizeMultiplier": 0.0
+            },
+            {
+                "bestQuality": 0,
+                "crop": "Tomato",
+                "harvested": false,
+                "sizeKnown": false,
+                "sizeMultiplier": 0.0
+            },
+            {
+                "bestQuality": 0,
+                "crop": "Pumpkin",
+                "harvested": false,
+                "sizeKnown": false,
+                "sizeMultiplier": 0.0
+            }
+        ]
+    },
+    "grid": {
+        "height": 4,
+        "selectedIndex": 6,
+        "width": 5
+    },
+    "pestSpread": {
+        "lastProcessedDay": 30,
+        "version": 1
+    },
+    "pestsEnabled": true,
+    "playMode": "ContestSeason",
+    "schemaVersion": 25,
+    "stagedUnlocks": true,
+    "tiles": [
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 20.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 20.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 1.0,
+                "nutrientSupply": 0.800000011920929
+            },
+            "crop": "Carrot",
+            "feature": "None",
+            "growth": 1.0,
+            "height": 1,
+            "irrigationEnabled": false,
+            "moisture": 0.6499999761581421,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.800000011920929,
+            "state": "Planted",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 20.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 20.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 1.0,
+                "nutrientSupply": 0.800000011920929
+            },
+            "crop": "Tomato",
+            "feature": "None",
+            "growth": 1.0,
+            "height": 1,
+            "irrigationEnabled": false,
+            "moisture": 0.6499999761581421,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.800000011920929,
+            "state": "Planted",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 20.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 20.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 1.0,
+                "nutrientSupply": 0.800000011920929
+            },
+            "crop": "Pumpkin",
+            "feature": "None",
+            "growth": 1.0,
+            "height": 0,
+            "irrigationEnabled": false,
+            "moisture": 0.6499999761581421,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.800000011920929,
+            "state": "Planted",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        },
+        {
+            "careHistory": {
+                "drySeconds": 0.0,
+                "efficiencySeconds": 0.0,
+                "excessSeconds": 0.0,
+                "goodSeconds": 0.0,
+                "lowSeconds": 0.0,
+                "nutrientGrowth": 0.0,
+                "nutrientSupply": 0.0
+            },
+            "crop": "None",
+            "feature": "None",
+            "growth": 0.0,
+            "height": 0,
+            "irrigationEnabled": true,
+            "moisture": 0.0,
+            "pests": {
+                "damageDays": 0,
+                "warningDay": 0
+            },
+            "repellentPlant": false,
+            "soilNutrients": 0.6000000238418579,
+            "state": "Empty",
+            "waterAmount": 0.0
+        }
+    ],
+    "weatherVersion": 1
+}

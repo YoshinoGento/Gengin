@@ -1,0 +1,687 @@
+{
+  "generator": "tools/audio/bake_local_cheers.py then tools/audio/publish_local_cheers.py",
+  "credit": "Qwen3-TTS",
+  "terms": "https://github.com/QwenLM/Qwen3-TTS/blob/main/LICENSE",
+  "source_sha256": "1bb63b4f514951a1137e5dc33d17ae5ccad08c1bdbca31bc524ad2605b4be981",
+  "voices": {
+    "L": {
+      "speaker": "観客・左",
+      "reference": "PumpkinPot_L_raw.wav",
+      "pan": -0.35
+    },
+    "R": {
+      "speaker": "観客・右",
+      "reference": "PumpkinPot_R_raw.wav",
+      "pan": 0.35
+    }
+  },
+  "audition": {
+    "pair": "PumpkinPot",
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "referenceDirectory": "tools/audio/cheer_reference",
+    "license": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+  },
+  "maximumVoiceSeconds": 4.5,
+  "clips": [
+    {
+      "pair": "Perfect",
+      "side": "L",
+      "file": "Perfect_L.wav",
+      "text": "百点満点！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "f3ed8c5c26cce89c1263252ab90a3f8e8f576a218945b1065267cda83abb7ac5",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17000,
+      "frames": 33358,
+      "seconds": 1.3899166666666667,
+      "peak": 0.581390380859375,
+      "sha256": "75340147afa1a440a32ed1ae535b013632d0c88b9ba8eab6d66ebfbb590d033f"
+    },
+    {
+      "pair": "Perfect",
+      "side": "R",
+      "file": "Perfect_R.wav",
+      "text": "表彰状、畑にも一枚！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "6135f21dc5cf791dd1c57f5f07a69dde5d72a0c2c30126232aba1a8d870b3e23",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17001,
+      "frames": 60224,
+      "seconds": 2.509333333333333,
+      "peak": 0.72100830078125,
+      "speech": {
+        "segments": [
+          "表彰状！",
+          "はたけにも、いちまい！"
+        ],
+        "pauseSeconds": 0.18
+      },
+      "pauses": [
+        {
+          "startFrame": 22693,
+          "frames": 4320
+        }
+      ],
+      "sha256": "8e20a0b229870fcf461677a93613e5d57956ef092741dace0de1e6a1df334bb1"
+    },
+    {
+      "pair": "PumpkinPot",
+      "side": "L",
+      "file": "PumpkinPot_L.wav",
+      "text": "鍋に入らないぞ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17002,
+      "frames": 35585,
+      "seconds": 1.4827083333333333,
+      "peak": 0.482147216796875,
+      "sha256": "63467013fcabf603392534bb57ab75fe3f0fe942f5b3c24428d885ce988c5907"
+    },
+    {
+      "pair": "PumpkinPot",
+      "side": "R",
+      "file": "PumpkinPot_R.wav",
+      "text": "鍋のほうを育ててこい！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17003,
+      "frames": 41342,
+      "seconds": 1.7225833333333334,
+      "peak": 0.74078369140625,
+      "sha256": "271aa6a9bad5e238f45a37ca84f06a0e92c8b2a48ad4ad246f3de525c9c55a01"
+    },
+    {
+      "pair": "PumpkinFestival",
+      "side": "L",
+      "file": "PumpkinFestival_L.wav",
+      "text": "お前ひとつで収穫祭！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "ef4766ed15359dd1174b20ca7fc01129ad9e5884ddf4e44a142c8f9f6280ca40",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17004,
+      "frames": 47515,
+      "seconds": 1.9797916666666666,
+      "peak": 0.63641357421875,
+      "speech": {
+        "segments": [
+          "お前ひとつで、シュウカクサイ！"
+        ],
+        "pauseSeconds": 0.0
+      },
+      "pauses": [],
+      "sha256": "3596448edad45ff4317c5532815cd8de578b4f9060e9f658007b2d1143a5b05f"
+    },
+    {
+      "pair": "PumpkinFestival",
+      "side": "R",
+      "file": "PumpkinFestival_R.wav",
+      "text": "煮物にするには会議が必要だ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "2e4acfbf20cf7c3fed2bccee070070541862ea438fda1cea2357c6e4873eac08",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17005,
+      "frames": 63070,
+      "seconds": 2.6279166666666667,
+      "peak": 0.76776123046875,
+      "speech": {
+        "segments": [
+          "ニモノにするには、会議が必要だ！"
+        ],
+        "pauseSeconds": 0.0
+      },
+      "pauses": [],
+      "sha256": "eee81176090db6db573d00ec53461e74b962ca8c32f29a037dfa99b6437f97a5"
+    },
+    {
+      "pair": "CarrotCurry",
+      "side": "L",
+      "file": "CarrotCurry_L.wav",
+      "text": "カレーの主役が来たぞ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "79ddae694d54229a88dfc0888813322d180fa31525132683a14a95452df7003c",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17006,
+      "frames": 40865,
+      "seconds": 1.7027083333333333,
+      "peak": 0.545562744140625,
+      "sha256": "94db1833da41da15f0642c4458029767abf4813edcf66bbce932d0b23704714a"
+    },
+    {
+      "pair": "CarrotCurry",
+      "side": "R",
+      "file": "CarrotCurry_R.wav",
+      "text": "ルーのほうが付け合わせだ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "f76231261d464aa8a615af384c22923038a70919e9bcfe9ccc28ff91fe698fcb",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17007,
+      "frames": 35039,
+      "seconds": 1.4599583333333332,
+      "peak": 0.56396484375,
+      "sha256": "13a800815fb5fb6ac1b1c8dc755885b4c1b8d278ae2ede4917327a9ea6521d9c"
+    },
+    {
+      "pair": "CarrotBundle",
+      "side": "L",
+      "file": "CarrotBundle_L.wav",
+      "text": "一本で一束を名乗っていいぞ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "23b26d391ae03567671710707cff0bf8b5264de4b93c0d9cfe104829172f005a",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17008,
+      "frames": 63502,
+      "seconds": 2.6459166666666665,
+      "peak": 0.701416015625,
+      "speech": {
+        "segments": [
+          "いっぽんで、ひとたばを、名乗っていいぞ！"
+        ],
+        "pauseSeconds": 0.0
+      },
+      "pauses": [],
+      "sha256": "78e31a90410ec95675816a926b24cc381da0622424bd29d36595accb35938bf7"
+    },
+    {
+      "pair": "CarrotBundle",
+      "side": "R",
+      "file": "CarrotBundle_R.wav",
+      "text": "一本なのに団体戦の迫力！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "23195fcb9035447b1ea9ee5e3352461822e5067ba541ad840ae8a60e1b789e3e",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17009,
+      "frames": 56458,
+      "seconds": 2.3524166666666666,
+      "peak": 0.733428955078125,
+      "sha256": "13e59f18358ceea206995b654b588170cb95399c1a2267fdd8f914a89a61884f"
+    },
+    {
+      "pair": "TomatoCenter",
+      "side": "L",
+      "file": "TomatoCenter_L.wav",
+      "text": "ヘタまで主役の風格！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "3121a97c1e2c57430f7aa54082db3510325f3d8a902ac227f2ee36dfd6cf51f5",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17010,
+      "frames": 45838,
+      "seconds": 1.9099166666666667,
+      "peak": 0.574859619140625,
+      "sha256": "5381f0003241af9cef03411be9def56f4421ce721526609b41c4592168e2da44"
+    },
+    {
+      "pair": "TomatoCenter",
+      "side": "R",
+      "file": "TomatoCenter_R.wav",
+      "text": "サラダのセンター、決まりました！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "3b8fe2d424d0f8e13a8d04ad4f9ee916ef165d82db2d60c7fee213249b772235",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17011,
+      "frames": 48486,
+      "seconds": 2.02025,
+      "peak": 0.76776123046875,
+      "speech": {
+        "segments": [
+          "サラダのセンター！",
+          "決まりました！"
+        ],
+        "pauseSeconds": 0.18
+      },
+      "pauses": [
+        {
+          "startFrame": 25108,
+          "frames": 4320
+        }
+      ],
+      "sha256": "57beed924a15ae96ab19269f8650667941d507ca235dc620e47f76d0684dece4"
+    },
+    {
+      "pair": "TomatoLunch",
+      "side": "L",
+      "file": "TomatoLunch_L.wav",
+      "text": "弁当箱に収まる気ゼロ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "573608bfa74f7e0a787eea6b8ccabc9f85c73abfd377b4c0ef60e373152df69a",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17012,
+      "frames": 48982,
+      "seconds": 2.0409166666666665,
+      "peak": 0.605621337890625,
+      "sha256": "97afd607795a361db3b75602bdb798bd21e9e36cfde7d2aea0ad7d91d4113fe8"
+    },
+    {
+      "pair": "TomatoLunch",
+      "side": "R",
+      "file": "TomatoLunch_R.wav",
+      "text": "弁当箱のほうを大きくしてこい！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "474ddf312a156264bd17ab9a96a715d9f91ad4ecb096cfb9590baca63b968262",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17013,
+      "frames": 56905,
+      "seconds": 2.3710416666666667,
+      "peak": 0.5877685546875,
+      "sha256": "483ec1c279945a34c21d61914416b739f69f92c48308e5e1be0d6683ca6d65ea"
+    },
+    {
+      "pair": "TurnipStar",
+      "side": "L",
+      "file": "TurnipStar_L.wav",
+      "text": "その丸み、堂々の登場！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "703605bc269228c758d10fdfea96e3c074051314c49a676c982ab39dc5f2cbb8",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17014,
+      "frames": 51289,
+      "seconds": 2.1370416666666667,
+      "peak": 0.6400146484375,
+      "sha256": "782cf5c6d913ff67caabf0eb04f56cd875b4ad6b6b2e812e99b4b70a5aa00d4d"
+    },
+    {
+      "pair": "TurnipStar",
+      "side": "R",
+      "file": "TurnipStar_R.wav",
+      "text": "主役の器は伊達じゃない！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "2ec39c3db65cf2c01f5eb7139fdfa6aef8dc7e6df8761f0c9408fb825819addc",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17015,
+      "frames": 49405,
+      "seconds": 2.0585416666666667,
+      "peak": 0.63323974609375,
+      "speech": {
+        "segments": [
+          "主役の器は、だてじゃない！"
+        ],
+        "pauseSeconds": 0.0
+      },
+      "pauses": [],
+      "sha256": "1f11e27a963549b7f5a0d5439e0c4b501c3165695600f83eb632e389ca0e152f"
+    },
+    {
+      "pair": "LargeDelivery",
+      "side": "L",
+      "file": "LargeDelivery_L.wav",
+      "text": "収穫じゃない、搬出だ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "bb47f110a54b944e82cbc4709580b176f0167f8d2144446d0f4d27ef3f286885",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17016,
+      "frames": 57781,
+      "seconds": 2.4075416666666665,
+      "peak": 0.581939697265625,
+      "speech": {
+        "segments": [
+          "しゅうかくじゃない！",
+          "ハンシュツだ！"
+        ],
+        "pauseSeconds": 0.16
+      },
+      "pauses": [
+        {
+          "startFrame": 33960,
+          "frames": 3840
+        }
+      ],
+      "sha256": "f3213b9216e1edf6d8c40738130ec3bca9c68eb1a8e403a51a9604cab3641c8f"
+    },
+    {
+      "pair": "LargeDelivery",
+      "side": "R",
+      "file": "LargeDelivery_R.wav",
+      "text": "袋じゃない、台車を持ってこい！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "450e69481c0c67b681859dbbcbc6b06f038fe6a3583bbacace0c3a81e90b6db1",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17017,
+      "frames": 61019,
+      "seconds": 2.5424583333333333,
+      "peak": 0.639984130859375,
+      "speech": {
+        "segments": [
+          "ふくろじゃない！",
+          "台車を持ってこい！"
+        ],
+        "pauseSeconds": 0.16
+      },
+      "pauses": [
+        {
+          "startFrame": 28577,
+          "frames": 3840
+        }
+      ],
+      "sha256": "ad9bc5add9f22e7fbf1fd8d2820d1f629daf8215c3faeac5e3a039fb6d4e96f0"
+    },
+    {
+      "pair": "LargeShop",
+      "side": "L",
+      "file": "LargeShop_L.wav",
+      "text": "一個で売り場を借りるな！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "27f17acec43b8b37e48fa629326bf6aac8f9d1dd5b843668fc6f714207b4d02b",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17018,
+      "frames": 39578,
+      "seconds": 1.6490833333333332,
+      "peak": 0.520660400390625,
+      "sha256": "264afef7d1d85504e0adf4c299922738259c9b80355cde9009d12d7623c262c7"
+    },
+    {
+      "pair": "LargeShop",
+      "side": "R",
+      "file": "LargeShop_R.wav",
+      "text": "売り場のほうを広げてこい！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "c56a0673a9342daa4746d42d463a6efb2830ced0d6399a2282b934a019eb24a6",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17019,
+      "frames": 41095,
+      "seconds": 1.7122916666666668,
+      "peak": 0.48529052734375,
+      "sha256": "788d339d2bca6f0e5c675de2ff736bcb19d5e94cd0909b32003a79d0540bbd2a"
+    },
+    {
+      "pair": "QualityMuseum",
+      "side": "L",
+      "file": "QualityMuseum_L.wav",
+      "text": "野菜売り場から美術館に移籍だ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "13a286591212c91901be1e1c954734fc6923e5e1ee0a7784764dd584a3799453",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17020,
+      "frames": 67010,
+      "seconds": 2.7920833333333333,
+      "peak": 0.642333984375,
+      "speech": {
+        "segments": [
+          "野菜売り場から、美術館に、イセキだ！"
+        ],
+        "pauseSeconds": 0.0
+      },
+      "pauses": [],
+      "sha256": "a6ad89638ae4e4eb71b148f167e1c13da4ccc9e5575059f340f4d4a1f70dc101"
+    },
+    {
+      "pair": "QualityMuseum",
+      "side": "R",
+      "file": "QualityMuseum_R.wav",
+      "text": "切る前に記念写真だ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "7dca6ac3ed0e8b709a994c99e73593aeb02cbfd025e1d932a7d74db7f8a5c463",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17021,
+      "frames": 38887,
+      "seconds": 1.6202916666666667,
+      "peak": 0.67608642578125,
+      "sha256": "4b7938b48f3d1ad28880a0d5d47d84524aba16f6e625033b6cc9f07df5f75e3b"
+    },
+    {
+      "pair": "QualityKnife",
+      "side": "L",
+      "file": "QualityKnife_L.wav",
+      "text": "包丁が緊張してるぞ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "87f31db34065bd88413b56866f08cf91bb93a96a2e2d8868236127d6cdef662f",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17022,
+      "frames": 45113,
+      "seconds": 1.8797083333333333,
+      "peak": 0.58612060546875,
+      "sha256": "c94f66e3ba92f45d93a551b8b963ca4d9f54ab09e0b0c53e7de0bb7338067b98"
+    },
+    {
+      "pair": "QualityKnife",
+      "side": "R",
+      "file": "QualityKnife_R.wav",
+      "text": "今日は切るな、飾っとけ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "96030e90e465767d4a6923b6e30aa5d52f68f067b19f08a080e740151aee4523",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17023,
+      "frames": 50135,
+      "seconds": 2.0889583333333333,
+      "peak": 0.73052978515625,
+      "speech": {
+        "segments": [
+          "きょうは切るな！",
+          "かざっとけ！"
+        ],
+        "pauseSeconds": 0.16
+      },
+      "pauses": [
+        {
+          "startFrame": 29468,
+          "frames": 3840
+        }
+      ],
+      "sha256": "ae62a66bacd6a16f6e4cc6799c91cada4f8f98aa4926f2879ae672efe6246317"
+    },
+    {
+      "pair": "NutrientSoil",
+      "side": "L",
+      "file": "NutrientSoil_L.wav",
+      "text": "土までドヤ顔してるぞ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "28c324028044a5ee115d3a15ab50e805066d8f6872c8db3782e68b643f816402",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17024,
+      "frames": 44860,
+      "seconds": 1.8691666666666666,
+      "peak": 0.49615478515625,
+      "speech": {
+        "segments": [
+          "土まで、ドヤ顔してるぞ！"
+        ],
+        "pauseSeconds": 0.0
+      },
+      "pauses": [],
+      "sha256": "f6e16ac87eefb951707bf1559cc81510da3e8b81f379ea6a996ac5912794f7b8"
+    },
+    {
+      "pair": "NutrientSoil",
+      "side": "R",
+      "file": "NutrientSoil_R.wav",
+      "text": "その土、履歴書に書けるぞ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "1facd02dfd488260ab8053b6b4fa8352dab74469a999708f274a922a866e5786",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17025,
+      "frames": 73569,
+      "seconds": 3.065375,
+      "peak": 0.76776123046875,
+      "speech": {
+        "segments": [
+          "そのつち！",
+          "りれきしょに、かけるぞ！"
+        ],
+        "pauseSeconds": 0.24
+      },
+      "pauses": [
+        {
+          "startFrame": 18136,
+          "frames": 5760
+        }
+      ],
+      "sha256": "65847a67f44af288d03c7494accfd70101e4fff96610e4a2a6cc39244bac9ab1"
+    },
+    {
+      "pair": "WaterCare",
+      "side": "L",
+      "file": "WaterCare_L.wav",
+      "text": "水の加減に職人がいる！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "fb8a81a455c1059935857977188f78dc2276bbd2c1be5b610bb0d2f977988836",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17026,
+      "frames": 45681,
+      "seconds": 1.903375,
+      "peak": 0.656646728515625,
+      "sha256": "29be19f341969992ab64a02660164bb0b278e6ef7bfbecac164aa73e1e0c3812"
+    },
+    {
+      "pair": "WaterCare",
+      "side": "R",
+      "file": "WaterCare_R.wav",
+      "text": "その仕上がりに拍手を送れ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "d99a4212a2092af78cddf59c28336047953261dfc561924f094b29f2c3f017c6",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17027,
+      "frames": 46890,
+      "seconds": 1.95375,
+      "peak": 0.688690185546875,
+      "sha256": "b488c9b414cd019e136c5b8c0bdb47b061780fdc67ca33fd01eb017f167c6a0d"
+    },
+    {
+      "pair": "Portrait",
+      "side": "L",
+      "file": "Portrait_L.wav",
+      "text": "表彰台が似合ってるぞ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "c4e51809aac16d4997c6b9481eb1cc01ae11119c27350a6c4a8c77c85a169a1d",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17028,
+      "frames": 43113,
+      "seconds": 1.796375,
+      "peak": 0.54327392578125,
+      "sha256": "8f51921567f86e37e96817a77b6bc51a19e9fcfc56673c627c424b865748da45"
+    },
+    {
+      "pair": "Portrait",
+      "side": "R",
+      "file": "Portrait_R.wav",
+      "text": "まず一枚、記念写真だ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "621b01e7af5ba12f02f5d153068849fea1c7e4ad56d4b2bcee06451fca95b43d",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17029,
+      "frames": 47388,
+      "seconds": 1.9745,
+      "peak": 0.707122802734375,
+      "speech": {
+        "segments": [
+          "まず、いちまい！",
+          "記念写真だ！"
+        ],
+        "pauseSeconds": 0.16
+      },
+      "pauses": [
+        {
+          "startFrame": 21618,
+          "frames": 3840
+        }
+      ],
+      "sha256": "d742bfbef52dc7e657b2eb606e1eec5b8fac8ced197c2daf60b3b25d5ba3541a"
+    },
+    {
+      "pair": "Guests",
+      "side": "L",
+      "file": "Guests_L.wav",
+      "text": "入賞野菜のお通りだ！",
+      "pan": -0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "23391c1fbd26c3e57c6528f2b0f06a7217e624a3265da13ef23ece3f3fd91eee",
+      "raw_sha256": "f129225a0f9ab5d673a1d6d0fbc78172c71672717942ac8a6325f221c3e83db1",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17030,
+      "frames": 41670,
+      "seconds": 1.73625,
+      "peak": 0.5140380859375,
+      "sha256": "88bb04b2e32ae3823721f320e78e731e82d2e6fdc32ccb385f059748ee427824"
+    },
+    {
+      "pair": "Guests",
+      "side": "R",
+      "file": "Guests_R.wav",
+      "text": "来賓席、ひとつ空けとけ！",
+      "pan": 0.35,
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "reference_sha256": "4a10e5219b9ff3bcbb4c906569a0e19b7ed7ecf47657f886ad2a86f0cf9c9c32",
+      "raw_sha256": "807b115e1832160e58f2ac49fe2fee3f56ee99da9594776e7879afc1a016c98a",
+      "revision": "fd4b254389122332181a7c3db7f27e918eec64e3",
+      "seed": 17031,
+      "frames": 60984,
+      "seconds": 2.541,
+      "peak": 0.76776123046875,
+      "speech": {
+        "segments": [
+          "らいひんせき！",
+          "ひとつ、あけとけ！"
+        ],
+        "pauseSeconds": 0.18
+      },
+      "pauses": [
+        {
+          "startFrame": 22341,
+          "frames": 4320
+        }
+      ],
+      "sha256": "b3e9f169bd227990132222a75e6a5d8e2fcde118b7f247c059c6156a75e43905"
+    }
+  ],
+  "provenance": "Approved synthetic VoiceDesign pair retained; other30 Base local voice-reference takes. No real-person recordings.",
+  "listening_status": "Two-line direction approved. Pronunciation overrides and authored pauses included; revised-take listening pending."
+}

@@ -31,9 +31,11 @@ inline void BuildPlayFlowView(View& view, FarmPlayFlow::Phase phase, const FarmH
             {40, 28, staged ? 530.0f : 810.0f, 44});
         if (staged) view.Add(Label::StageGuide, {600,28,272,44}, {Action::StageGuide});
         view.Metric(Label::TrialDay, {900, 28, 332, 44}, 170, std::to_string(data.day));
+        view.Add(Label::CampaignStart, {40, 380, 570, 48}, {Action::CampaignStart});
+        view.Add(Label::CampaignExhibit, {630, 380, 602, 48}, {Action::CampaignExhibit});
         view.Add(Label::Experience, {40, 444, 440, 48}, {Action::ExperienceOpen});
         if (data.freeFarming || data.contestSeason)
-            view.Add(data.freeFarming ? Label::FreeGoal : Label::SeasonGoal, {40, 510, 1184, 42});
+            view.Add(data.freeFarming ? Label::FreeGoal : staged ? Label::CampaignGoal : Label::SeasonGoal, {40, 510, 1184, 42});
         else view.Metric(Label::TrialGoal, {40, 510, 1184, 42}, 650, std::to_string(data.goalMoney) + "G");
         view.Add(Label::TrialBegin, {40, 572, 570, 48}, {Action::FlowContinue});
         view.Add(Label::Records, {630, 572, 602, 48}, {Action::FlowRecords});

@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/system/FarmContestGoalSystem.h"
+#include "farm/system/FarmContestCheerSystem.h"
 #include "title/TitleCloudMotionSystem.h"
 
 enum class FarmContestSizeAdvice { None, Sufficient, MoreSize, ImproveQuality };
@@ -85,11 +86,39 @@ public:
 // Value snapshot survives inventory consumption; no pointers into farm records or GPU storage.
 class FarmContestPresentationSystem final {
 public:
-    enum class Cue { None, Assess, Passed, Failed, Recorded };
+    enum class Cue { None, Assess, Passed, Failed, Recorded, Clear, Drumroll, Silence };
     enum class Page { Result, Quality, Size };
     static constexpr float kSpecimenEnd = 1.15f;
     static constexpr float kTotalStart = kSpecimenEnd, kVerdictTime = 2.10f;
     static constexpr float kAdviceStart = 3.10f, kRevealSeconds = 4.0f;
+    static constexpr float kClearAnnouncement = 1.0f, kClearCelebrationEnd = 6.0f;
+    static constexpr float kCheerFadeIn = FarmContestCheerSystem::kVoiceDelay, kCheerFadeOut = .10f;
+    static constexpr float kCheerReadHold = .06f, kCheerGap = .15f;
+    static constexpr float kCheerVoicePadding = FarmContestCheerSystem::kVoiceDelay + kCheerFadeOut + kCheerReadHold;
+    static constexpr float kCheerLeftStart = 1.7f;
+    static constexpr float kClearTitleSettleStart = 2.8f, kClearTitleSettleEnd = 3.7f;
+    struct ClearTiming {
+        float leftEnd = 0, rightStart = 0, rightEnd = 0, resultStart = 0, resultEnd = 0;
+    };
+    [[nodiscard]] static constexpr ClearTiming TimingFor(FarmContestCheerSystem::Pair pair) noexcept {
+        using Cheer = FarmContestCheerSystem;
+        ClearTiming timing;
+        const float leftSpeechEnd = kCheerLeftStart + Cheer::kVoiceDelay + Cheer::VoiceSeconds(pair, Cheer::Side::Left);
+        timing.leftEnd = leftSpeechEnd + kCheerReadHold + kCheerFadeOut;
+        // Response delay is measured from the end of this line, not the longest line in the catalog.
+        timing.rightStart = leftSpeechEnd + Cheer::ReplyGap(pair) - Cheer::kVoiceDelay;
+        timing.rightEnd = timing.rightStart + Cheer::VoiceSeconds(pair, Cheer::Side::Right) + kCheerVoicePadding;
+        timing.resultStart = (std::max)(kClearCelebrationEnd, timing.rightEnd + kCheerGap);
+        timing.resultEnd = timing.resultStart + 1.f;
+        return timing;
+    }
+    [[nodiscard]] ClearTiming ClearTimeline() const noexcept { return TimingFor(cheerPair_); }
+    // Conservative cap for tests/hosts; actual completion follows the selected pair's resultEnd.
+    static constexpr float kClearSeconds = (std::max)(kClearCelebrationEnd,
+        kCheerLeftStart + FarmContestCheerSystem::LongestVoice(FarmContestCheerSystem::Side::Left) + .45f +
+        FarmContestCheerSystem::LongestVoice(FarmContestCheerSystem::Side::Right) + kCheerVoicePadding + kCheerGap) + 1.f;
+    static_assert(kClearAnnouncement < kCheerLeftStart &&
+        kCheerReadHold + kCheerFadeOut + FarmContestCheerSystem::kVoiceDelay < .30f);
     static_assert(0 < kSpecimenEnd && kTotalStart < kVerdictTime &&
         kVerdictTime < kAdviceStart && kAdviceStart < kRevealSeconds);
     struct Frame {
@@ -98,6 +127,13 @@ public:
         bool explanation = false, complete = false;
         bool verdictVisible = false;
         bool active = false, unsubmitted = false;
+        bool finalClear = false;
+        float clearReveal = 0;
+        float clearSeconds = 0;
+        bool celebrationActive = false;
+        float celebrationSeconds = 0;
+        FarmContestCheerSystem::Frame cheer{};
+        float resultReveal = 1;
         float ceremonyTime = 0;
         Vector2 cloudOffset{};
         float specimenReveal = 0, totalReveal = 0;
@@ -107,16 +143,30 @@ public:
     void Begin(const FarmContestComparison& comparison, bool replay) noexcept {
         comparison_ = comparison; active_ = comparison.valid; elapsed_ = replay ? kRevealSeconds : 0;
         unsubmitted_ = false;
+        clearElapsed_ = 0;
+        finalClear_ = !replay && comparison.valid && comparison.staged && comparison.passed &&
+            comparison.day == FarmContestEntrySystem::kContestDays.back();
         cloudMotion_.Reset();
         page_ = Page::Result; explanation_ = false;
-        pendingCue_ = Cue::None;
+        pendingCue_ = finalClear_ ? Cue::Drumroll : Cue::None;
+        cheerPair_ = finalClear_ ? FarmContestCheerSystem::Select(comparison.quality,
+            comparison.total, comparison.qualityPoints, previousCheer_) : FarmContestCheerSystem::Pair::None;
+        if (cheerPair_ != FarmContestCheerSystem::Pair::None) previousCheer_ = cheerPair_;
+    }
+    [[nodiscard]] bool BeginPreview(const FarmContestComparison& comparison, FarmContestCheerSystem::Pair pair) noexcept {
+        if (!comparison.valid || !comparison.staged || !comparison.passed ||
+            comparison.day != FarmContestEntrySystem::kContestDays.back() ||
+            !FarmContestCheerSystem::Eligible(pair, comparison.quality, comparison.total, comparison.qualityPoints)) return false;
+        Begin(comparison, false);
+        cheerPair_ = pair;
+        return true;
     }
     void BeginUnsubmitted(int day) noexcept {
         Close(); comparison_ = {}; elapsed_ = 0;
         for (const int contestDay : FarmContestEntrySystem::kContestDays)
             if (day == contestDay) { active_ = true; unsubmitted_ = true; comparison_.day = day; }
     }
-    void Close() noexcept { active_ = false; unsubmitted_ = false; elapsed_ = 0; page_ = Page::Result; explanation_ = false; pendingCue_ = Cue::None; cloudMotion_.Reset(); }
+    void Close() noexcept { active_ = false; unsubmitted_ = false; elapsed_ = 0; page_ = Page::Result; explanation_ = false; pendingCue_ = Cue::None; cloudMotion_.Reset(); finalClear_=false; clearElapsed_=0; cheerPair_=FarmContestCheerSystem::Pair::None; }
     [[nodiscard]] bool SelectPage(int page) noexcept {
         if (!Complete() || unsubmitted_ || page < 0 || page > static_cast<int>(Page::Size)) return false;
         page_ = static_cast<Page>(page); explanation_ = false;
@@ -130,10 +180,16 @@ public:
         if (page_ != Page::Result) { page_ = Page::Result; return true; }
         return false;
     }
-    [[nodiscard]] bool Complete() const noexcept { return active_ && elapsed_ >= kRevealSeconds; }
+    [[nodiscard]] bool Complete() const noexcept { return active_ && (finalClear_ ? clearElapsed_ >= ClearTimeline().resultEnd : elapsed_ >= kRevealSeconds); }
     void Update(float dt) noexcept {
         if (!active_ || !std::isfinite(dt) || dt <= 0) return;
         cloudMotion_.Update((std::min)(dt,.1f));
+        if (finalClear_) {
+            const float previous=clearElapsed_;
+            clearElapsed_=(std::min)(ClearTimeline().resultEnd,clearElapsed_+(std::min)(dt,.1f));
+            if (previous<kClearAnnouncement && clearElapsed_>=kClearAnnouncement) pendingCue_=Cue::Clear;
+            return;
+        }
         const float previous = elapsed_;
         elapsed_ = (std::min)(kRevealSeconds, elapsed_ + (std::min)(dt, .1f));
         if (!unsubmitted_ && previous < kTotalStart && elapsed_ >= kTotalStart) pendingCue_ = Cue::Assess;
@@ -141,6 +197,7 @@ public:
     }
     void Reveal() noexcept {
         if (!active_) return;
+        if (finalClear_) { clearElapsed_=ClearTimeline().resultEnd; pendingCue_=Cue::Silence; return; }
         // Skip discards obsolete assessment cues, but never repeats an already presented verdict.
         if (elapsed_ < kVerdictTime) pendingCue_ = VerdictCue();
         elapsed_ = kRevealSeconds;
@@ -153,19 +210,54 @@ public:
         frame.active = active_; frame.unsubmitted = unsubmitted_; frame.ceremonyTime = elapsed_;
         frame.cloudOffset = cloudMotion_.Offset();
         frame.page = page_; frame.explanation = explanation_; frame.complete = Complete();
+        frame.finalClear=finalClear_;
+        frame.clearSeconds=clearElapsed_;
         frame.specimenReveal = Progress(0, kSpecimenEnd);
         frame.totalReveal = unsubmitted_ ? 0 : Progress(kTotalStart, kVerdictTime);
         frame.verdictVisible = active_ && elapsed_ >= kVerdictTime;
         frame.verdictReveal = Progress(kVerdictTime, kAdviceStart);
         frame.adviceReveal = Progress(kAdviceStart, kRevealSeconds);
+        if (finalClear_) {
+            const auto timing = ClearTimeline();
+            // Celebration and results share one immutable submission and one continuous clock.
+            frame.ceremonyTime=clearElapsed_;
+            frame.celebrationActive=clearElapsed_>=kClearAnnouncement && clearElapsed_<kClearCelebrationEnd;
+            frame.celebrationSeconds=(std::max)(0.f,clearElapsed_-kClearAnnouncement);
+            frame.clearReveal=Smooth(kClearTitleSettleStart,kClearTitleSettleEnd,clearElapsed_);
+            frame.resultReveal=Smooth(timing.resultStart,timing.resultEnd,clearElapsed_);
+            frame.specimenReveal=Smooth(0,kSpecimenEnd,clearElapsed_);
+            frame.verdictVisible=clearElapsed_>=kClearAnnouncement;
+            frame.verdictReveal=Smooth(kClearAnnouncement,kClearAnnouncement+.45f,clearElapsed_);
+            frame.adviceReveal=Smooth(kClearAnnouncement,kClearAnnouncement+.55f,clearElapsed_);
+            if (cheerPair_ != FarmContestCheerSystem::Pair::None) {
+                frame.cheer.ducking = Smooth(kCheerLeftStart,kCheerLeftStart+kCheerFadeIn,clearElapsed_) *
+                    (1 - Smooth(timing.rightEnd-kCheerFadeOut,timing.rightEnd,clearElapsed_));
+                const bool left = clearElapsed_ >= kCheerLeftStart && clearElapsed_ < timing.leftEnd;
+                const bool right = clearElapsed_ >= timing.rightStart && clearElapsed_ < timing.rightEnd;
+                if (left || right) {
+                    const float start = left ? kCheerLeftStart : timing.rightStart;
+                    const float end = left ? timing.leftEnd : timing.rightEnd;
+                    frame.cheer.pair = cheerPair_;
+                    frame.cheer.side = left ? FarmContestCheerSystem::Side::Left : FarmContestCheerSystem::Side::Right;
+                    frame.cheer.entrance = Smooth(start, start + kCheerFadeIn, clearElapsed_);
+                    frame.cheer.opacity = frame.cheer.entrance * (1 - Smooth(end - kCheerFadeOut, end, clearElapsed_));
+                    frame.cheer.voiceReady = clearElapsed_ >= start + FarmContestCheerSystem::kVoiceDelay;
+                }
+            }
+            // Fade the result panel, not the immutable judged score or its gauge.
+            frame.totalReveal=1;
+        }
         frame.displayedTotal = static_cast<int>(comparison_.total * frame.totalReveal);
         return frame;
     }
 private:
+    [[nodiscard]] static float Smooth(float begin, float end, float seconds) noexcept {
+        const float t=std::clamp((seconds-begin)/(end-begin),0.f,1.f);
+        return t*t*(3-2*t);
+    }
     [[nodiscard]] float Progress(float begin, float end) const noexcept {
         if (!active_) return 0;
-        const float t = std::clamp((elapsed_ - begin) / (end - begin), 0.0f, 1.0f);
-        return t*t*(3-2*t);
+        return Smooth(begin,end,elapsed_);
     }
     [[nodiscard]] Cue VerdictCue() const noexcept {
         return unsubmitted_ || !comparison_.staged ? Cue::Recorded : comparison_.passed ? Cue::Passed : Cue::Failed;
@@ -175,6 +267,10 @@ private:
     float elapsed_ = 0;
     bool active_ = false;
     bool unsubmitted_ = false;
+    bool finalClear_ = false;
+    float clearElapsed_ = 0;
+    FarmContestCheerSystem::Pair cheerPair_ = FarmContestCheerSystem::Pair::None;
+    FarmContestCheerSystem::Pair previousCheer_ = FarmContestCheerSystem::Pair::None;
     Page page_ = Page::Result;
     bool explanation_ = false;
     Cue pendingCue_ = Cue::None;

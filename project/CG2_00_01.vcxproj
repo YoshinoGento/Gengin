@@ -188,6 +188,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\system\FarmPestAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmRainAudioSystem.cpp" />
     <ClCompile Include="application\farm\render\FarmRainRenderer.cpp" />
+    <ClCompile Include="application\farm\render\FarmCelebrationRenderer.cpp" />
 	<ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
 	<ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
 	<ClCompile Include="engine\command\CommandHistory.cpp" />
@@ -527,6 +528,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\system\FarmRainAudioSystem.h" />
     <ClInclude Include="application\farm\render\FarmRainGeometry.h" />
     <ClInclude Include="application\farm\render\FarmRainRenderer.h" />
+    <ClInclude Include="application\farm\render\FarmCelebrationRenderer.h" />
+    <ClInclude Include="application\farm\render\FarmCelebrationGeometry.h" />
+    <ClInclude Include="application\farm\system\FarmCelebrationSystem.h" />
     <ClInclude Include="application\farm\ui\FarmRepellentView.h" />
     <ClInclude Include="application\farm\system\FarmCropRecordSystem.h" />
     <ClInclude Include="application\farm\system\FarmRecordBookSystem.h" />
@@ -543,6 +547,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
 	<ClInclude Include="application\farm\system\FarmStageAccessSystem.h" />
 	<ClInclude Include="application\farm\system\FarmContestGoalSystem.h" />
 	<ClInclude Include="application\farm\system\FarmContestPresentationSystem.h" />
+    <ClInclude Include="application\farm\system\FarmContestCheerSystem.h" />
+    <ClInclude Include="application\farm\data\FarmContestCheerAssets.h" />
+    <ClInclude Include="application\farm\ui\FarmContestCheerView.h" />
 	<ClInclude Include="application\farm\system\FarmContestOutcomeSystem.h" />
 	<ClInclude Include="application\farm\ui\FarmContestOutcomeView.h" />
 	<ClInclude Include="application\farm\ui\FarmContestDetailView.h" />
@@ -602,6 +609,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\ui\FarmRuntimeAtlas.h" />
     <ClInclude Include="application\farm\system\FarmRuntimeController.h" />
     <ClInclude Include="application\farm\system\FarmExhibitionSystem.h" />
+    <ClInclude Include="application\farm\system\FarmContestShowcaseSystem.h" />
     <ClInclude Include="application\farm\ui\FarmExhibitionView.h" />
     <ClInclude Include="application\farm\system\FarmLayoutSystem.h" />
     <ClInclude Include="application\farm\ui\FarmRecordDialog.h" />

@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/ui/FarmQualityView.h"
+#include "farm/ui/FarmContestCheerView.h"
 
 namespace farmui {
 namespace contestdetail {
@@ -33,22 +34,7 @@ inline void Advice(View& view, const FarmQualityAdvice& advice, float y) {
 }
 inline void Summary(View& view, const FarmContestPresentationSystem::Frame& frame) {
     const auto& data = frame.comparison;
-    view.Add(CropLabel(data.quality.crop), {80,560,480,38});
-    const auto first = view.count;
-    if (data.staged && !data.passed)
-        view.Metric(Label::ContestGapShort, {680,316,552,44}, 260, std::to_string(data.shortfall)+" pt");
-    else view.Add(data.staged ? Label::ContestPassedShort : Label::ContestLegacyShort, {680,316,552,44});
-    if (data.quality.pestPenalty > 0) {
-        view.Metric(Label::PestPenalty, {680,390,552,38}, 390,
-            "-" + std::to_string(data.quality.pestPenalty) + " pt");
-        view.Add(Label::PestAdvice, {680,438,552,38});
-    } else Advice(view,data.qualityAdvice,390);
-    if (data.sizeAdvice == FarmContestSizeAdvice::ImproveQuality)
-        view.Add(Label::ContestQualityNeeded, {680,496,552,38});
-    else if (data.sizeAdvice == FarmContestSizeAdvice::MoreSize)
-        view.Metric(Label::ContestMoreShort, {680,496,552,38}, 350, "+"+std::to_string(data.additionalGrams)+" g");
-    if (data.qualityAdvice.partial) view.Add(Label::ContestPartialShort, {680,548,552,38});
-    for (std::size_t i=first; i<view.count; ++i) view.items[i].opacity = frame.adviceReveal;
+    view.Metric(Label::ContestTargetShort, {944,346,288,42}, 166, data.staged ? std::to_string(data.target)+" pt" : "--");
 }
 inline void Quality(View& view, const FarmContestComparison& data) {
     const auto& q = data.quality;
@@ -68,11 +54,12 @@ inline void Quality(View& view, const FarmContestComparison& data) {
     view.Add(Label::ContestRadarScaleShort, {220,548,240,32});
     view.Metric(Label::ContestQualityScoreShort, {680,260,552,42}, 300, std::to_string(data.qualityPoints)+" / 60");
     Advice(view,data.qualityAdvice,332);
-    if (q.pestPenalty > 0)
+    if (q.pestPenalty > 0) {
         view.Metric(Label::PestPenalty, {680,440,552,38}, 390,
             "-" + std::to_string(q.pestPenalty) + " pt");
-    else view.Add(Label::ContestAxesShort, {680,440,552,38});
-    if (data.qualityAdvice.partial) view.Add(Label::ContestPartialShort, {680,496,552,38});
+        view.Add(Label::PestAdvice, {680,488,552,38});
+    } else view.Add(Label::ContestAxesShort, {680,440,552,38});
+    if (data.qualityAdvice.partial) view.Add(Label::ContestPartialShort, {680,q.pestPenalty > 0 ? 540.f : 496.f,552,38});
 }
 inline void Size(View& view, const FarmContestComparison& data) {
     view.Add(Label::ContestActual, {80,248,500,38});
@@ -95,7 +82,14 @@ inline void BuildContestDetailView(View& view, const FarmContestPresentationSyst
     const auto& data = frame.comparison;
     const bool complete = frame.complete;
     view.modal = true; view.contestDetail = true; view.contestFrame = frame;
-    view.Add(Label::ContestDetailTitle, {48,20,500,42});
+    if (frame.finalClear) {
+        const float width=kLabels[static_cast<std::size_t>(Label::FinalClearTitle)].width+20;
+        const float smallWidth=(width-20)*.44f+20;
+        const float startX=(1280-width)*.5f, settle=frame.clearReveal;
+        view.Add(Label::FinalClearTitle, {startX+(48-startX)*settle,64-50*settle,
+            width+(smallWidth-width)*settle,96-46*settle});
+        view.items[view.count-1].opacity=frame.verdictReveal;
+    } else view.Add(Label::ContestDetailTitle, {48,20,500,42});
     view.Metric(Label::ContestEventDay, {680,20,220,42}, 128, std::to_string(data.day));
     if (frame.unsubmitted) {
         view.Add(frame.verdictVisible ? Label::ContestMissed : Label::ContestJudging, {680,174,552,52});
@@ -107,28 +101,32 @@ inline void BuildContestDetailView(View& view, const FarmContestPresentationSyst
             {complete ? Action::ContestDetailClose : Action::ContestReveal});
         return;
     }
-    view.Metric(Label::ContestTargetShort, {944,20,288,42}, 166, data.staged ? std::to_string(data.target)+" pt" : "--");
+    const bool summary=frame.page==Page::Result;
+    if (!summary) view.Metric(Label::ContestTargetShort, {944,20,288,42}, 166, data.staged ? std::to_string(data.target)+" pt" : "--");
     constexpr std::array<Label,3> tabs{{Label::ContestTabResult,Label::ContestTabQuality,Label::ContestTabSize}};
+    const auto firstNavigation=view.count;
     for (std::size_t i=0; i<tabs.size(); ++i)
         view.Add(tabs[i], kTabs[i], {Action::ContestTab,static_cast<int>(i)}, complete, static_cast<int>(frame.page)==static_cast<int>(i));
-    view.Add(Label::ContestExplanation, kExplanation, {Action::ContestExplanation}, complete, frame.explanation);
-    if (!complete) for (std::size_t i=3;i<view.count;++i) view.items[i].opacity=0;
+    if (!summary) view.Add(Label::ContestExplanation, kExplanation, {Action::ContestExplanation}, complete, frame.explanation);
+    if (!complete) for (std::size_t i=firstNavigation;i<view.count;++i) view.items[i].opacity=0;
     const auto verdict = !frame.verdictVisible ? Label::ContestJudging : !data.staged ? Label::ContestEntered :
         data.passed ? Label::StagePassed : Label::StageFailed;
-    const bool summary=frame.page==Page::Result;
-    view.Add(verdict, {summary ? 680.f : 48.f,174,540,46});
-    view.Metric(Label::ContestScoreShort, {680,summary ? 234.f : 174.f,552,46}, 210,
+    view.Add(verdict, {summary ? 944.f : 48.f,174,summary ? 288.f : 540.f,46});
+    view.Metric(Label::ContestScoreShort, {summary ? 944.f : 680.f,summary ? 250.f : 174.f,summary ? 288.f : 552.f,46}, summary ? 110.f : 210.f,
         frame.totalReveal > 0 ? std::to_string(frame.displayedTotal)+" / 100" : "--");
     switch (frame.page) {
     case Page::Result: Summary(view,frame); break;
     case Page::Quality: Quality(view,data); break;
     case Page::Size: Size(view,data); break;
     }
-    if (frame.explanation) {
+    if (frame.explanation && !summary) {
         view.Add(Label::ContestRuleShort, {48,606,600,32});
         view.Add(Label::ContestWeightRuleShort, {680,606,552,32});
     }
-    view.Add(!complete ? Label::ContestReveal : frame.page==Page::Result ? Label::ContestDetailBack : Label::ContestSummaryBack,
+    if(frame.finalClear) for(std::size_t i=1;i<view.count;++i) view.items[i].opacity*=frame.resultReveal;
+    if(frame.finalClear && summary && !complete) contestcheer::Build(view,frame.cheer);
+    view.Add(!complete ? (frame.finalClear ? Label::FinalClearSkip : Label::ContestReveal) : frame.page==Page::Result ?
+        (frame.finalClear ? Label::FinalClearContinue : Label::ContestDetailBack) : Label::ContestSummaryBack,
         kBack, {!complete ? Action::ContestReveal : frame.page==Page::Result ? Action::ContestDetailClose : Action::ContestTab,0});
 }
 }

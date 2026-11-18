@@ -39,11 +39,17 @@ bool FarmRuntimeController::HandleExperienceRequest(const FarmRuntimeContext& s,
         page_ = request.argument; menuDetails_ = false; focusedItem_ = -1; return true;
     }
     switch (request.action) {
+    case Action::CampaignStart:
+    case Action::CampaignExhibit:
     case Action::ExperienceOpen:
         if (pending_ != Action::None || shop_.IsOpen() || s.host.IsTimelineScrubbing() ||
             s.farmIrrigationPreviewSystem.IsActive() || s.farmCropSelectionSystem.IsOpen() ||
             flow_.GetPhase() == FarmPlayFlow::Phase::Starting) return true;
         s.farmTimeAdvance.Interrupt();
+        if (request.action == Action::CampaignStart)
+            experienceSelection_ = static_cast<int>(Topic::CampaignStart);
+        else if (request.action == Action::CampaignExhibit)
+            experienceSelection_ = static_cast<int>(Topic::FinalSubmission);
         open_ = true; page_ = kExperiencePage; experienceConfirm_ = false;
         status_ = Label::Ready; focusedItem_ = -1; return true;
     case Action::ExperiencePage:
@@ -68,7 +74,8 @@ bool FarmRuntimeController::HandleExperienceRequest(const FarmRuntimeContext& s,
         activeExperience_ = experienceSelection_;
         contestPresentation_.Close(); contestOutcome_.Reset(); shop_.Close(); saleReview_.Cancel();
         s.farmCropSelectionSystem.Cancel(); s.farmTimeAdvance.Reset();
-        flow_.Reset(); flow_.Continue();
+        flow_.Reset();
+        if (static_cast<Topic>(activeExperience_) != Topic::CampaignStart) flow_.Continue();
         open_ = observation_ = terrain_ = paused_ = contestNotice_ = false;
         pending_ = Action::None; pendingSubmission_ = {}; pendingExpansion_ = {}; pendingScreenTransition_ = {};
         pendingDocumentId_.clear(); pendingContestDay_ = 0;
@@ -84,6 +91,8 @@ bool FarmRuntimeController::HandleExperienceRequest(const FarmRuntimeContext& s,
         Action action = Action::None;
         int argument = 0;
         switch (static_cast<Topic>(activeExperience_)) {
+        case Topic::CampaignStart: action = Action::StageGuide; break;
+        case Topic::FinalMissed: action = Action::ContestOutcome; break;
         case Topic::Plant: action = Action::Tool; argument = 2; break;
         case Topic::Harvest: action = Action::Tool; argument = 3; break;
         case Topic::Soil: action = Action::SoilCare; break;
@@ -94,6 +103,8 @@ bool FarmRuntimeController::HandleExperienceRequest(const FarmRuntimeContext& s,
         case Topic::Repellent: action = Action::Repellent; break;
         case Topic::Time: action = Action::TimeAdvance; break;
         case Topic::Judging:
+        case Topic::FinalSubmission:
+        case Topic::FinalFailure:
             Execute(s, {Action::HarvestDisplay}, false);
             action = Action::ContestPreview; argument = 1; break;
         case Topic::Results: OpenContestDetail(s, 0, true); break;

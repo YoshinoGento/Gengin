@@ -28,6 +28,11 @@ int main() {
                 Check(std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z),"finite vertex");
                 Check(std::abs(n.SquareLength()-1)<.001f,"unit normal");
                 Check(uv.x>=0 && uv.x<=1 && uv.y>=0 && uv.y<=1,"bounded UV");
+                if (entry.path().stem()=="name_face") {
+                    Check(n.z<-.99f && std::abs(p.z+.023f)<.0001f,"printed front faces audience and clears wood by3mm");
+                    Check(std::abs(uv.x-(-p.x+.72f)/1.44f)<.0001f &&
+                        std::abs(uv.y-(.32f-p.y)/.64f)<.0001f,"crop name UV orientation after production import");
+                }
             }
             for (unsigned i=0;i<mesh->mNumFaces;++i) {
                 const auto& face=mesh->mFaces[i];
@@ -38,6 +43,6 @@ int main() {
         }
         ++files;
     }
-    Check(files==17 && triangles<65000,"fixed file and triangle budget");
+    Check(files==18 && triangles<65000,"fixed file and triangle budget");
     std::cout<<"PASS "<<files<<" imported meshes; "<<triangles<<" triangles; normals/UV/indices\n";
 }

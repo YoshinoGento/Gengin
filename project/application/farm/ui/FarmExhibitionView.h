@@ -8,14 +8,30 @@ inline void BuildExhibitionView(View& view, const FarmExhibitionSystem& system) 
     view.modal = true;
     if (system.GetPhase() == Phase::Result || system.GetPhase() == Phase::Missed) {
         BuildContestDetailView(view, system.ContestFrame());
-        view.items[0].label = Label::ExhibitionTitle;
+        if (!system.ContestFrame().finalClear) view.items[0].label = Label::ExhibitionTitle;
         if (system.Complete()) {
             auto& back = view.items[view.count - 1];
             if (system.ContestFrame().page == FarmContestPresentationSystem::Page::Result) {
-                back.label = Label::ExhibitionHome; back.request = {Action::ExhibitionHome};
+                back.label = system.ClearGallery() ? Label::ClearGalleryHome : Label::ExhibitionHome;
+                back.request = {Action::ExhibitionHome};
             }
             view.Add(Label::ExhibitionAgain, {48,654,300,46}, {Action::ExhibitionWatch});
         }
+        return;
+    }
+    if (system.ClearGallery()) {
+        constexpr std::array<Label, static_cast<std::size_t>(FarmContestCheerSystem::Pair::Count)> labels{{
+            Label::GalleryPerfect, Label::GalleryPumpkinPot, Label::GalleryPumpkinFestival,
+            Label::GalleryCarrotCurry, Label::GalleryCarrotBundle, Label::GalleryTomatoCenter,
+            Label::GalleryTomatoLunch, Label::GalleryPumpkinStar, Label::GalleryLargeDelivery,
+            Label::GalleryLargeShop, Label::GalleryQualityMuseum, Label::GalleryQualityKnife,
+            Label::GalleryNutrientSoil, Label::GalleryWaterCare, Label::GalleryPortrait, Label::GalleryGuests
+        }};
+        view.Add(Label::ClearGalleryTitle, {152,64,972,52});
+        for (int i=0; i<system.CaseCount(); ++i)
+            view.Add(labels[i], {152+(i%4)*246.f,168+(i/4)*104.f,234,80}, {Action::ExhibitionSelect,i},
+                system.Available(i), system.Selection()==i);
+        view.Add(system.Startup() ? Label::ReturnTitle : Label::Close, {780,624,344,48}, {Action::ExhibitionExit});
         return;
     }
     view.Add(Label::ExhibitionTitle, {176,70,928,52});

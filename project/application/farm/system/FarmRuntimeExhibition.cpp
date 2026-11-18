@@ -9,7 +9,10 @@
 void FarmRuntimeController::ExecuteExhibition(const FarmRuntimeContext& s, farmui::Request request) {
     using farmui::Action;
     switch (request.action) {
-    case Action::ExhibitionSelect: (void)exhibition_.Select(request.argument); break;
+    case Action::ExhibitionSelect:
+        if (exhibition_.Select(request.argument) && exhibition_.ClearGallery())
+            (void)exhibition_.Begin(s.farmToolActionSystem.MaximumHarvestSize(exhibition_.Crop()));
+        break;
     case Action::ExhibitionWatch:
         (void)exhibition_.Begin(s.farmToolActionSystem.MaximumHarvestSize(exhibition_.Crop())); break;
     case Action::ExhibitionHome: exhibition_.Home(); break;
@@ -68,7 +71,7 @@ bool FarmRuntimeController::UpdateExhibition(const FarmRuntimeContext& s, const 
     }
     const bool playing = exhibition_.GetPhase() == FarmExhibitionSystem::Phase::Result ||
         exhibition_.GetPhase() == FarmExhibitionSystem::Phase::Missed;
-    contestAudio_.Update(exhibition_.ConsumeCue(), playing, true);
+    contestAudio_.Update(exhibition_.ConsumeCue(), playing, true, exhibition_.ContestFrame().cheer);
     BuildView(s);
     return true;
 }
