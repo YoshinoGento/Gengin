@@ -14,8 +14,50 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <array>
+
+namespace {
+void CheckPlayFlowTransitions() {
+    using P = FarmPlayFlow::Phase;
+    constexpr std::array phases{P::Briefing,P::Starting,P::Playing,P::Result,P::Review};
+    using Input = void (*)(FarmPlayFlow&);
+    constexpr std::array<Input,5> inputs{{
+        [](FarmPlayFlow& f) { f.Observe(false); }, [](FarmPlayFlow& f) { f.Observe(true); },
+        [](FarmPlayFlow& f) { f.Continue(); }, [](FarmPlayFlow& f) { f.BeginStart(); },
+        [](FarmPlayFlow& f) { f.FinishStart(); }
+    }};
+    constexpr P expected[][inputs.size()] = {
+        {P::Briefing,P::Result, P::Playing,P::Starting,P::Briefing},
+        {P::Starting,P::Starting,P::Starting,P::Starting,P::Playing},
+        {P::Playing, P::Result, P::Playing,P::Playing, P::Playing},
+        {P::Briefing,P::Result, P::Review, P::Result,  P::Result},
+        {P::Briefing,P::Review, P::Review, P::Review,  P::Review}
+    };
+    for (std::size_t i = 0; i < phases.size(); ++i) {
+        FarmPlayFlow start;
+        switch (phases[i]) {
+        case P::Briefing: break;
+        case P::Starting: start.BeginStart(); break;
+        case P::Playing: start.Continue(); break;
+        case P::Result: start.Observe(true); break;
+        case P::Review: start.Observe(true); start.Continue(); break;
+        }
+        for (std::size_t j = 0; j < inputs.size(); ++j) {
+            auto flow = start;
+            inputs[j](flow);
+            assert(flow.GetPhase() == expected[i][j] && start.GetPhase() == phases[i]);
+            assert(flow.BlocksSimulation() == (flow.GetPhase() != P::Playing && flow.GetPhase() != P::Review));
+            flow.RequestTitle();
+            assert(flow.RequestsTitle() && flow.BlocksSimulation() && !start.RequestsTitle());
+            flow.Reset();
+            assert(!flow.RequestsTitle() && flow.GetPhase() == P::Briefing && flow.BlocksSimulation());
+        }
+    }
+}
+}
 
 int main() {
+    CheckPlayFlowTransitions();
     {
         for (int points = 0; points <= 300; ++points) {
             FarmEconomySystem::ContestResults records{};

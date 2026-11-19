@@ -785,6 +785,8 @@
     <ClCompile Include="application\farm\system\FarmRuntimeMenu.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExperience.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeCanalLesson.cpp" />
+    <ClCompile Include="application\farm\system\FarmCanalLessonSystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmPlayFlow.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeForecast.cpp" />
     <ClCompile Include="application\farm\system\FarmLayoutSystem.cpp" />
     <ClCompile Include="application\farm\ui\FarmRecordDialog.cpp" />

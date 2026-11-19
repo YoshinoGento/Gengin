@@ -17,7 +17,7 @@ bool FarmRuntimeController::OffersCanalLesson(const FarmRuntimeContext& s) const
 
 bool FarmRuntimeController::UpdateCanalLesson(const FarmRuntimeContext& s, const Input& input, bool click, farmui::Action hit) {
     using A = farmui::Action;
-    using P = farm::FarmCanalLessonSystem::Phase;
+    using Response = farm::FarmCanalLessonSystem::Response;
     const auto* framework = Framework::GetInstance();
     const auto* clock = framework ? framework->GetFrameClock() : nullptr;
     lesson_->Tick(clock ? clock->GetRealDeltaSeconds() : 0);
@@ -29,15 +29,12 @@ bool FarmRuntimeController::UpdateCanalLesson(const FarmRuntimeContext& s, const
     if (dx || dy) lesson_->Move(dx,dy);
     A action = click ? hit : A::None;
     if (pressed(InputKey::Escape,InputGamepadButton::B))
-        action = lesson_->State() == P::Preview ? A::LessonUndo : A::LessonExit;
+        action = lesson_->Back() == Response::Exit ? A::LessonExit : A::None;
     else if (input.TriggerMouseButton(InputMouseButton::Right)) action = A::LessonUndo;
     else if (pressed(InputKey::Enter,InputGamepadButton::A)) {
-        switch (lesson_->State()) {
-        case P::Choose: action = A::LessonPreview; break;
-        case P::Preview: action = lesson_->WillReach() ? A::LessonConnect : A::LessonUndo; break;
-        case P::Reached: action = lesson_->Target() == farm::FarmCanalLessonSystem::kFirst ? A::LessonAgain : A::LessonExit; break;
-        default: break;
-        }
+        const Response response = lesson_->Primary();
+        if (response == Response::Exit) action = A::LessonExit;
+        else if (response == Response::Handled) action = A::None;
     } else if (click && s.host.IsViewportHovered() && !view_.Covers(pointer_)) {
         Vector3 origin{},direction{}; int index = -1;
         if (s.host.TryBuildViewportRay(origin,direction) && s.farmVisualSystem.TryPickTile(lesson_->Board(),origin,direction,index))

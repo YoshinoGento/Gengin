@@ -202,6 +202,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\system\FarmRuntimeMenu.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExperience.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeCanalLesson.cpp" />
+    <ClCompile Include="application\farm\system\FarmCanalLessonSystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmPlayFlow.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeForecast.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExhibition.cpp" />
     <ClCompile Include="application\farm\system\FarmExhibitionSystem.cpp" />

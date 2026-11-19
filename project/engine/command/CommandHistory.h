@@ -16,6 +16,11 @@ public:
 class CommandHistory final {
 public:
 	explicit CommandHistory(std::size_t capacity = 128);
+	// Stored commands may borrow other members of the history's owner.
+	CommandHistory(const CommandHistory&) = delete;
+	CommandHistory& operator=(const CommandHistory&) = delete;
+	CommandHistory(CommandHistory&&) = delete;
+	CommandHistory& operator=(CommandHistory&&) = delete;
 
 	bool Execute(std::unique_ptr<IUndoableCommand> command);
 	bool Undo();

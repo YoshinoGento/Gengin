@@ -1,7 +1,6 @@
 #include "SceneManager.h"
 #include "AbstractSceneFactory.h"
 #include "2d/TextureManager.h"
-#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -24,7 +23,6 @@ void SceneManager::DeleteInstance() {
 SceneManager::~SceneManager() {
     loading_.Cancel();
 	if (scene_) scene_->Finalize();
-	// unique_ptr なので手動の delete は不要です
 }
 
 /**
@@ -66,9 +64,7 @@ void SceneManager::BeginFrame() {
 			TextureManager::GetInstance()->ReleaseSceneTextures();
 		}
 
-		// ★所有権を移動。この代入の瞬間に古い scene_ は自動で破棄されます。
 		scene_ = std::move(nextScene_);
-		nextScene_ = nullptr;
 
 		scene_->SetSceneManager(this);
         if (transition_.CanSwap()) {
@@ -122,10 +118,7 @@ void SceneManager::InitializeTransitions(DirectXCommon* dx, SrvManager* srv, Aud
 
 bool SceneManager::ChangeSceneWithRipple(const std::string& sceneName, scene::RipplePoint origin,
     const scene::PondRipplePath& pond) {
-	if (!sceneFactory_ || nextScene_ || transition_.IsActive()) return false;
-	auto next = sceneFactory_->CreateScene(sceneName);
-	if (!next) return false;
-	nextScene_ = std::move(next);
+	if (nextScene_ || !TryCreateNextScene(sceneName)) return false;
     if (scene_ && transitionRenderer_.IsReady()) transition_.Begin(origin,
         scene::TransitionTarget::SceneReplacement,scene::TransitionSoundTheme::Water,scene::TransitionStyle::Ripple,pond);
 	return true;
@@ -139,12 +132,21 @@ ScreenTransitionResult SceneManager::BeginScreenTransition(const BaseScene* owne
 		? ScreenTransitionResult::Started : ScreenTransitionResult::Busy;
 }
 
-/**
- * 名前指定によるシーン切り替え
- */
 void SceneManager::ChangeScene(const std::string& sceneName) {
-	assert(sceneFactory_ && "SceneFactory is not set.");
+	TryCreateNextScene(sceneName);
+}
 
-	// ★工場(CreateScene)が返す unique_ptr を、そのまま予約用関数の引数へ渡します
-	SetNextScene(sceneFactory_->CreateScene(sceneName));
+bool SceneManager::TryCreateNextScene(const std::string& sceneName) {
+	if (!sceneFactory_) {
+		Logger::Warning("Cannot change scene before a factory is registered.");
+		return false;
+	}
+	if (transition_.IsActive()) return false;
+	auto next = sceneFactory_->CreateScene(sceneName);
+	if (!next) {
+		Logger::Warning("Scene factory did not recognize the requested scene.");
+		return false;
+	}
+	nextScene_ = std::move(next);
+	return true;
 }

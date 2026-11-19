@@ -4,24 +4,20 @@
 class FarmPlayFlow final {
 public:
     enum class Phase { Briefing, Starting, Playing, Result, Review };
-    void Reset() noexcept { phase_ = Phase::Briefing; returnTitle_ = false; }
+    FarmPlayFlow() noexcept;
+    void Reset() noexcept;
     void RequestTitle() noexcept { returnTitle_ = true; }
     [[nodiscard]] bool RequestsTitle() const noexcept { return returnTitle_; }
-    void Observe(bool cleared) noexcept {
-        if (cleared && (phase_ == Phase::Briefing || phase_ == Phase::Playing)) phase_ = Phase::Result;
-        else if (!cleared && (phase_ == Phase::Result || phase_ == Phase::Review)) phase_ = Phase::Briefing;
-    }
-    void Continue() noexcept {
-        if (phase_ == Phase::Briefing) phase_ = Phase::Playing;
-        else if (phase_ == Phase::Result) phase_ = Phase::Review;
-    }
-    void BeginStart() noexcept { if (phase_ == Phase::Briefing) phase_ = Phase::Starting; }
-    void FinishStart() noexcept { if (phase_ == Phase::Starting) phase_ = Phase::Playing; }
-    [[nodiscard]] Phase GetPhase() const noexcept { return phase_; }
-    [[nodiscard]] bool BlocksSimulation() const noexcept {
-        return returnTitle_ || phase_ == Phase::Briefing || phase_ == Phase::Starting || phase_ == Phase::Result;
-    }
+    void Observe(bool cleared) noexcept;
+    void Continue() noexcept;
+    void BeginStart() noexcept;
+    void FinishStart() noexcept;
+    [[nodiscard]] Phase GetPhase() const noexcept;
+    [[nodiscard]] bool BlocksSimulation() const noexcept;
 private:
-    Phase phase_ = Phase::Briefing;
+    struct State;
+    enum class Event { Cleared, NotCleared, Continue, BeginStart, FinishStart };
+    void Dispatch(Event event) noexcept;
+    const State* state_; // Borrows an immutable state for the lifetime of the process.
     bool returnTitle_ = false;
 };

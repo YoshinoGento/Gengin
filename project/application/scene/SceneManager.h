@@ -18,9 +18,9 @@ class SceneManager {
 private:
 	static SceneManager* instance;
 
-	// ★生のポインタを unique_ptr に変更。これで自動的に delete されるようになります。
 	std::unique_ptr<BaseScene> scene_;
 	std::unique_ptr<BaseScene> nextScene_;
+	// Borrowed from Game; must outlive scene creation requests.
 	AbstractSceneFactory* sceneFactory_ = nullptr;
 	scene::SceneTransitionSystem transition_;
 	scene::RippleTransitionRenderer transitionRenderer_;
@@ -29,6 +29,7 @@ private:
 
 	SceneManager() = default;
 	~SceneManager();
+	bool TryCreateNextScene(const std::string& sceneName);
 
 public:
 	static SceneManager* GetInstance();
@@ -48,13 +49,7 @@ public:
 	void PreviewWaterDrop(scene::RipplePoint origin) { transition_.AddDrop(origin); }
     [[nodiscard]] bool IsTransitionCoverPresented() const noexcept { return transition_.CanSwap(); }
 
-	// ★追加: 現在実行中のシーンを取得する（GameクラスでのUI表示に必要）
 	BaseScene* GetCurrentScene() const { return loading_.BlocksScene() ? nullptr : scene_.get(); }
-
-	// ★引数を unique_ptr にし、所有権を受け取る（std::move）ように変更
-	void SetNextScene(std::unique_ptr<BaseScene> nextScene) {
-		if (!transition_.IsActive()) nextScene_ = std::move(nextScene);
-	}
 
 	void ChangeScene(const std::string& sceneName);
 

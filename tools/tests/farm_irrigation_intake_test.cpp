@@ -10,6 +10,7 @@
 #include "farm/system/FarmGrowthComparisonSystem.h"
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace {
@@ -52,7 +53,15 @@ int main() try {
     {
         FarmCanalLessonSystem lesson;
         using P = FarmCanalLessonSystem::Phase;
+        using R = FarmCanalLessonSystem::Response;
         Check(lesson.Begin() && !lesson.Water().IsInIrrigationRange(lesson.Target()), "lesson starts dry");
+        Check(lesson.Back() == R::Exit && lesson.Primary() == R::Handled && lesson.State() == P::Preview,
+            "choose default and exit");
+        Check(!lesson.Preview(-1) && lesson.State() == P::Choose && lesson.Rejected() && !lesson.WillReach(),
+            "invalid replacement discards previous candidate");
+        lesson.Cancel(); Check(!lesson.Rejected(), "cancel dismisses rejection");
+        Check(lesson.Primary() == R::Handled && lesson.Back() == R::Handled && lesson.State() == P::Choose,
+            "back cancels without exiting the preview");
         Check(!lesson.Preview(-1) && !lesson.Preview(10) && !lesson.Connect(), "invalid or occupied");
         Check(lesson.Preview(12) && lesson.WillReach(), "first prediction");
         lesson.Tick(1);
@@ -70,6 +79,16 @@ int main() try {
             }
         }
         Check(!lesson.TrySecond(), "lesson ends after second crop");
+        Check(lesson.Primary() == R::Exit && lesson.Back() == R::Exit, "completion exits");
+        Check(lesson.Begin() && lesson.Target() == lesson.kFirst && lesson.Primary() == R::Handled &&
+            lesson.Primary() == R::Handled && lesson.State() == P::Flowing, "restart and confirm by keyboard");
+        Check(lesson.Primary() == R::Ignored && lesson.Back() == R::Exit, "flowing input policy");
+        for (const float dt : {-1.f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()})
+            lesson.Tick(dt);
+        Check(lesson.Moisture() == lesson.kDry && lesson.State() == P::Flowing, "invalid elapsed time");
+        for (int step = 0; step < 600 && lesson.State() == P::Flowing; ++step) lesson.Tick(1.f/60);
+        Check(lesson.Primary() == R::Handled && lesson.Target() == lesson.kSecond && lesson.Preview(0) &&
+            lesson.Primary() == R::Handled && lesson.State() == P::Choose, "next crop and disconnected primary cancels");
         std::cout << "Canal lesson: preview, cancel, disconnected route and two watered crops passed\n";
     }
     for (float speed : {1.f, 2.f, 4.f}) {

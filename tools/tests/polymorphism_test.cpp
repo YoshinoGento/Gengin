@@ -75,6 +75,8 @@ void CheckScenesAndLifetime() {
     static_assert(std::has_virtual_destructor_v<AbstractSceneFactory>);
     static_assert(std::has_virtual_destructor_v<FarmToolBehavior>);
     static_assert(std::has_virtual_destructor_v<IUndoableCommand>);
+    static_assert(!std::is_copy_constructible_v<CommandHistory> && !std::is_move_constructible_v<CommandHistory>);
+    static_assert(!std::is_copy_assignable_v<CommandHistory> && !std::is_move_assignable_v<CommandHistory>);
     static_assert(std::has_virtual_destructor_v<editor::GamePlayEditorScene>);
     static_assert(std::has_virtual_destructor_v<scene::ViewportInputTarget>);
     static_assert(std::is_base_of_v<editor::GamePlayEditorScene, GamePlayScene>);
@@ -112,6 +114,15 @@ void CheckScenesAndLifetime() {
     Check(value == 1 && history.Undo() && value == 0 && history.Redo() && value == 1, "undo redo dispatch");
     history.Clear();
     Check(destroyed == 2, "command virtual destruction");
+    CommandHistory bounded(2);
+    for (int i = 0; i < 3; ++i)
+        Check(bounded.Execute(std::make_unique<ProbeCommand>(value, destroyed)), "push command");
+    Check(bounded.GetUndoCount() == 2 && destroyed == 3, "evict oldest through base");
+    Check(bounded.Undo() && !bounded.Execute(nullptr) && bounded.CanRedo(), "rejected command preserves redo");
+    Check(bounded.Execute(std::make_unique<ProbeCommand>(value, destroyed)) &&
+        !bounded.CanRedo() && destroyed == 4, "new branch discards redo");
+    Check(bounded.Undo() && bounded.Undo() && !bounded.Undo() && bounded.GetRedoCount() == 2,
+        "undo stops at retained boundary");
 }
 
 void CheckToolPlans() {
