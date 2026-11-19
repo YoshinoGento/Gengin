@@ -73,6 +73,7 @@ private:
         case R::WaterExcess: return "Stopped: too much water";
         case R::ContestDay: return "Stopped: contest day";
         case R::PestWarning: return "Stopped: pest warning (no skipped damage day)";
+        case R::MoldAlert: return "Stopped: overwatering disease risk";
         case R::WeatherChanged: return "Stopped: weather changed";
         case R::Finished: return "Stopped: season finished";
         case R::NoTarget: return "Stopped: no target day";

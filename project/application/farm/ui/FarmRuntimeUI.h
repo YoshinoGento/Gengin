@@ -32,7 +32,8 @@ enum class Action {
     PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook,
     Repellent, RepellentSelect, RepellentPlace, RepellentRemove, Recovery, RecoveryClaim,
     ExperienceOpen, ExperiencePage, ExperienceSelect, ExperienceBegin, ExperienceConfirm, ExperienceCancel, ExperienceAction,
-    CampaignStart, CampaignExhibit
+    CampaignStart, CampaignExhibit, ApplyFungicide,
+    LessonPreview, LessonConnect, LessonUndo, LessonAgain, LessonExit
 };
 struct Request {
     Action action = Action::None;
@@ -111,6 +112,7 @@ struct View {
     std::array<int, 2> harvestFigures{{-1, -1}};
     bool observation = false;
     bool terrain = false;
+    bool irrigationForecast = false;
     bool fieldActions = false;
     bool feedback = false;
     bool waterGuidance = false;

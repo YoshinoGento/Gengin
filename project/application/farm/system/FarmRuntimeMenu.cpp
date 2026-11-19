@@ -59,6 +59,7 @@ bool FarmRuntimeController::HandleSaleRequest(const FarmRuntimeContext& s,farmui
 void FarmRuntimeController::BuildMenuOverview(const FarmRuntimeContext& s) {
     const auto hud=s.host.BuildFarmHUDViewData();
     farmui::MenuOverviewState state;
+    state.mainGameOnly = mainGameOnly_;
     state.page=page_;
     state.unlocked=!s.farmProgressionSystem.IsCleared() && !s.farmIrrigationPreviewSystem.IsActive();
     state.money=hud.money; state.seeds=hud.seedCount;

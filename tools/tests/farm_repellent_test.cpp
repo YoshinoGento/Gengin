@@ -127,7 +127,7 @@ void SaveAndMesh() {
     Plant(grid,6);
     Check(docs.SaveAs("Repellent",grid,economy,selection), "save");
     const auto id=docs.GetActiveDocumentId(), path=docs.GetPath();
-    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==25, "schema25");
+    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==FarmDocumentSystem::kCurrentSchemaVersion, "current schema");
     Plant(grid,6,false);
     Check(docs.Load(id,grid,economy,selection) && R::IsProtected(grid,7), "save roundtrip");
     for(int kind=0;kind<8;++kind) {
@@ -139,7 +139,7 @@ void SaveAndMesh() {
         if(kind==4) { tile["state"]="Planted"; tile["crop"]="Carrot"; }
         if(kind==5) tile["growth"]=.1;
         if(kind==6) tile["pests"]["warningDay"]=6;
-        if(kind==7) bad["schemaVersion"]=26;
+        if(kind==7) bad["schemaVersion"]=FarmDocumentSystem::kCurrentSchemaVersion + 1;
         const auto generation=grid.GetGeneration(), inventory=economy.GetInventoryGeneration();
         Check(JsonFile::Save(path,bad) && !docs.Load(id,grid,economy,selection) &&
             grid.GetGeneration()==generation && economy.GetInventoryGeneration()==inventory &&

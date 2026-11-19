@@ -31,7 +31,9 @@ constexpr int kCropRecordSchemaVersion = 22;
 constexpr int kRepellentSchemaVersion = 23;
 constexpr int kPestSpreadSchemaVersion = 24;
 constexpr int kRecoverySchemaVersion = 25;
-constexpr int kSchemaVersion = kRecoverySchemaVersion;
+constexpr int kMoldSchemaVersion = 26;
+constexpr int kFungicideSchemaVersion = 27;
+constexpr int kSchemaVersion = FarmDocumentSystem::kCurrentSchemaVersion;
 constexpr int kMinimumSupportedSchemaVersion = 1;
 constexpr int kCatalogSchemaVersion = 1;
 constexpr int kMaximumGridDimension = 128;
@@ -331,6 +333,8 @@ nlohmann::json BuildJson(
 			{ "moisture", tile.moisture },
 			{ "growth", tile.growth },
 			{ "pests", {{"warningDay", tile.pests.warningDay}, {"damageDays", tile.pests.damageDays}} },
+			{ "mold", {{"exposure", tile.mold.exposure}, {"lastMoisture", tile.mold.lastMoisture},
+				{"sick", tile.mold.sick}, {"recovering", tile.mold.recovering}, {"protectedSeconds", tile.mold.protectedSeconds}} },
 			{ "waterAmount", tile.waterAmount },
 			{ "irrigationEnabled", tile.irrigationEnabled },
 			{ "repellentPlant", tile.repellentPlant },
@@ -350,6 +354,7 @@ nlohmann::json BuildJson(
 		{ "money", economySnapshot.money },
 		{ "lifetimeSales", economySnapshot.lifetimeSales },
 		{ "lastRecoveryDay", economySnapshot.lastRecoveryDay },
+		{ "fungicideCount", economySnapshot.fungicideCount },
 		{ "cropCounts", economySnapshot.cropCounts },
 		{ "cropValues", economySnapshot.cropValues },
 		{ "seedCounts", economySnapshot.seedCounts },
@@ -540,6 +545,23 @@ bool ParseSnapshot(
 				}
 				tile.repellentPlant = tileJson["repellentPlant"].get<bool>();
 			}
+			if (schemaVersion >= kMoldSchemaVersion) {
+				const auto& m = tileJson.at("mold");
+				if (!m.is_object() || !m.at("exposure").is_number() || !m.at("lastMoisture").is_number() ||
+					!m.at("sick").is_boolean() || !m.at("recovering").is_boolean()) {
+					error = "Invalid mold state."; return false;
+				}
+				tile.mold = {m.at("exposure").get<float>(), m.at("lastMoisture").get<float>(),
+					m.at("sick").get<bool>(), m.at("recovering").get<bool>()};
+				if (schemaVersion >= kFungicideSchemaVersion) {
+					const auto& remaining = m.at("protectedSeconds");
+					if (!remaining.is_number() || remaining.get<double>() < 0 ||
+						remaining.get<double>() > farm::FarmMoldState::kProtectionSeconds) {
+						error = "Invalid mold protection duration."; return false;
+					}
+					tile.mold.protectedSeconds = remaining.get<float>();
+				}
+			}
 			if (schemaVersion >= kPestSchemaVersion) {
 				const auto it = tileJson.find("pests");
 				if (it == tileJson.end() || !it->is_object() ||
@@ -723,6 +745,7 @@ bool ParsePersistentState(
 		economySnapshot.lifetimeSales = 0; // Legacy saves have no reliable cumulative revenue history.
 		economySnapshot.soldCropRecords = {};
 		economySnapshot.lastRecoveryDay = 0;
+		economySnapshot.fungicideCount = 0;
 		if (schemaVersion == 1) {
 			return true;
 		}
@@ -733,6 +756,10 @@ bool ParsePersistentState(
 		}
 
 		const nlohmann::json& economyJson = document["economy"];
+		if (schemaVersion >= kFungicideSchemaVersion && (!economyJson.contains("fungicideCount") ||
+			!ReadNonNegativeInt(economyJson["fungicideCount"], economySnapshot.fungicideCount))) {
+			error = "Invalid or missing fungicide inventory."; return false;
+		}
 		if (schemaVersion >= kRecoverySchemaVersion &&
 			(!economyJson.contains("lastRecoveryDay") ||
 			 !ReadNonNegativeInt(economyJson["lastRecoveryDay"], economySnapshot.lastRecoveryDay))) {

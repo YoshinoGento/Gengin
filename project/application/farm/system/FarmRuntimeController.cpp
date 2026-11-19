@@ -23,6 +23,7 @@
 #include "farm/ui/FarmRecordDialog.h"
 #include "farm/ui/FarmObservationView.h"
 #include "farm/ui/FarmPlayFlowView.h"
+#include "farm/ui/FarmCanalLessonView.h"
 #include "farm/ui/FarmFieldActionView.h"
 #include "farm/ui/FarmPestView.h"
 #include "farm/ui/FarmNextGoalView.h"
@@ -46,6 +47,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <filesystem>
 #include <utility>
 #include <Windows.h>
 
@@ -73,6 +75,15 @@ template<class... Args> std::string Numbers(const char* format, Args... args) {
 }
 }
 
+void FarmRuntimeController::InitializeEdition() {
+    forecastPick_ = {};
+    lesson_.reset();
+    std::error_code error;
+    mainGameOnly_ = std::filesystem::is_regular_file("Settings/runtime/main_game.flag", error);
+    if (!mainGameOnly_) exhibition_.Initialize();
+    else exhibition_.Close();
+}
+
 void FarmRuntimeController::OpenContestDetail(const FarmRuntimeContext& s, int index, bool replay) {
     const auto& results = s.farmEconomySystem.GetContestResults();
     if (index < 0 || index >= static_cast<int>(results.size())) return;
@@ -90,6 +101,7 @@ void FarmRuntimeController::OpenContestDetail(const FarmRuntimeContext& s, int i
 void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
     view_ = {};
     contestNotice_ = false;
+    if (lesson_) { farmui::BuildCanalLessonView(view_,lesson_->Read()); return; }
     if (menuAudio_.GetFrame().open) {
         farmui::BuildMenuAudioView(view_, menuAudio_.GetFrame());
         return;
@@ -131,7 +143,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         }
         farmui::BuildContestOutcomeView(view_, outcome, s.farmEconomySystem.GetContestResults(),
             pending_ == Action::SeasonRetry, seasonRetryFailed_);
-        if (s.farmDocumentSystem.IsPrepared() && pending_ == Action::None)
+        if (!mainGameOnly_ && s.farmDocumentSystem.IsPrepared() && pending_ == Action::None)
             view_.Add(Label::Experience, {80, 660, 350, 44}, {Action::ExperienceOpen});
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
@@ -160,7 +172,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 FarmContestSeasonSystem::Evaluate(s.farmDateSystem.GetDay(),s.farmEconomySystem.GetContestResults()),
                 FarmContestGoalSystem::Evaluate(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
                     s.farmProgressionSystem.StagePolicy().enabled));
-        else farmui::BuildPlayFlowView(view_, flow_.GetPhase(), s.host.BuildFarmHUDViewData(), s.farmProgressionSystem.StagePolicy().enabled);
+        else farmui::BuildPlayFlowView(view_, flow_.GetPhase(), s.host.BuildFarmHUDViewData(), s.farmProgressionSystem.StagePolicy().enabled, mainGameOnly_, OffersCanalLesson(s));
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
@@ -210,6 +222,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             if (const auto* candidate = preview.GetPreviewGrid()) {
                 displayedIndex = candidate->GetSelectedIndex();
                 tile = candidate->GetTile(displayedIndex);
+                if (state.canConfirm) InspectForecast(s,state);
             }
             state.tileValues = tile ? Numbers("%d / H%d / %.0f / %.0f", displayedIndex, tile->heightLevel,
                 tile->moisture * 100, tile->growth * 100) : "--";
@@ -232,7 +245,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         view_.goalVisible = !hud.freeFarming;
         view_.feedback = hud.feedback != FarmHUDFeedback::None;
         view_.IconButton(Label::Menu, farmui::HUDIcon::Menu, farmui::HUDLayout::UtilitySlot(5), {Action::Menu});
-        BuildExperienceHUD(s);
+        if (!mainGameOnly_) BuildExperienceHUD(s);
         if (s.farmIrrigationPreviewSystem.IsActive()) {
             view_.Add(Label::Confirm, {1040, 544, 216, 44}, {Action::Confirm}, s.farmIrrigationPreviewSystem.CanConfirm(s.farmGrid));
             view_.Add(Label::Cancel, {1040, 596, 216, 44}, {Action::Cancel});
@@ -245,14 +258,17 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 !s.farmProgressionSystem.IsCleared(), s.farmDateSystem.GetTimeScale());
             const auto* reserved = s.farmEconomySystem.GetContestReservation();
             const auto weather = FarmWeatherSystem::Inspect(s.farmDateSystem.GetDay(), s.farmProgressionSystem.WeatherVersion());
-            farmui::BuildWeatherView(view_, weather);
             const auto* tile = s.farmGrid.GetSelectedTile();
             const int index = s.farmGrid.GetSelectedIndex();
+            farmui::BuildFungicideView(view_, FarmFungicideSystem::Inspect(tile,s.farmEconomySystem),
+                s.farmEconomySystem.GetFungicideCount(), tile ? tile->mold.protectedSeconds : 0.f, index,
+                !s.farmProgressionSystem.IsCleared() && !s.host.IsTimelineScrubbing());
             const auto forecast = tile ? s.farmGrowthSystem.Evaluate(*tile,
                 s.farmCropSelectionSystem.GetSelectedCrop(), s.farmDateSystem.GetTimeScale(),
                 s.farmIrrigationSystem.GetAvailableIrrigationStrength(s.farmGrid, index), weather.soilRainPerSecond) : FarmGrowthForecast{};
             const auto water = FarmGrowthSystem::AnalyzeWater(tile, forecast,
                 s.farmIrrigationSystem.GetWaterStatus(s.farmGrid, index));
+            farmui::BuildWeatherView(view_, weather, forecast.rainAdvice);
             farmui::BuildWaterGuidanceView(view_, water, !s.farmProgressionSystem.IsCleared(),
                 s.farmToolActionSystem.CanSetIrrigation(s.farmGrid, index));
             farmui::BuildPlayCropStatusView(view_, hud.feedback != FarmHUDFeedback::None,
@@ -287,7 +303,8 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 farmui::BuildPestView(view_, goal.pestTile, index == goal.pestTile, goal.kind == FarmNextGoalKind::PestWarning,
                     FarmPestSystem::CountActive(s.farmGrid), s.farmProgressionSystem.PestSpread().version != 0);
             } else {
-                farmui::BuildFarmNextGoalView(view_, goal, farmui::HUDLayout::shortGoal.Contains(pointer_));
+                farmui::BuildFarmNextGoalView(view_, goal, farmui::HUDLayout::shortGoal.Contains(pointer_),
+                    mainGameOnly_ && hud.day == 1 && s.farmEconomySystem.GetLifetimeSales() == 0);
             }
         }
         return;
@@ -493,9 +510,11 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         button(Label::Follow, Action::Follow, 0, true, s.host.IsFollowingPlayer());
         button(Label::Overview, Action::Overview, 0, true, !s.host.IsFollowingPlayer());
         button(Label::Exit, Action::Exit);
-        button(Label::SeasonMode, Action::ChangePlayMode, 1, true, hud.contestSeason);
-        button(Label::TrialMode, Action::ChangePlayMode, 0, true, !hud.contestSeason && !hud.freeFarming);
-        button(Label::FreeMode, Action::ChangePlayMode, 2, true, hud.freeFarming);
+        if (!mainGameOnly_) {
+            button(Label::SeasonMode, Action::ChangePlayMode, 1, true, hud.contestSeason);
+            button(Label::TrialMode, Action::ChangePlayMode, 0, true, !hud.contestSeason && !hud.freeFarming);
+            button(Label::FreeMode, Action::ChangePlayMode, 2, true, hud.freeFarming);
+        }
         view_.Value(Label::Day, 440, Numbers("%d / x%.0f", hud.day, hud.timeScale));
         view_.Add(Label::PauseCapture, {176, 492, 900, 40});
     }
@@ -535,6 +554,9 @@ void FarmRuntimeController::CommitScreenTransition(const FarmRuntimeContext& s) 
 }
 
 void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request request, bool allowTransition) {
+    if (mainGameOnly_ && (request.action == Action::ChangePlayMode || request.action == Action::CampaignStart ||
+        request.action == Action::CampaignExhibit || request.action == Action::ExhibitionOpen ||
+        (request.action >= Action::ExperienceOpen && request.action <= Action::ExperienceAction))) return;
     if (HandleExperienceRequest(s, request)) return;
     if (request.action == Action::TimeAdvance || request.action == Action::TimeCancel || request.action == Action::TimeFocus) {
         editor::GamePlayEditorCommand command{};
@@ -658,12 +680,24 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         if (s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive()) { shop_.Close(); return; }
         const auto result = shop_.Confirm(s.farmEconomySystem);
         if (result.Succeeded()) {
-            s.farmCropSelectionSystem.SetSelectedCrop(result.crop);
+            if (shop_.Selection() != shop_.kFungicideProduct) {
+                s.farmCropSelectionSystem.SetSelectedCrop(result.crop);
+                s.farmFeedbackSystem.ShowSeedPurchased(result.crop, result.purchasedCount, result.spentMoney);
+            }
             s.farmDocumentSystem.MarkDirty();
-            s.farmFeedbackSystem.ShowSeedPurchased(result.crop, result.purchasedCount, result.spentMoney);
         }
         return;
     }
+    case Action::ApplyFungicide:
+        if (open_ || shop_.IsOpen() || terrain_ || observation_ || pending_ != Action::None ||
+            s.farmProgressionSystem.IsCleared() || s.host.IsTimelineScrubbing() || flow_.BlocksSimulation() ||
+            s.farmIrrigationPreviewSystem.IsActive() || s.farmCropSelectionSystem.IsOpen() ||
+            s.farmGrid.GetSelectedIndex() != request.argument) return;
+        if (FarmFungicideSystem::Apply(s.farmGrid,request.argument,s.farmEconomySystem)) {
+            s.farmToolActionSystem.ClearHistory();
+            s.farmDocumentSystem.MarkDirty();
+        }
+        return;
     case Action::OpenSeedShop:
         if (shop_.IsOpen() || observation_ || terrain_ || pending_ != Action::None || flow_.BlocksSimulation() ||
             s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive() ||
@@ -730,7 +764,10 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         return;
     }
     case Action::FlowContinue:
-        if (flow_.GetPhase() == FarmPlayFlow::Phase::Briefing) BeginFarmStart(s);
+        if (flow_.GetPhase() == FarmPlayFlow::Phase::Briefing) {
+            const bool practicing = OffersCanalLesson(s) && FrameFarm(s,false,true) && lesson_.emplace().Begin();
+            if (!practicing) { lesson_.reset(); BeginFarmStart(s); }
+        }
         else flow_.Continue();
         open_ = false; observation_ = false; pickingSlot_ = -1; focusedItem_ = -1;
         return;
@@ -1158,6 +1195,10 @@ bool FarmRuntimeController::FrameFarm(const FarmRuntimeContext& s, bool followPl
 }
 
 int FarmRuntimeController::ResolveHoveredTile(const FarmRuntimeContext& s) const {
+    if (ShowsIrrigationForecast() && forecastPick_.valid && s.host.IsViewportFocused() &&
+        s.host.IsViewportHovered() && !view_.Covers(pointer_) &&
+        forecastPick_.revision == s.farmIrrigationPreviewSystem.CandidateRevision())
+        return forecastPick_.index;
     if (!ready_ || !s.host.IsViewportFocused() || !s.host.IsViewportHovered() || open_ || observation_ ||
         frameCaptured_ || flow_.BlocksSimulation() || s.farmProgressionSystem.IsCleared() ||
         s.farmIrrigationPreviewSystem.IsActive() || s.farmCropSelectionSystem.IsOpen() ||
@@ -1292,6 +1333,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     const bool click = input.TriggerMouseButton(InputMouseButton::Left);
     pointerTriggered_ = click || input.TriggerMouseButton(InputMouseButton::Right);
     const auto hit = view_.Hit(pointer_);
+    if (lesson_) return UpdateCanalLesson(s,input,click,hit.action);
     if (contestPresentation_.Active()) {
         const auto* framework = Framework::GetInstance();
         const auto* clock = framework ? framework->GetFrameClock() : nullptr;

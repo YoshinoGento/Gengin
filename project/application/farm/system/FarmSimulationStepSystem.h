@@ -2,6 +2,7 @@
 #include "farm/system/FarmContestDaySystem.h"
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
+#include "farm/system/FarmMoldVisualSystem.h"
 #include "farm/system/FarmIrrigationSystem.h"
 #include "farm/system/FarmProgressionSystem.h"
 #include "farm/system/FarmPestSystem.h"
@@ -21,6 +22,7 @@ public:
         const FarmEconomySystem& economy;
         FarmProgressionSystem& progression;
         FarmGrowthComparisonSystem* comparison = nullptr;
+        farm::FarmMoldVisualSystem* moldVisual = nullptr;
     };
     struct Result {
         bool advanced = false, dayChanged = false, pestWarning = false, weatherChanged = false;
@@ -52,7 +54,9 @@ public:
         c.irrigation.UpdateWater(c.grid, delta, clock.timeScale, weather.soilRainPerSecond);
         // Growth can change tile identity at maturity; capture flow while it is still valid.
         const auto water = c.irrigation.GetLastStep(c.grid);
+        const auto beforeMold = c.moldVisual ? c.moldVisual->Capture(c.grid) : farm::FarmMoldVisualSystem::Cases{};
         c.growth.Update(c.grid, delta, clock.timeScale);
+        if (c.moldVisual) c.moldVisual->AfterGrowth(c.grid, beforeMold);
         if (c.comparison) c.comparison->ObserveAfterStep(c.grid, delta, clock.timeScale);
         c.contest.Advance(c.date, delta, c.economy.GetContestResults(), boundary, !c.progression.IsFreeFarming());
         const auto pests = c.progression.AdvancePests(c.grid, clock.day, c.date.GetDay());

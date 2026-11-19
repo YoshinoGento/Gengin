@@ -25,7 +25,7 @@
 #include "farm/system/FarmPestVisualSystem.h"
 #include "farm/system/FarmRainPresentationSystem.h"
 #include "farm/system/FarmRainAudioSystem.h"
-#include "farm/render/FarmRainRenderer.h"
+#include "farm/render/FarmFieldEffectRenderer.h"
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
 #include "farm/system/FarmInputSystem.h"
@@ -311,7 +311,8 @@ private:
 	farm::FarmPestVisualSystem farmPestVisualSystem_;
     farm::FarmRainPresentationSystem farmRainPresentation_;
     FarmRainAudioSystem farmRainAudio_;
-    FarmRainRenderer farmRainRenderer_;
+    FarmFieldEffectRenderer farmFieldEffectRenderer_;
+    farm::FarmMoldVisualSystem farmMoldVisual_;
     bool farmRainAudioSuspended_ = false;
 	FarmGrowthSystem farmGrowthSystem_;
 	FarmGrowthComparisonSystem farmGrowthComparisonSystem_;

@@ -5,6 +5,7 @@
 #include <sstream>
 #include "farm/ui/FarmObservationView.h"
 #include "farm/ui/FarmPlayFlowView.h"
+#include "farm/ui/FarmCanalLessonView.h"
 #include "farm/ui/FarmFieldActionView.h"
 #include "farm/ui/FarmCameraView.h"
 #include "farm/ui/FarmQualityView.h"
@@ -395,6 +396,72 @@ void TestCaptionLayout() {
 }
 
 int main() {
+    {
+        for (bool valid : {true,false}) for (int field : {0,1,2,3}) {
+            TerrainViewState state;
+            state.preview = state.forecastAvailable = true;
+            state.canConfirm = valid;
+            state.forecastCounts = field == 0 ? farm::FarmIrrigationForecast::Counts{} :
+                farm::FarmIrrigationForecast::Counts{640,320,320};
+            if (field >= 2) state.inspected = {100,42};
+            state.inspectedClosed = field == 3;
+            View v{}; BuildTerrainView(v,state);
+            AssertItemsDoNotOverlap(v);
+            for (std::size_t i=0; i<v.count; ++i) AssertReadable(v.items[i]);
+            assert(v.irrigationForecast == valid);
+            assert(!v.Covers({620,320}) && v.Hit({350,660}).action == Action::Cancel);
+            assert((v.Hit({50,660}).action == Action::Confirm) == valid);
+            if (valid) {
+                const Label expected[] = {Label::ForecastEmpty,Label::ForecastHover,Label::ForecastStrength,Label::ForecastClosed};
+                assert(v.items[8].label == expected[field]);
+                if (field == 2) assert(v.items[8].value == "100% -> 42%");
+            }
+        }
+    }
+    {
+        using P = farm::FarmCanalLessonSystem::Phase;
+        for (P p : {P::Choose,P::Preview,P::Flowing,P::Reached}) for (bool first : {true,false})
+        for (bool valid : {true,false}) {
+            View v{};
+            BuildCanalLessonView(v,{p,first,!valid,valid,.08f,.12f});
+            AssertItemsDoNotOverlap(v);
+            for (std::size_t i=0; i<v.count; ++i) AssertReadable(v.items[i]);
+            assert(!v.Covers({640,320}) && v.Hit({950,650}).action == Action::LessonExit);
+            if (p == P::Preview) {
+                assert((v.Hit({120,650}).action == Action::LessonConnect) == valid);
+                assert(v.Hit({450,650}).action == Action::LessonUndo);
+            }
+        }
+        FarmHUDViewData day{}; day.day = 1; day.contestSeason = true;
+        for (bool offer : {true,false}) {
+            View v{}; BuildPlayFlowView(v,FarmPlayFlow::Phase::Briefing,day,true,true,offer);
+            assert(v.items[4].label == (offer ? Label::LessonBegin : Label::MainEnter));
+        }
+    }
+    {
+        auto check = [](const View& view) {
+            for (std::size_t i=0; i<view.count; ++i) {
+                const auto action = view.items[i].request.action;
+                assert(action != Action::ExperienceOpen && action != Action::CampaignStart &&
+                    action != Action::CampaignExhibit && action != Action::ChangePlayMode);
+            }
+        };
+        FarmHUDViewData data{};
+        data.day=1; data.contestSeason=true;
+        View entry{};
+        BuildPlayFlowView(entry,FarmPlayFlow::Phase::Briefing,data,true,true);
+        check(entry); AssertItemsDoNotOverlap(entry);
+        assert(entry.Hit({90,650}).action==Action::FlowContinue);
+        assert(entry.Hit({750,650}).action==Action::FlowRecords);
+        for (int page=0;page<kMenuPageCount;++page) {
+            View menu{}; MenuOverviewState state{};
+            state.page=page; state.mainGameOnly=true;
+            BuildMenuOverview(menu,state); check(menu);
+        }
+        View prompt{};
+        BuildFarmNextGoalView(prompt,{FarmNextGoalKind::BuySeed},false,true);
+        assert(prompt.count==1 && prompt.items[0].label==Label::MainBuy);
+    }
     {
         std::ifstream atlas("project/Resources/ui/farm_runtime_menu.png", std::ios::binary);
         assert(MatchesRuntimeAtlas(atlas));

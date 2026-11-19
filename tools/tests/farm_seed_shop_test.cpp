@@ -75,7 +75,7 @@ int main() {
     Check(!shop.Confirm(economy).Succeeded() && !shop.Select(0), "closed shop cannot act");
     shop.Open(farm::CropType::TestCrop);
     Check(shop.Quantity()==1 && shop.Selection()==0, "default selection");
-    Check(!shop.Select(-1) && !shop.Select(3) && !shop.ChangeQuantity(0) && !shop.ChangeQuantity(999), "bad input rejected");
+    Check(!shop.Select(-1) && !shop.Select(shop.kProductCount) && !shop.ChangeQuantity(0) && !shop.ChangeQuantity(999), "bad input rejected");
     Check(!shop.ChangeQuantity(-1), "minimum quantity");
     for(int product=0;product<FarmSeedShopSystem::kProductCount;++product) {
         Check(shop.Select(product),"select formal crop"); ValidateView(shop,economy);
@@ -117,5 +117,23 @@ int main() {
     Check(economy.RestoreSnapshot(snapshot), "inventory max fixture");
     Check(!shop.Evaluate(economy).available && !shop.BeginConfirmation(economy), "inventory overflow rejected");
     ValidateView(shop,economy);
+    FarmEconomySystem supplies; supplies.Initialize();
+    shop.Open(farm::CropType::Carrot);
+    Check(shop.Select(shop.kFungicideProduct) && shop.ChangeQuantity(1),"two bottles");
+    const auto cash=supplies.GetMoney();
+    Check(shop.BeginConfirmation(supplies),"review supplies"); ValidateView(shop,supplies);
+    shop.CancelConfirmation();
+    Check(supplies.GetFungicideCount()==0 && supplies.GetMoney()==cash,"cancel preserves inventory");
+    Check(shop.BeginConfirmation(supplies) && shop.Confirm(supplies).Succeeded() &&
+        supplies.GetFungicideCount()==2 && supplies.GetMoney()==cash-2*supplies.kFungicidePrice &&
+        supplies.GetTotalSeedCount()==0 && !shop.Confirm(supplies).Succeeded(),"separate inventory, bill once");
+    Check(shop.BeginConfirmation(supplies) && supplies.BuyFungicide(1).Succeeded() &&
+        !shop.Confirm(supplies).Succeeded(),"stale supply quote");
+    auto stock=supplies.CaptureSnapshot(); stock.money=0;
+    Check(supplies.RestoreSnapshot(stock) && !shop.BeginConfirmation(supplies) &&
+        !supplies.BuyFungicide(1).Succeeded() && supplies.GetFungicideCount()==3,"no funds");
+    stock.fungicideCount=(std::numeric_limits<int>::max)(); stock.money=100;
+    Check(supplies.RestoreSnapshot(stock) && !shop.BeginConfirmation(supplies) &&
+        !supplies.BuyFungicide(1).Succeeded() && supplies.GetMoney()==100,"no stock overflow");
     std::cout << "Seed shop: selection, quote/cancel/purchase, stale/double-confirm, bounds/overflow, layout PASS\n";
 }

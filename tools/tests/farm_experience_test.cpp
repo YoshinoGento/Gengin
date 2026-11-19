@@ -6,6 +6,7 @@
 #include "farm/system/FarmContestOutcomeSystem.h"
 #include "farm/system/FarmContestSubmissionSystem.h"
 #include "io/JsonFile.h"
+#include "farm_forecast_fixture.h"
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -118,6 +119,17 @@ void Prepare(Fixture& f, int index) {
         tile.heightLevel = 1; tile.moisture = 0.6f; tile.soilNutrients = 0.02f;
         Check(f.grid.SetTile(6, tile), "depleted soil");
     }
+    if (topic == Topic::Rain) {
+        Check(f.date.RestoreSnapshot({18, 0, 1}), "start of rainy tomato day");
+        auto stage = f.progression.CaptureSnapshot();
+        stage.pestSpread.lastProcessedDay = f.date.GetDay();
+        Check(f.progression.RestoreSnapshot(stage), "rain fixture pest clock");
+        auto tomato = Crop(1, 0.10f, 0.70f);
+        tomato.mold = {farm::FarmMoldState::kWarningSeconds, tomato.moisture, false, false};
+        tomato.irrigationEnabled = true;
+        Check(f.grid.SetTile(6, tomato) && f.grid.SetTile(8, tomato) &&
+            f.selection.SetSelectedCrop(tomato.crop), "matching rain beds");
+    }
     if (topic == Topic::Compare) {
         Check(f.grid.SetTile(6, Crop(1, 0.1f, 0.55f)) && f.grid.SetTile(8, Crop(1, 0.1f, 0)), "comparison pair");
     }
@@ -188,7 +200,37 @@ void ValidateAction(Fixture& f, int index) {
         Check(protectedCount > 0 && f.economy.SellAll().Succeeded() &&
             f.economy.GetTotalCropCount() == protectedCount, "protected sale"); break;
     }
-    case Topic::Rain: Check(FarmWeatherSystem::Inspect(f.date.GetDay(), f.progression.WeatherVersion()).phase == FarmWeatherSystem::Phase::Rain, "rain phase"); break;
+    case Topic::Rain: {
+        const auto rain = FarmWeatherSystem::Inspect(f.date.GetDay(), f.progression.WeatherVersion());
+        const auto* a = f.grid.GetTile(6);
+        const auto* b = f.grid.GetTile(8);
+        Check(rain.phase == FarmWeatherSystem::Phase::Rain && f.economy.IsCropUnlocked(farm::CropType::Tomato) &&
+            a && b && a->crop == farm::CropType::Tomato && b->crop == a->crop && a->moisture == b->moisture &&
+            a->growth == b->growth && a->irrigationEnabled && b->irrigationEnabled && f.grid.GetSelectedIndex() == 6,
+            "comparable unlocked tomato beds");
+        using M = farm::MoldPhase;
+        Check(a->mold.Phase() == M::Warning && a->mold == b->mold, "both start at the warning, not illness");
+        Check(tools.SetSelectedIrrigation(f.grid, false), "close the left intake");
+        farm::FarmIrrigationSystem canal; canal.Initialize();
+        FarmGrowthSystem growth; growth.Initialize();
+        for (int tick = 0; tick < 300; ++tick) {
+            canal.UpdateWater(f.grid, 1.f / 60, 1, rain.soilRainPerSecond);
+            growth.Update(f.grid, 1.f / 60, 1);
+            if (tick == 0) Check(f.grid.GetTile(6)->mold.Phase() == M::Recovering &&
+                f.grid.GetTile(8)->mold.Phase() == M::Warning, "relief on first drying step");
+        }
+        a = f.grid.GetTile(6); b = f.grid.GetTile(8);
+        Check(growth.Evaluate(*a).moistureStatus == FarmMoistureStatus::Good &&
+            growth.Evaluate(*b).moistureStatus == FarmMoistureStatus::Excess && a->growth > b->growth,
+            "rain-only benefit visible within five seconds");
+        for (int tick = 300; tick < 21 * 60; ++tick) {
+            canal.UpdateWater(f.grid, 1.f / 60, 1, rain.soilRainPerSecond);
+            growth.Update(f.grid, 1.f / 60, 1);
+        }
+        Check(f.grid.GetTile(6)->mold.Phase() == M::Healthy && f.grid.GetTile(8)->mold.Phase() == M::Sick,
+            "untreated plant sick, rain-only plant recovered");
+        break;
+    }
     case Topic::Pests: case Topic::Repellent: Check(FarmPestSystem::FindActive(f.grid) >= 0, "pests present"); break;
     case Topic::Judging: Check(f.economy.GetContestReservation() != nullptr && f.date.GetDay() == 10, "ready to submit"); break;
     case Topic::Results: Check(f.economy.GetContestResults()[0].contestDay == 10, "result recorded"); break;
@@ -205,8 +247,21 @@ int main(int argc, char** argv) {
     try {
         const bool generate = argc == 4 && std::string_view(argv[1]) == "--generate";
         const bool generateCampaign = argc == 2 && std::string_view(argv[1]) == "--generate-campaign";
-        Check(generate || generateCampaign || argc == 1, "usage: farm_experience_test [--generate exportedRoot outputRoot | --generate-campaign]");
+        const bool forecastReview = argc == 2 && std::string_view(argv[1]) == "--forecast-review";
+        Check(generate || generateCampaign || forecastReview || argc == 1, "usage: farm_experience_test [--generate exportedRoot outputRoot | --generate-campaign | --forecast-review]");
         const auto temp = fs::path("generated/codex_checks") / ("experience_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        if (forecastReview) {
+            const fs::path folder = temp / "forecast";
+            Fixture f(folder);
+            Check(forecast_fixture::Build(f.grid) &&
+                f.documents.SaveAs("水路の分岐",f.grid,f.economy,f.selection),"save review board");
+            Fixture reopened(folder);
+            Check(reopened.grid.GetSelectedIndex() == forecast_fixture::branch &&
+                reopened.grid.GetTile(forecast_fixture::loses)->crop == farm::CropType::Tomato &&
+                reopened.progression.IsFreeFarming(), "reload review board");
+            std::cout << "Forecast review: " << folder.string() << '\n';
+            return 0;
+        }
         const auto assets = generate ? fs::path(argv[3]) : fs::path("project/Resources/farm/experience");
         fs::create_directories(assets);
         constexpr std::array source{"01_water", "01_water", "01_water", "01_water", "01_water", "03_rain", "02_pests", "02_pests",

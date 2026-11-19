@@ -15,6 +15,9 @@ struct TerrainViewState {
     std::size_t changeCount = 0;
     farm::FarmCanalPathIssue pathIssue = farm::FarmCanalPathIssue::None;
     int blockedTileIndex = -1;
+    bool forecastAvailable = false, inspectedClosed = false;
+    farm::FarmIrrigationForecast::Counts forecastCounts{};
+    farm::FarmIrrigationForecast::Field inspected{};
 };
 
 // Availability comes from Systems; the view emits requests and never edits tiles.
@@ -38,6 +41,20 @@ inline void BuildTerrainView(View& view, const TerrainViewState& state) {
     view.Add(Label::Resume, {950, 24, 298, 40}, {Action::TerrainExit});
     view.Metric(Label::Tile, {26, 68, 910, 36}, 510, state.tileValues);
     view.Metric(Label::Changed, {950, 68, 298, 36}, 180, std::to_string(state.changeCount));
+    if (state.forecastAvailable && state.preview && state.canConfirm) {
+        view.irrigationForecast = true;
+        view.Metric(Label::ForecastGain,{28,532,552,44},340,std::to_string(state.forecastCounts.stronger));
+        view.Metric(Label::ForecastLoss,{648,532,552,44},340,std::to_string(state.forecastCounts.weaker));
+        if (state.inspected.Valid() && !state.inspectedClosed)
+            view.Metric(Label::ForecastStrength,{28,588,1208,44},492,
+                std::to_string(state.inspected.before) + "% -> " + std::to_string(state.inspected.after) + "%");
+        else view.Add(state.inspectedClosed ? Label::ForecastClosed : state.forecastCounts.fields == 0 ?
+            Label::ForecastEmpty : Label::ForecastHover,{28,588,1208,44});
+        view.Add(rejectedExtension ? Label::ConfirmCandidates : Label::Confirm,{28,644,296,44},{Action::Confirm},true,true);
+        view.Add(Label::Cancel,{338,644,296,44},{Action::Cancel});
+        view.Add(Label::Overview,{958,644,296,44},{Action::Overview});
+        return;
+    }
     int index = 0;
     const auto button = [&](Label label, Action action, bool enabled, bool selected = false) {
         const int i = index++;
@@ -97,10 +114,15 @@ inline void BuildWaterGuidanceView(View& view, const FarmWaterGuidance& state, b
     case FarmWaterAdvice::Monitor: advice = Label::WaterAdviceMonitorShort; break;
     default: break;
     }
+    using M = farm::MoldPhase;
+    if (state.mold == M::Warning) advice = state.intakeClosed ? Label::MoldWait : Label::MoldWarning;
+    if (state.mold == M::Sick) advice = state.intakeClosed ? Label::MoldSickClosed : Label::MoldSick;
+    if (state.mold == M::Recovering) advice = Label::MoldRecovery;
     view.Add(supply, {24, 460, 252, 38}, {Action::TerrainField}, canEdit);
     const auto adviceIndex = view.count;
     view.Add(advice, {24, 502, 314, 38});
-    if (view.count > adviceIndex) view.items[adviceIndex].warning = state.HasExcessMoisture();
+    if (view.count > adviceIndex) view.items[adviceIndex].warning = state.mold == M::Sick ||
+        state.mold == M::Warning || (state.mold == M::Healthy && state.HasExcessMoisture());
     view.IconButton(state.intakeClosed ? Label::IntakeOn : Label::IntakeOff, HUDIcon::Canal, {284, 460, 54, 38},
         {Action::SetIrrigation, state.intakeClosed ? 1 : 0}, canEdit && canSetIrrigation,
         state.advice == FarmWaterAdvice::CloseIntake);

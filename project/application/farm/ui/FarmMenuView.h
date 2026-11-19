@@ -14,6 +14,7 @@ struct MenuOverviewState {
     int compareA = -1, compareB = -1;
     Label compareIssue = Label::Ready;
     bool contestSeason = false, freeFarming = false;
+    bool mainGameOnly = false;
 };
 namespace MenuLayout {
 inline constexpr Rect details{166,628,224,44};
@@ -54,7 +55,7 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         button(Label::Development,Action::Development,0,500);
         button(Label::CropBook,Action::CropBook,1,500);
         button(Label::Recovery,Action::Recovery,0,564);
-        button(Label::Experience,Action::ExperienceOpen,1,564);
+        if (!s.mainGameOnly) button(Label::Experience,Action::ExperienceOpen,1,564);
     } else if (s.page == 1) {
         view.Add(Label::MenuTerrainWork,{176,130,920,38});
         button(Label::Overview,Action::TerrainField,0,188,s.unlocked);
@@ -91,6 +92,7 @@ inline void BuildMenuOverview(View& view, const MenuOverviewState& s) {
         view.Add(Label::MenuCameraHeading,{176,274,920,38});
         button(Label::Follow,Action::Follow,0,320,true,0,s.following);
         button(Label::Overview,Action::Overview,1,320,true,0,!s.following);
+        if (s.mainGameOnly) return;
         view.Add(Label::MenuModeHeading,{176,418,920,38});
         constexpr std::array labels{Label::MenuModeSeason,Label::MenuModeTrial,Label::MenuModeFree};
         constexpr std::array arguments{1,0,2};

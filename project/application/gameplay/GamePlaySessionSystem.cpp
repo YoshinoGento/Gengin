@@ -603,7 +603,7 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 #endif
 	// Reveal can draw before the first input/simulation update.
     farmRainPresentation_.Reset();
-    if (!farmRainRenderer_.Initialize(framework_->GetDxCommon())) AddLog("Rain geometry unavailable.");
+    if (!farmFieldEffectRenderer_.Initialize(framework_->GetDxCommon())) AddLog("Farm field effects unavailable.");
     if (!farmRainAudio_.Initialize(framework_->GetAudio())) AddLog("Rain ambience unavailable.");
     co_await std::suspend_always{};
 	PrepareRenderFrame(0.0f);
@@ -726,6 +726,8 @@ void GamePlaySessionSystem::Update() {
 	if (timelineScrubbing_) farmHarvestVisualSystem_.Clear();
 	if (timelineScrubbing_ || !farmProgressionSystem_.PestsEnabled()) farmPestVisualSystem_.Clear();
 	farmPestVisualSystem_.Update(farmGrid_, viewportFocused_ ? realDeltaTime_ : 0.0f);
+    if (timelineScrubbing_) farmMoldVisual_.Clear();
+    else farmMoldVisual_.Update(viewportFocused_ ? realDeltaTime_ : 0.0f);
 	// Committed harvest feedback must finish even when pause or clear stops world time.
 	farmHarvestVisualSystem_.Update(farmGrid_, realDeltaTime_);
     UpdateRainPresentation(viewportFocused_ ? realDeltaTime_ : 0.0f, viewportFocused_);
@@ -1652,25 +1654,30 @@ void GamePlaySessionSystem::Draw() {
     }
     if (farmRuntimeController_.ShowsSeedShop() || farmRuntimeController_.ShowsHarvestDisplay()) {
 		objCommon->BeginObjectPass();
-        farmSeedShopRenderer_.Draw(farmRuntimeController_.ShowsSeedShop() ? farmRuntimeController_.SeedShopSelection() % 2 : farmRuntimeController_.HarvestDisplaySelection());
+        const bool shop = farmRuntimeController_.ShowsSeedShop();
+        const int selection = farmRuntimeController_.SeedShopSelection();
+        farmSeedShopRenderer_.Draw(shop ? selection % 2 : farmRuntimeController_.HarvestDisplaySelection(),
+            shop && selection / 2 == FarmSeedShopSystem::kFungicideProduct / 2);
 		objCommon->EndObjectPass();
 		spriteCommon->PreDraw();
 		farmRuntimeController_.Draw();
 		return;
 	}
 #endif
-	const farm::FarmGrid* previewGrid = farmIrrigationPreviewSystem_.GetPreviewGrid();
-	const farm::FarmIrrigationSystem* previewIrrigation = farmIrrigationPreviewSystem_.GetPreviewIrrigation();
+	const auto* lesson = farmRuntimeController_.CanalLesson();
+	const auto& preview = lesson ? lesson->Prediction() : farmIrrigationPreviewSystem_;
+	const farm::FarmGrid* previewGrid = preview.GetPreviewGrid();
+	const farm::FarmIrrigationSystem* previewIrrigation = preview.GetPreviewIrrigation();
 	const bool irrigationPreviewActive = previewGrid != nullptr && previewIrrigation != nullptr;
-	const farm::FarmGrid& displayedFarmGrid = irrigationPreviewActive ? *previewGrid : farmGrid_;
+	const farm::FarmGrid& displayedFarmGrid = irrigationPreviewActive ? *previewGrid : lesson ? lesson->Board() : farmGrid_;
     const bool arrivalScenery = farmGameMode_ && farmArrivalRenderer_.IsReady() &&
         FarmDevelopmentSystem::StandardSize(displayedFarmGrid.GetWidth(), displayedFarmGrid.GetHeight());
     farmArrivalRenderer_.Prepare(camera_.get(),farmRuntimeController_.StartFrame(),arrivalScenery,realDeltaTime_,
         farmRainPresentation_.GetFrame());
-	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : farmIrrigationSystem_;
+	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : lesson ? lesson->Water() : farmIrrigationSystem_;
 	farmRenderer_.Prepare(displayedFarmGrid, farmVisualSystem_, camera_.get(),
-		farmRuntimeController_.ResolveHoveredTile(RuntimeContext()), irrigationPreviewActive ? nullptr : &farmHarvestVisualSystem_,
-        !farmRuntimeController_.PresentsIntroduction(),
+		lesson ? lesson->Target() : farmRuntimeController_.ResolveHoveredTile(RuntimeContext()), irrigationPreviewActive || lesson ? nullptr : &farmHarvestVisualSystem_,
+        lesson || !farmRuntimeController_.PresentsIntroduction(),
         !irrigationPreviewActive && !timelineScrubbing_ && farmProgressionSystem_.PestsEnabled() &&
         !farmRuntimeController_.PresentsIntroduction() ? &farmPestVisualSystem_ : nullptr);
 
@@ -1735,10 +1742,11 @@ void GamePlaySessionSystem::Draw() {
 			farmCropSelectionSystem_.GetSelectedCrop(), &farmEconomySystem_),
 		*LineDrawer::GetInstance(),
 		irrigationPreviewActive
-			? &farmIrrigationPreviewSystem_.GetChangedTileIndices()
+			? &preview.GetChangedTileIndices()
 			: nullptr,
 		!farmGameMode_ || !farmRenderer_.IsReady(),
-		!farmRenderer_.IsReady() || !farmRenderer_.IsVisible() || !farmRenderer_.HasCropMeshes() || farmRenderer_.IsLimitExceeded());
+		!farmRenderer_.IsReady() || !farmRenderer_.IsVisible() || !farmRenderer_.HasCropMeshes() || farmRenderer_.IsLimitExceeded(),
+		irrigationPreviewActive && !lesson && farmRuntimeController_.ShowsIrrigationForecast() ? &preview.Forecast() : nullptr);
 
 	if (gpuParticleDebugMode_ == GPUParticleDebugMode::Interaction &&
 		interactionBrushOperation_ != InteractionBrushOperation::None) {
@@ -1835,7 +1843,10 @@ void GamePlaySessionSystem::Draw() {
 
     const auto& rainLayout = farmVisualSystem_.GetLayout();
     const float rainPitch = rainLayout.tileSize + rainLayout.tileGap;
-    farmRainRenderer_.Draw(farmRainPresentation_.GetFrame(), *camera_, rainLayout.center,
+    const bool showMold = farmRenderer_.IsVisible() && !irrigationPreviewActive && !timelineScrubbing_ &&
+        !farmRuntimeController_.PresentsIntroduction();
+    const auto moldFrame = showMold ? farmMoldVisual_.Frame(farmGrid_,farmVisualSystem_) : farm::FarmMoldFrame{};
+    farmFieldEffectRenderer_.Draw(farmRainPresentation_.GetFrame(), moldFrame, *camera_, rainLayout.center,
         farmGrid_.GetWidth()*rainPitch + 8.0f, farmGrid_.GetHeight()*rainPitch + 8.0f);
 
 	// HUD is the final Scene overlay and does not mutate gameplay state.
@@ -2061,7 +2072,7 @@ bool GamePlaySessionSystem::HandleFarmInput() {
 	}
 	RouteFarmToolFeedback(result.toolAction);
 	if (result.buySeedRequested) {
-		const FarmSeedPurchaseResult purchaseResult = farmEconomySystem_.BuySeed(
+		const FarmPurchaseResult purchaseResult = farmEconomySystem_.BuySeed(
 			farmCropSelectionSystem_.GetSelectedCrop());
 		if (purchaseResult.Succeeded()) {
 			farmDocumentSystem_.MarkDirty();
@@ -2071,7 +2082,7 @@ bool GamePlaySessionSystem::HandleFarmInput() {
 			farmFeedbackSystem_.ShowSeedPurchased(
 				purchaseResult.crop, purchaseResult.purchasedCount,
 				purchaseResult.spentMoney);
-		} else if (purchaseResult.status == FarmSeedPurchaseStatus::InsufficientMoney) {
+		} else if (purchaseResult.status == FarmPurchaseStatus::InsufficientMoney) {
 			farmFeedbackSystem_.ShowInsufficientMoney();
 		} else {
 			AddLog("Seed purchase rejected by FarmEconomySystem.");
@@ -2993,8 +3004,9 @@ void GamePlaySessionSystem::ChangeAnimationModel(int index) {
 }
 
 FarmSimulationStepSystem::Context GamePlaySessionSystem::SimulationContext() {
+    static_assert(farm::FarmMoldFrame::kBeds == FarmDevelopmentSystem::kWidth * FarmDevelopmentSystem::kMaximumHeight);
     return {farmGrid_, farmIrrigationSystem_, farmGrowthSystem_, farmDateSystem_, farmContestDaySystem_,
-        farmEconomySystem_, farmProgressionSystem_, &farmGrowthComparisonSystem_};
+        farmEconomySystem_, farmProgressionSystem_, &farmGrowthComparisonSystem_, &farmMoldVisual_};
 }
 
 bool GamePlaySessionSystem::TimeAdvanceBlocked() const {

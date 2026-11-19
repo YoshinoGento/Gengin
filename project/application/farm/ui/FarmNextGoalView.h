@@ -39,14 +39,25 @@ struct FarmNextGoalCopy {
     }
 }
 
-inline void BuildFarmNextGoalView(View& view, const FarmNextGoal& goal, bool details) {
+inline void BuildFarmNextGoalView(View& view, const FarmNextGoal& goal, bool details, bool firstDayGuide = false) {
     const auto copy = DescribeFarmNextGoal(goal.kind);
     if (!copy || goal.pestTile >= 0) return;
     view.shortGoal = true;
     if (goal.contestDay > 0)
         view.Metric(copy->title, HUDLayout::shortGoal, 316, "D" + std::to_string(goal.contestDay));
-    else view.Add(copy->title, HUDLayout::shortGoal,
+    else {
+        Label title = copy->title;
+        if (firstDayGuide) switch (goal.kind) {
+        case FarmNextGoalKind::Till: title = Label::MainTill; break;
+        case FarmNextGoalKind::BuySeed: title = Label::MainBuy; break;
+        case FarmNextGoalKind::Plant: title = Label::MainPlant; break;
+        case FarmNextGoalKind::Water: title = Label::MainWater; break;
+        case FarmNextGoalKind::Harvest: title = Label::MainHarvest; break;
+        default: break;
+        }
+        view.Add(title, HUDLayout::shortGoal,
         {goal.kind == FarmNextGoalKind::NeedFunds ? Action::Recovery : Action::None});
+    }
     if (details && copy->detail) {
         view.shortGoalDetail = true;
         view.Add(*copy->detail, HUDLayout::shortGoalDetail);

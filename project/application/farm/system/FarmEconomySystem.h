@@ -20,7 +20,7 @@ struct FarmSaleResult {
 	}
 };
 
-enum class FarmSeedPurchaseStatus {
+enum class FarmPurchaseStatus {
 	None,
 	Purchased,
 	UnsupportedCrop,
@@ -31,14 +31,14 @@ enum class FarmSeedPurchaseStatus {
 	Locked,
 };
 
-struct FarmSeedPurchaseResult {
-	FarmSeedPurchaseStatus status = FarmSeedPurchaseStatus::None;
+struct FarmPurchaseResult {
+	FarmPurchaseStatus status = FarmPurchaseStatus::None;
 	farm::CropType crop = farm::CropType::None;
 	int purchasedCount = 0;
 	int spentMoney = 0;
 
 	[[nodiscard]] bool Succeeded() const noexcept {
-		return status == FarmSeedPurchaseStatus::Purchased &&
+		return status == FarmPurchaseStatus::Purchased &&
 			purchasedCount > 0 && spentMoney > 0;
 	}
 };
@@ -46,6 +46,7 @@ struct FarmSeedPurchaseResult {
 class FarmEconomySystem final {
 public:
 	static constexpr std::size_t kMaxHarvestRecords = 128;
+	static constexpr int kFungicidePrice = 40;
 	struct HarvestRecord {
 		FarmCropQualityResult quality{};
 		int quantity = 0;
@@ -77,6 +78,7 @@ public:
 		int lifetimeSales = 0;
 		FarmCropRecordSystem::Records soldCropRecords{};
 		int lastRecoveryDay = 0; // 0 means no aid received in this farm.
+		int fungicideCount = 0;
 	};
 
 	void Initialize(const farm::FarmRules& rules = {});
@@ -99,8 +101,10 @@ public:
 		const FarmCropQualityResult& restoredLastHarvestQuality) noexcept;
 	[[nodiscard]] bool AddSeed(farm::CropType crop, int quantity = 1) noexcept;
 	[[nodiscard]] bool RemoveSeed(farm::CropType crop, int quantity = 1) noexcept;
-	[[nodiscard]] FarmSeedPurchaseResult BuySeed(
+	[[nodiscard]] FarmPurchaseResult BuySeed(
 		farm::CropType crop, int quantity = 1) noexcept;
+	[[nodiscard]] FarmPurchaseResult BuyFungicide(int quantity) noexcept;
+	[[nodiscard]] int GetFungicideCount() const noexcept { return fungicideCount_; }
 	[[nodiscard]] FarmSaleResult SellCrop(farm::CropType crop) noexcept;
 	[[nodiscard]] FarmSaleResult SellAll() noexcept;
 	[[nodiscard]] FarmSaleResult PreviewSale(farm::CropType crop = farm::CropType::None) const noexcept;
@@ -142,6 +146,10 @@ public:
 	bool RestoreSnapshot(const Snapshot& snapshot) noexcept;
 
 private:
+	friend class FarmFungicideSystem;
+	int fungicideCount_ = 0;
+	[[nodiscard]] FarmPurchaseResult BuyStock(FarmPurchaseResult result, int quantity, int price, int& stock) noexcept;
+	void ConsumeFungicide() noexcept { --fungicideCount_; ++inventoryGeneration_; }
 	friend class FarmDevelopmentSystem;
 	// Development validates affordability and commits the grid first, on the same thread.
 	void CommitDevelopmentPayment(int amount) noexcept {

@@ -1,7 +1,9 @@
 #include <cassert>
 #include "farm_test_edit.h"
+#include "farm_forecast_fixture.h"
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmIrrigationSystem.h"
+#include "farm/system/FarmCanalLessonSystem.h"
 #include "farm/system/FarmIrrigationPreviewSystem.h"
 #include "farm/system/FarmToolActionSystem.h"
 #include "farm/system/FarmEconomySystem.h"
@@ -15,6 +17,61 @@ void Check(bool ok, const char* what) { if (!ok) throw std::runtime_error(what);
 }
 int main() try {
     using namespace farm;
+    {
+        namespace F = forecast_fixture;
+        using Op = FarmIrrigationPreviewOperation;
+        FarmGrid g; Check(F::Build(g), "branch fixture");
+        FarmIrrigationPreviewSystem p; p.Initialize();
+        const auto& forecast = p.Forecast();
+        Check(p.Begin(g,F::branch,Op::PlaceCanalPath), "branch preview");
+        const auto summary = forecast.Summary();
+        Check(summary.fields == 3 && summary.stronger == 1 && summary.weaker == 1, "branch gain and loss");
+        const auto gain = *forecast.Inspect(F::gains), loss = *forecast.Inspect(F::loses);
+        Check(gain.before == 0 && gain.after > 0 && loss.before > loss.after && loss.after > 0, "direction");
+        Check(forecast.Inspect(F::closed)->after == 0 && !forecast.Inspect(-1) &&
+            !forecast.Inspect(20) && !forecast.Inspect(F::branch) && !forecast.Inspect(4), "intake and bounds");
+        Check(g.GetTile(F::branch)->feature == FarmTileFeature::None && g.GetTile(F::gains)->moisture == .32f,
+            "no simulated moisture in preview");
+        const auto rev = p.CandidateRevision();
+        Check(!p.VisitCanalPathTile(g,F::closed) && rev == p.CandidateRevision(), "blocked segment keeps forecast");
+        Check(p.VisitCanalPathTile(g,7) && p.CandidateRevision() != rev && p.VisitCanalPathTile(g,F::branch),
+            "extension and retraction");
+        Check(forecast.Inspect(F::gains)->after == gain.after && forecast.Inspect(F::loses)->after == loss.after, "restored prefix");
+        FarmToolActionSystem tools; tools.Initialize();
+        Check(p.CanConfirm(g) && tools.PlaceCanalPath(g,p.GetChangedTileIndices()) && !p.CanConfirm(g), "commit and detect stale candidate");
+        p.Cancel(); Check(!forecast.Inspect(F::gains) && forecast.Summary().stronger == 0, "clear markers");
+        FarmIrrigationSystem actual; actual.Initialize(); actual.Rebuild(g);
+        Check(std::lround(100*actual.GetIrrigationStrength(F::gains)) == gain.after &&
+            std::lround(100*actual.GetIrrigationStrength(F::loses)) == loss.after, "commit matches preview");
+        Check(p.Begin(g,F::gains,Op::RaiseTerrain) && p.Forecast().Inspect(F::gains)->after == 0, "no uphill delivery");
+        Check(p.Begin(g,10,Op::ToggleWaterSource) && p.Forecast().Inspect(F::loses)->after == 0 &&
+            p.GetPreviewIrrigation()->GetWaterStatus(*p.GetPreviewGrid(),F::loses) == FarmWaterStatus::Retained,
+            "retained water is not a lasting source");
+        std::cout << "PASS: forecast branch gain/loss, closed intake, height, retained water, prefix, parity\n";
+    }
+    {
+        FarmCanalLessonSystem lesson;
+        using P = FarmCanalLessonSystem::Phase;
+        Check(lesson.Begin() && !lesson.Water().IsInIrrigationRange(lesson.Target()), "lesson starts dry");
+        Check(!lesson.Preview(-1) && !lesson.Preview(10) && !lesson.Connect(), "invalid or occupied");
+        Check(lesson.Preview(12) && lesson.WillReach(), "first prediction");
+        lesson.Tick(1);
+        Check(lesson.Board().GetTile(12)->feature == FarmTileFeature::None &&
+            lesson.Moisture() == lesson.kDry, "no simulation or edit in preview");
+        lesson.Cancel(); Check(!lesson.Connect(), "cancel does not commit");
+        for (int i = 0; i < 2; ++i) {
+            Check(lesson.Preview(i == 0 ? 12 : 14) && lesson.Connect() && !lesson.Connect(), "commit exactly once");
+            lesson.Tick(0); Check(lesson.Moisture() == lesson.kDry, "no instantaneous gain");
+            for (int step = 0; step < 60 * 10 && lesson.State() != P::Reached; ++step) lesson.Tick(1.f/60);
+            Check(lesson.State() == P::Reached && lesson.Moisture() >= lesson.Before()+lesson.kNoticeableGain, "real delivery");
+            if (i == 0) {
+                Check(lesson.TrySecond() && lesson.Moisture() == lesson.kDry, "independent second crop");
+                Check(lesson.Preview(0) && !lesson.WillReach() && !lesson.Connect(), "disconnected preview");
+            }
+        }
+        Check(!lesson.TrySecond(), "lesson ends after second crop");
+        std::cout << "Canal lesson: preview, cancel, disconnected route and two watered crops passed\n";
+    }
     for (float speed : {1.f, 2.f, 4.f}) {
         FarmGrid grid; Check(grid.Initialize(3, 2), "initialize");
         FarmTile source; source.feature = FarmTileFeature::WaterSource; source.waterAmount = 1;

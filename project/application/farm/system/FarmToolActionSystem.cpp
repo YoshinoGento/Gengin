@@ -34,6 +34,7 @@ bool TilesEqual(const farm::FarmTile& left, const farm::FarmTile& right)
 		left.careHistory.nutrientGrowth == right.careHistory.nutrientGrowth &&
 		left.careHistory.nutrientSupply == right.careHistory.nutrientSupply &&
 		left.pests == right.pests &&
+		left.mold == right.mold &&
 		left.repellentPlant == right.repellentPlant &&
 		left.soilNutrients == right.soilNutrients;
 }

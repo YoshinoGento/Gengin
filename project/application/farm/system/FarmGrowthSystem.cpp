@@ -1,5 +1,6 @@
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmWeatherSystem.h"
+#include "farm/system/FarmMoldSystem.h"
 
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmSoilSystem.h"
@@ -197,6 +198,7 @@ FarmWaterGuidance FarmGrowthSystem::AnalyzeWater(
 		if (farm::IsHarvestReady(*tile)) {
 			result.advice = FarmWaterAdvice::Harvest;
 		} else if (forecast.moistureValid && forecast.profileCrop == tile->crop) {
+			result.mold = tile->mold.Phase();
 			const bool available = !result.intakeClosed &&
 				(supply == farm::FarmWaterStatus::Available || supply == farm::FarmWaterStatus::Retained);
 			switch (forecast.moistureStatus) {
@@ -263,9 +265,9 @@ bool FarmGrowthSystem::Update(
 		}
 
 		const MoistureResponse response = EvaluateMoisture(*profile, tile->moisture);
-		const float growthPerSecond = response.rate;
+		const float growthPerSecond = response.rate * FarmMoldSystem::GrowthMultiplier(tile->mold);
 		const float efficiency = profile->growthPerSecondWet > 0.0f
-			? growthPerSecond / profile->growthPerSecondWet
+			? response.rate / profile->growthPerSecondWet
 			: 0.0f;
 		AccumulateCareHistory(
 			tile->careHistory, response.status, scaledDeltaTime, efficiency);
@@ -278,6 +280,12 @@ bool FarmGrowthSystem::Update(
 			tile->moisture - profile->moistureDecayPerSecond * scaledDeltaTime,
 			kNormalizedMinimum,
 			kNormalizedMaximum);
+		if (farm::ToCropSlot(tile->crop) > 0) {
+			tile->mold = FarmMoldSystem::Next(source->mold, response.status == FarmMoistureStatus::Excess,
+				tile->irrigationEnabled, tile->moisture, scaledDeltaTime);
+			if (farm::IsHarvestReady(*tile)) tile->mold.protectedSeconds = 0;
+			changed |= tile->mold != source->mold;
+		}
 		changed |= previousMoisture != tile->moisture ||
 			previousGrowth != tile->growth ||
 			!CareHistoriesEqual(previousCareHistory, tile->careHistory);
@@ -299,7 +307,7 @@ FarmGrowthForecast FarmGrowthSystem::Evaluate(
 		!std::isfinite(tile.moisture) || !std::isfinite(tile.growth)) {
 		return result;
 	}
-	result.irrigationActive = result.irrigationAvailable && IsCultivated(tile);
+	result.irrigationActive = result.irrigationAvailable && tile.irrigationEnabled;
 	const farm::CropType profileCrop = farm::IsPlantableCrop(tile.crop)
 		? tile.crop : previewCrop;
 	const farm::FarmCropGrowthProfile* profile =
@@ -317,14 +325,14 @@ FarmGrowthForecast FarmGrowthSystem::Evaluate(
 	const auto response = EvaluateMoisture(*profile, moisture);
 	result.moistureStatus = response.status;
 	result.growthEfficiency = profile->growthPerSecondWet > 0.0f
-		? response.rate / profile->growthPerSecondWet : 0.0f;
+		? response.rate * FarmMoldSystem::GrowthMultiplier(tile.mold) / profile->growthPerSecondWet : 0.0f;
 
 	if (!std::isfinite(timeScale) || timeScale <= 0.0f) {
 		return result;
 	}
 	result.irrigationRecoveryPerSecond = result.irrigationActive
 		? rules_.irrigationMoistureRecoveryPerSecond *
-			result.irrigationStrength * timeScale
+			result.irrigationStrength * farm::FarmCanalSeepage::Fraction(moisture) * timeScale
 		: 0.0f;
 	result.growing = tile.state == farm::FarmTileState::Planted &&
 		tile.crop != farm::CropType::None && growth < kNormalizedMaximum;
@@ -336,21 +344,24 @@ FarmGrowthForecast FarmGrowthSystem::Evaluate(
 		? soilRainPerSecond * timeScale : 0.0f;
 	result.netMoisturePerSecond =
 		result.irrigationRecoveryPerSecond + result.rainRecoveryPerSecond - result.moistureDecayPerSecond;
-	if (result.netMoisturePerSecond < 0.0f &&
+	const bool raining = soilRainPerSecond > 0.0f && soilRainPerSecond <= FarmWeatherSystem::kSoilRainPerSecond;
+	if (raining && result.growing && soilRainPerSecond >= profile->moistureDecayPerSecond &&
+		FarmWeatherSystem::kRainMoistureLimit >= profile->goodMoistureMinimum &&
+		response.status == FarmMoistureStatus::Good) {
+		if (!tile.irrigationEnabled) result.rainAdvice = FarmRainIntakeAdvice::RainOnly;
+		else if (result.irrigationActive) result.rainAdvice = FarmRainIntakeAdvice::CanClose;
+	}
+	// Wet-soil seepage varies during drying, and a canal alone cannot reach 100%.
+	if (!raining && (!result.irrigationActive || moisture <= farm::FarmCanalSeepage::kFullRateUntil) &&
+		result.netMoisturePerSecond < 0.0f &&
 		std::isfinite(result.netMoisturePerSecond)) {
 		result.secondsUntilDry = moisture / -result.netMoisturePerSecond;
-	} else if (result.netMoisturePerSecond > 0.0f &&
-		std::isfinite(result.netMoisturePerSecond)) {
-		result.secondsUntilFullMoisture =
-			(kNormalizedMaximum - moisture) / result.netMoisturePerSecond;
 	}
-	// Rain is capped and scheduled, so constant-rate dry/full times would mislead.
-	if (soilRainPerSecond > 0.0f) result.secondsUntilDry = result.secondsUntilFullMoisture = -1.0f;
 	if (!result.growing) {
 		return result;
 	}
 
-	result.growthPerSecond = response.rate * timeScale;
+	result.growthPerSecond = response.rate * FarmMoldSystem::GrowthMultiplier(tile.mold) * timeScale;
 	if (result.growthPerSecond > 0.0f && std::isfinite(result.growthPerSecond)) {
 		result.secondsUntilReady =
 			(kNormalizedMaximum - growth) / result.growthPerSecond;

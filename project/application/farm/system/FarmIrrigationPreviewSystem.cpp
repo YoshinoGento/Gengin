@@ -14,6 +14,7 @@ bool TilesEqual(const FarmTile& left, const FarmTile& right) noexcept
 	return left.heightLevel == right.heightLevel &&
 		left.feature == right.feature &&
 		left.irrigationEnabled == right.irrigationEnabled &&
+		left.mold == right.mold &&
 		left.repellentPlant == right.repellentPlant &&
 		left.state == right.state &&
 		left.crop == right.crop &&
@@ -128,7 +129,9 @@ bool FarmIrrigationPreviewSystem::Begin(
 	}
 
 	previewIrrigation_.Initialize(rules_);
-	previewIrrigation_.Rebuild(previewGrid_);
+	previewIrrigation_.Rebuild(sourceGrid);
+	forecast_.Capture(sourceGrid,previewIrrigation_);
+	RebuildCandidate();
 	sourceGrid.CaptureSnapshot(sourceSnapshot_);
 	sourceGeneration_ = sourceGrid.GetGeneration();
 	originalTile_ = *sourceTile;
@@ -180,7 +183,7 @@ bool FarmIrrigationPreviewSystem::AppendCanalPathTile(
 	}
 
 	changedTileIndices_.push_back(tileIndex);
-	previewIrrigation_.Rebuild(previewGrid_);
+	RebuildCandidate();
 	return true;
 }
 
@@ -212,7 +215,7 @@ bool FarmIrrigationPreviewSystem::VisitCanalPathTile(
 	}
 	changedTileIndices_.resize(keepCount);
 	static_cast<void>(previewGrid_.SetSelectedIndex(tileIndex));
-	previewIrrigation_.Rebuild(previewGrid_);
+	RebuildCandidate();
 	return true;
 }
 
@@ -278,7 +281,7 @@ bool FarmIrrigationPreviewSystem::ExtendCanalPathTo(const FarmGrid& sourceGrid, 
 		changedTileIndices_.push_back(candidate.index);
 	}
 	static_cast<void>(previewGrid_.SetSelectedIndex(tileIndex));
-	previewIrrigation_.Rebuild(previewGrid_);
+	RebuildCandidate();
 	pathIssue_ = FarmCanalPathIssue::None;
 	blockedTileIndex_ = -1;
 	return true;
@@ -332,10 +335,17 @@ bool FarmIrrigationPreviewSystem::VisitTerrainTile(const FarmGrid& sourceGrid, i
 		changedTileIndices_.push_back(index);
 	}
 	static_cast<void>(previewGrid_.SetSelectedIndex(tileIndex));
-	if (!additions.empty()) previewIrrigation_.Rebuild(previewGrid_);
+	if (!additions.empty()) RebuildCandidate();
 	pathIssue_ = FarmCanalPathIssue::None;
 	blockedTileIndex_ = -1;
 	return true;
+}
+
+void FarmIrrigationPreviewSystem::RebuildCandidate()
+{
+	previewIrrigation_.Rebuild(previewGrid_);
+	forecast_.Compare(previewGrid_,previewIrrigation_);
+	++candidateRevision_;
 }
 
 void FarmIrrigationPreviewSystem::Cancel() noexcept
@@ -350,6 +360,7 @@ void FarmIrrigationPreviewSystem::Cancel() noexcept
 	candidateFeature_ = FarmTileFeature::None;
 	candidateHeightLevel_ = 0;
 	changedTileIndices_.clear();
+	forecast_.Clear();
 	active_ = false;
 	pathIssue_ = FarmCanalPathIssue::None;
 	blockedTileIndex_ = -1;

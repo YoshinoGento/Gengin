@@ -14,7 +14,7 @@ class FarmTimeAdvanceSystem final {
 public:
     enum class StopReason {
         None, Cancelled, Blocked, InvalidState, ContextChanged, HarvestReady,
-        WaterLow, WaterExcess, ContestDay, Finished, NoTarget, BudgetLimit, TargetReached, PestWarning, WeatherChanged
+        WaterLow, WaterExcess, ContestDay, Finished, NoTarget, BudgetLimit, TargetReached, PestWarning, WeatherChanged, MoldAlert
     };
     using Context = FarmSimulationStepSystem::Context;
     struct Status {
@@ -115,6 +115,13 @@ private:
         if (status_.active && FarmWeatherSystem::Inspect(clock.day, expectedWeatherVersion_).phase != initialWeather_)
             return Stop(StopReason::WeatherChanged);
         if (status_.active && clock.day >= status_.targetDay) return Stop(StopReason::TargetReached);
+        for (int i = 0; i < context.grid.GetTileCount(); ++i) {
+            const auto* tile = context.grid.GetTile(i);
+            if (!tile || farm::IsHarvestReady(*tile)) continue;
+            const auto phase = tile->mold.Phase();
+            if (phase == farm::MoldPhase::Warning || phase == farm::MoldPhase::Sick)
+                return Stop(StopReason::MoldAlert, i);
+        }
         for (int index = 0; index < context.grid.GetTileCount(); ++index) {
             const auto* tile = context.grid.GetTile(index);
             if (!tile) return Stop(StopReason::InvalidState, index);

@@ -63,6 +63,7 @@ void FarmEconomySystem::Initialize(const farm::FarmRules& rules)
 		(std::max)(rules.initialTomatoSeedCount, 0), (std::max)(rules.initialPumpkinSeedCount, 0),
 	};
 	lastRecoveryDay_ = 0;
+	fungicideCount_ = 0;
 	seedPrices_ = {
 		rules.testCropSeedPrice > 0 ? rules.testCropSeedPrice : 0,
 		rules.carrotSeedPrice > 0 ? rules.carrotSeedPrice : 0,
@@ -191,44 +192,55 @@ bool FarmEconomySystem::RemoveSeed(farm::CropType crop, int quantity) noexcept
 	return true;
 }
 
-FarmSeedPurchaseResult FarmEconomySystem::BuySeed(
+FarmPurchaseResult FarmEconomySystem::BuySeed(
 	farm::CropType crop, int quantity) noexcept
 {
-	FarmSeedPurchaseResult result{};
+	FarmPurchaseResult result{};
 	result.crop = crop;
 	const int slot = farm::ToCropSlot(crop);
 	if (slot < 0) {
-		result.status = FarmSeedPurchaseStatus::UnsupportedCrop;
+		result.status = FarmPurchaseStatus::UnsupportedCrop;
 		return result;
 	}
+	if (!IsCropUnlocked(crop)) { result.status = FarmPurchaseStatus::Locked; return result; }
+	return BuyStock(result, quantity, seedPrices_[slot], seedCounts_[slot]);
+}
+
+FarmPurchaseResult FarmEconomySystem::BuyFungicide(int quantity) noexcept
+{
+	return BuyStock({}, quantity, kFungicidePrice, fungicideCount_);
+}
+
+FarmPurchaseResult FarmEconomySystem::BuyStock(FarmPurchaseResult result, int quantity, int price, int& stock) noexcept
+{
 	if (quantity <= 0) {
-		result.status = FarmSeedPurchaseStatus::InvalidQuantity;
+		result.status = FarmPurchaseStatus::InvalidQuantity;
 		return result;
 	}
-	if (!IsCropUnlocked(crop)) { result.status = FarmSeedPurchaseStatus::Locked; return result; }
-	if (seedPrices_[slot] <= 0) {
-		result.status = FarmSeedPurchaseStatus::Unavailable;
+	if (price <= 0) {
+		result.status = FarmPurchaseStatus::Unavailable;
 		return result;
 	}
-	if (seedCounts_[slot] > (std::numeric_limits<int>::max)() - quantity) {
-		result.status = FarmSeedPurchaseStatus::Overflow;
+	if (stock > (std::numeric_limits<int>::max)() - quantity) {
+		result.status = FarmPurchaseStatus::Overflow;
 		return result;
 	}
 
 	const long long cost =
-		static_cast<long long>(seedPrices_[slot]) * static_cast<long long>(quantity);
+		static_cast<long long>(price) * quantity;
 	if (cost > (std::numeric_limits<int>::max)()) {
-		result.status = FarmSeedPurchaseStatus::Overflow;
+		result.status = FarmPurchaseStatus::Overflow;
 		return result;
 	}
 	if (cost > money_) {
-		result.status = FarmSeedPurchaseStatus::InsufficientMoney;
+		result.status = FarmPurchaseStatus::InsufficientMoney;
 		return result;
 	}
 
 	money_ -= static_cast<int>(cost);
-	seedCounts_[slot] += quantity;
-	result.status = FarmSeedPurchaseStatus::Purchased;
+	stock += quantity;
+	++inventoryGeneration_;
+	result.status = FarmPurchaseStatus::Purchased;
 	result.purchasedCount = quantity;
 	result.spentMoney = static_cast<int>(cost);
 	return result;
@@ -402,7 +414,7 @@ FarmEconomySystem::Snapshot FarmEconomySystem::CaptureSnapshot() const noexcept
 {
 	return {
 		money_, cropCounts_, cropValues_, sellPrices_, seedCounts_, seedPrices_,
-		lastHarvestQuality_, harvestRecords_, harvestRecordCount_, nextHarvestRecordId_, contestReservationId_, contestResults_, lifetimeSales_, soldCropRecords_, lastRecoveryDay_
+		lastHarvestQuality_, harvestRecords_, harvestRecordCount_, nextHarvestRecordId_, contestReservationId_, contestResults_, lifetimeSales_, soldCropRecords_, lastRecoveryDay_, fungicideCount_
 	};
 }
 
@@ -432,7 +444,7 @@ int FarmEconomySystem::GetUnrecordedCropCount() const noexcept
 
 bool FarmEconomySystem::ValidateSnapshot(const Snapshot& snapshot) noexcept
 {
-	if (snapshot.lastRecoveryDay < 0 || snapshot.money < 0 || snapshot.lifetimeSales < 0 || !FarmCropRecordSystem::Validate(snapshot.soldCropRecords) || !AreValuesValid(snapshot.cropCounts) ||
+	if (snapshot.fungicideCount < 0 || snapshot.lastRecoveryDay < 0 || snapshot.money < 0 || snapshot.lifetimeSales < 0 || !FarmCropRecordSystem::Validate(snapshot.soldCropRecords) || !AreValuesValid(snapshot.cropCounts) ||
 		!AreValuesValid(snapshot.cropValues) ||
 		!AreValuesValid(snapshot.sellPrices) || !AreValuesValid(snapshot.seedCounts) ||
 		!AreValuesValid(snapshot.seedPrices) ||
@@ -478,6 +490,7 @@ bool FarmEconomySystem::RestoreSnapshot(const Snapshot& snapshot) noexcept
 	if (!ValidateSnapshot(snapshot)) return false;
 	money_ = snapshot.money;
 	lastRecoveryDay_ = snapshot.lastRecoveryDay;
+	fungicideCount_ = snapshot.fungicideCount;
 	lifetimeSales_ = snapshot.lifetimeSales;
 	soldCropRecords_ = snapshot.soldCropRecords;
 	cropCounts_ = snapshot.cropCounts;

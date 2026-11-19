@@ -213,8 +213,10 @@ void VerifyBalanceTargets(const Layout& layout, CropType crop, Policy policy, We
     if (std::string_view(layout.name) == "short_two" && policy == Policy::Open && weather == Weather::Clear) {
         if (crop == CropType::Carrot) Check(r.readyLast <= 20 && r.qualityMinimum >= 85,
             "starter crop overwatering penalty");
-        else Check(r.excessMean > 80 && r.qualityMean < 75,
-            "sensitive crops no longer reward intake management");
+        else if (crop == CropType::Tomato)
+            Check(r.readyLast <= 55 && r.readyLast > 25 && r.excessMean > 0 && r.qualityMean < 90,
+                "short open tomato should mature within 55s but still reward management");
+        else Check(r.readyLast <= 80 && r.excessMean > 0, "short open pumpkin pacing");
     }
 }
 
@@ -246,6 +248,19 @@ void VerifySharedRate() {
             growth.Update(grid, kStep, speed);
             Check(std::abs(grid.GetTile(2)->moisture - (soil.moisture + forecast.netMoisturePerSecond * kStep)) < 0.000001f,
                 "stock-sufficient forecast/runtime mismatch");
+            for (float wet : {FarmCanalSeepage::kFullRateUntil, 0.80f, FarmCanalSeepage::kStopsAt, 0.99f}) {
+                soil.moisture = wet;
+                Check(grid.SetTile(2, soil), "wet fixture");
+                const auto prediction = growth.Evaluate(soil, soil.crop, speed, water.GetAvailableIrrigationStrength(grid, 2));
+                water.UpdateWater(grid, kStep, speed);
+                Check(std::abs(water.GetLastStep(grid).soilDelivered - prediction.irrigationRecoveryPerSecond * kStep) < 0.000001 &&
+                    prediction.secondsUntilFullMoisture < 0, "wet seepage forecast");
+                if (wet > FarmCanalSeepage::kFullRateUntil && wet < FarmCanalSeepage::kStopsAt)
+                    Check(prediction.irrigationRecoveryPerSecond > 0 && prediction.irrigationRecoveryPerSecond < expectedRate,
+                        "wet soil must still absorb, but more slowly than dry soil");
+                if (wet >= FarmCanalSeepage::kStopsAt)
+                    Check(water.GetLastStep(grid).soilDelivered == 0, "saturated soil spent water");
+            }
         }
     }
     FarmRules invalid;

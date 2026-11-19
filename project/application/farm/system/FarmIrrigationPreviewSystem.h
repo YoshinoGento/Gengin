@@ -3,6 +3,7 @@
 #include "farm/core/FarmGrid.h"
 #include "farm/data/FarmRules.h"
 #include "farm/system/FarmIrrigationSystem.h"
+#include "farm/system/FarmIrrigationForecast.h"
 #include "farm/system/FarmStageAccessSystem.h"
 
 #include <cstdint>
@@ -47,6 +48,8 @@ public:
 
 	[[nodiscard]] bool CanConfirm(const FarmGrid& sourceGrid) const noexcept;
 	[[nodiscard]] bool IsActive() const noexcept { return active_; }
+	[[nodiscard]] const FarmIrrigationForecast& Forecast() const noexcept { return forecast_; }
+	[[nodiscard]] std::uint64_t CandidateRevision() const noexcept { return candidateRevision_; }
 	[[nodiscard]] int GetTileIndex() const noexcept { return tileIndex_; }
 	[[nodiscard]] FarmIrrigationPreviewOperation GetOperation() const noexcept {
 		return operation_;
@@ -78,6 +81,9 @@ public:
 	}
 
 private:
+	void RebuildCandidate();
+	FarmIrrigationForecast forecast_;
+	std::uint64_t candidateRevision_ = 0;
 	const FarmStageAccessSystem* stageAccess_ = nullptr;
 	[[nodiscard]] int MaximumAllowedHeight() const noexcept {
 		return stageAccess_ ? stageAccess_->Get().maximumHeight : kFarmStageRulesV1.back().maximumHeight;

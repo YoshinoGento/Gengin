@@ -5,7 +5,8 @@
 // Owns only the shop interaction. Economy remains the sole purchase authority.
 class FarmSeedShopSystem final {
 public:
-    static constexpr int kProductCount = farm::kPlayableCropCount;
+    static constexpr int kFungicideProduct = farm::kPlayableCropCount;
+    static constexpr int kProductCount = kFungicideProduct + 1;
     static constexpr int kMaxQuantity = 99;
     enum class Phase { Closed, Browsing, Confirming };
     enum class Notice { None, Purchased, Changed, Failed };
@@ -15,6 +16,7 @@ public:
         long long total = 0;
         bool available = false;
         int unlockDay = 0;
+        bool fungicide = false;
         bool operator==(const Quote&) const = default;
     };
     [[nodiscard]] static farm::CropType Product(int index) noexcept {
@@ -42,11 +44,14 @@ public:
     [[nodiscard]] Quote Evaluate(const FarmEconomySystem& economy) const noexcept {
         Quote quote;
         if (!IsOpen()) return quote;
+        quote.fungicide = selection_ == kFungicideProduct;
         quote.crop = Product(selection_); quote.quantity = quantity_;
-        quote.price = economy.GetSeedPrice(quote.crop); quote.owned = economy.GetSeedCount(quote.crop);
+        quote.price = quote.fungicide ? economy.kFungicidePrice : economy.GetSeedPrice(quote.crop);
+        quote.owned = quote.fungicide ? economy.GetFungicideCount() : economy.GetSeedCount(quote.crop);
         quote.money = economy.GetMoney(); quote.total = static_cast<long long>(quote.price) * quantity_;
-        quote.unlockDay = economy.IsCropUnlocked(quote.crop) ? 0 : FarmStageAccessSystem::UnlockDay(quote.crop);
-        quote.available = economy.IsCropUnlocked(quote.crop) && quote.price > 0 && quantity_ >= 1 && quantity_ <= kMaxQuantity &&
+        const bool unlocked = quote.fungicide || economy.IsCropUnlocked(quote.crop);
+        quote.unlockDay = unlocked ? 0 : FarmStageAccessSystem::UnlockDay(quote.crop);
+        quote.available = unlocked && quote.price > 0 && quantity_ >= 1 && quantity_ <= kMaxQuantity &&
             quote.total <= (std::numeric_limits<int>::max)() && quote.total <= quote.money &&
             quote.owned <= (std::numeric_limits<int>::max)() - quantity_;
         return quote;
@@ -60,7 +65,7 @@ public:
     void CancelConfirmation() noexcept {
         if (phase_ == Phase::Confirming) { phase_ = Phase::Browsing; confirmation_ = {}; }
     }
-    [[nodiscard]] FarmSeedPurchaseResult Confirm(FarmEconomySystem& economy) noexcept {
+    [[nodiscard]] FarmPurchaseResult Confirm(FarmEconomySystem& economy) noexcept {
         if (phase_ != Phase::Confirming) return {};
         const auto quote = Evaluate(economy);
         phase_ = Phase::Browsing;
@@ -68,7 +73,7 @@ public:
             confirmation_ = {}; notice_ = Notice::Changed; return {};
         }
         confirmation_ = {};
-        const auto result = economy.BuySeed(quote.crop, quote.quantity);
+        const auto result = quote.fungicide ? economy.BuyFungicide(quote.quantity) : economy.BuySeed(quote.crop, quote.quantity);
         notice_ = result.Succeeded() ? Notice::Purchased : Notice::Failed;
         return result;
     }

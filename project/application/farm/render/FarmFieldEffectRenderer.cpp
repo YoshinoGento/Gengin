@@ -1,8 +1,8 @@
-#include "farm/render/FarmRainRenderer.h"
+#include "farm/render/FarmFieldEffectRenderer.h"
 #include "base/DirectXCommon.h"
 #include "3d/Camera.h"
 
-bool FarmRainRenderer::Initialize(DirectXCommon* dx) {
+bool FarmFieldEffectRenderer::Initialize(DirectXCommon* dx) {
     if (pipeline_) return true;
     if (!dx || !dx->GetDevice()) return false;
     const auto vs=dx->CompileShader(L"Resources/shader/LineVS.hlsl",L"vs_6_0");
@@ -39,7 +39,7 @@ bool FarmRainRenderer::Initialize(DirectXCommon* dx) {
     pso.SampleDesc.Count=1; pso.SampleMask=D3D12_DEFAULT_SAMPLE_MASK;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
     if (FAILED(dx->GetDevice()->CreateGraphicsPipelineState(&pso,IID_PPV_ARGS(&pipeline)))) return false;
-    auto vertices=dx->CreateBufferResource(sizeof(farm::rain::Vertex)*farm::rain::kVertexCount);
+    auto vertices=dx->CreateBufferResource(sizeof(farm::rain::Vertex)*kCapacity);
     auto constants=dx->CreateBufferResource(D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
     if (!vertices || !constants) return false;
     const D3D12_RANGE noRead{0,0};
@@ -47,17 +47,21 @@ bool FarmRainRenderer::Initialize(DirectXCommon* dx) {
     if (FAILED(vertices->Map(0,&noRead,reinterpret_cast<void**>(&mappedVertices))) ||
         FAILED(constants->Map(0,&noRead,reinterpret_cast<void**>(&mappedConstants)))) return false;
     *mappedConstants={MatrixMath::MakeIdentity4x4(),MatrixMath::MakeIdentity4x4()};
-    view_={vertices->GetGPUVirtualAddress(),static_cast<UINT>(sizeof(farm::rain::Vertex)*farm::rain::kVertexCount),sizeof(farm::rain::Vertex)};
+    view_={vertices->GetGPUVirtualAddress(),static_cast<UINT>(sizeof(farm::rain::Vertex)*kCapacity),sizeof(farm::rain::Vertex)};
     root_=std::move(root); pipeline_=std::move(pipeline);
     vertices_=std::move(vertices); constants_=std::move(constants);
     mappedVertices_=mappedVertices; mappedConstants_=mappedConstants; dx_=dx;
     return true;
 }
-void FarmRainRenderer::Draw(const farm::FarmRainFrame& frame, const Camera& camera, Vector3 center, float extentX, float extentZ) {
-    if (!pipeline_ || !dx_ || frame.rain<=0) return;
+void FarmFieldEffectRenderer::Draw(const farm::FarmRainFrame& frame, const farm::FarmMoldFrame& mold,
+    const Camera& camera, Vector3 center, float extentX, float extentZ) {
+    if (!pipeline_ || !dx_ || (frame.rain<=0 && !mold.count)) return;
     const auto& world=camera.GetWorldMatrix();
-    const auto count=farm::rain::Build({mappedVertices_,farm::rain::kVertexCount},frame,center,
-        {world.m[0][0],world.m[0][1],world.m[0][2]},extentX,extentZ);
+    const Vector3 right{world.m[0][0],world.m[0][1],world.m[0][2]};
+    std::span<farm::rain::Vertex> vertices{mappedVertices_,kCapacity};
+    auto count=farm::mold::Build(vertices.first(farm::mold::kVertexCount),mold,right,
+        {world.m[1][0],world.m[1][1],world.m[1][2]});
+    count+=farm::rain::Build(vertices.subspan(count),frame,center,right,extentX,extentZ);
     if (!count) return;
     // One upload/draw per frame. DirectXCommon::PostDraw waits for its Fence before reuse/destruction.
     mappedConstants_->viewProjection=camera.GetViewProjectionMatrix();

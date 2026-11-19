@@ -28,7 +28,7 @@ bool FarmSeedShopRenderer::Initialize(Object3dCommon* common, ModelManager* mode
     return true;
 }
 
-void FarmSeedShopRenderer::Draw(int selected) {
+void FarmSeedShopRenderer::Draw(int selected, bool showFungicide) {
     if (!ready_) return;
     std::size_t count = 0;
     const auto part = [&](Vector3 position, Vector3 scale, Vector4 color, float rotation = 0.0f) {
@@ -51,6 +51,14 @@ void FarmSeedShopRenderer::Draw(int selected) {
         const auto center = farmui::SeedShopLayout::AtScreen(rect.x + rect.width * 0.5f, farmui::SeedShopLayout::packetCenterY);
         const float x = center.x;
         part({x, -1.40f, 0}, {1.50f, 0.15f, 0.80f}, selected == i ? Vector4{1, 0.81f, 0.24f, 1} : Vector4{0.28f, 0.34f, 0.33f, 1});
+        if (showFungicide && i == FarmSeedShopSystem::kFungicideProduct % 2) {
+            // Bottle rests on the display block; its ivory label faces the shop camera.
+            part({x,-.43f,0},{.65f,.82f,.32f},{.23f,.53f,.45f,1});
+            part({x,.49f,0},{.44f,.10f,.26f},{.23f,.53f,.45f,1});
+            part({x,.76f,0},{.26f,.17f,.21f},{.88f,.81f,.54f,1});
+            part({x,-.46f,-.33f},{.54f,.42f,.015f},{.94f,.91f,.75f,1});
+            part({x,-.46f,-.36f},{.22f,.09f,.012f},{.23f,.53f,.45f,1});
+        }
         // Front faces use the same projection contract as labels and click targets.
         const auto plaque = [&](farmui::Rect screen, float frontZ, Vector4 color) {
             constexpr float depth = 0.025f;

@@ -4,6 +4,17 @@
 
 namespace farm {
 
+// Canal seepage, not a crop-specific moisture target. Rain and hand watering are separate inputs.
+struct FarmCanalSeepage {
+	static constexpr float kFullRateUntil = 0.70f;
+	static constexpr float kStopsAt = 0.96f;
+	static_assert(0.0f < kFullRateUntil && kFullRateUntil < kStopsAt && kStopsAt < 1.0f);
+	[[nodiscard]] static constexpr float Fraction(float moisture) noexcept {
+		if (moisture <= kFullRateUntil) return 1.0f;
+		return moisture < kStopsAt ? (kStopsAt - moisture) / (kStopsAt - kFullRateUntil) : 0.0f;
+	}
+};
+
 struct FarmCropGrowthProfile {
 	float growthPerSecondDry = 1.0f / 25.0f;
 	float growthPerSecondWet = 1.0f / 10.0f;

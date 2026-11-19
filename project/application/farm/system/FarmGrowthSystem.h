@@ -15,7 +15,10 @@ enum class FarmMoistureStatus {
 	Excess,
 };
 
+enum class FarmRainIntakeAdvice { None, CanClose, RainOnly };
+
 struct FarmGrowthForecast {
+	FarmRainIntakeAdvice rainAdvice = FarmRainIntakeAdvice::None;
 	bool moistureValid = false;
 	bool growing = false;
 	farm::CropType profileCrop = farm::CropType::None;
@@ -45,6 +48,7 @@ struct FarmWaterGuidance {
 	bool intakeClosed = false;
 	farm::FarmWaterStatus supply = farm::FarmWaterStatus::None;
 	FarmWaterAdvice advice = FarmWaterAdvice::Unknown;
+	farm::MoldPhase mold = farm::MoldPhase::Healthy;
 	[[nodiscard]] bool HasExcessMoisture() const noexcept {
 		return advice == FarmWaterAdvice::CloseIntake || advice == FarmWaterAdvice::AvoidWater;
 	}

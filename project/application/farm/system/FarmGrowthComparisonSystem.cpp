@@ -14,7 +14,7 @@ bool Valid(const farm::FarmTile& tile) noexcept {
 bool Same(const farm::FarmTile& a, const farm::FarmTile& b) noexcept {
 	return a.state == b.state && a.crop == b.crop && a.feature == b.feature &&
 		a.heightLevel == b.heightLevel && a.moisture == b.moisture && a.irrigationEnabled == b.irrigationEnabled &&
-		a.growth == b.growth && a.waterAmount == b.waterAmount && a.soilNutrients == b.soilNutrients &&
+		a.growth == b.growth && a.waterAmount == b.waterAmount && a.soilNutrients == b.soilNutrients && a.mold == b.mold &&
 		a.careHistory.nutrientGrowth == b.careHistory.nutrientGrowth &&
 		a.careHistory.nutrientSupply == b.careHistory.nutrientSupply;
 }

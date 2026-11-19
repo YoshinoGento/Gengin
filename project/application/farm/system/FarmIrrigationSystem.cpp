@@ -378,8 +378,9 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 		const int canal = FindWetCanal(grid, i);
 		if (canal < 0) { continue; }
 		const float strength = IsSupplied(canal) ? GetSupplyStrength(canal) : canalTransferEfficiency_;
-		const float demand = static_cast<float>((std::min)(
-			static_cast<double>(1.0f - std::clamp(tile.moisture, 0.0f, 1.0f)), recoveryPerSecond_ * strength * dt));
+		const float capacity = (std::max)(0.0f, FarmCanalSeepage::kStopsAt - tile.moisture);
+		const float demand = static_cast<float>((std::min)(static_cast<double>(capacity),
+			recoveryPerSecond_ * strength * FarmCanalSeepage::Fraction(tile.moisture) * dt));
 		soilCanals_[i] = canal;
 		soilDemand_[i] = demand;
 		canalDemand_[canal] += demand;

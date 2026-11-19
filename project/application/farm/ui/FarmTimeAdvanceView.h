@@ -12,6 +12,7 @@ inline Label TimeAdvanceLabel(const FarmTimeAdvanceControlSystem::View& state) n
     case R::WaterExcess: return Label::TimeExcess;
     case R::PestWarning: return Label::TimePest;
     case R::WeatherChanged: return Label::TimeWeather;
+    case R::MoldAlert: return Label::TimeMold;
     case R::ContestDay: return Label::TimeContest;
     case R::Finished: return Label::TimeFinished;
     case R::NoTarget: return Label::TimeNoTarget;

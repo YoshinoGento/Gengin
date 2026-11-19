@@ -19,7 +19,7 @@ inline constexpr std::array<Label, FarmExperienceSystem::kCount> kExperienceGoal
 }};
 inline constexpr std::array<Label, FarmExperienceSystem::kCount> kExperienceOperations{{
     Label::ExperienceSeedTool, Label::ExperienceHarvestTool, Label::SoilCare, Label::TradeOpen,
-    Label::MenuTerrain, Label::MenuTerrain, Label::ExperiencePestFocus, Label::Repellent,
+    Label::MenuTerrain, Label::IntakeOff, Label::ExperiencePestFocus, Label::Repellent,
     Label::TimeAdvance, Label::ContestPreview, Label::ContestDetails, Label::Development,
     Label::CropBook, Label::MenuObserve, Label::Recovery, Label::Records,
     Label::StageGuide, Label::ContestPreview, Label::ContestPreview, Label::OutcomeFinal

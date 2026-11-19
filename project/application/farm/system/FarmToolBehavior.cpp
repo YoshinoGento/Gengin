@@ -101,6 +101,7 @@ public:
             plan.after.moisture = (std::max)(0.0f, tile.moisture - kHarvestMoistureCost);
             plan.after.careHistory = {};
             plan.after.pests = {};
+            plan.after.mold = {};
             plan.commandName = "Harvest Crop";
             plan.harvestedQuantity = 1;
         }

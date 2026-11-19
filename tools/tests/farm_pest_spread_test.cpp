@@ -111,7 +111,7 @@ void Persistence() {
     Check(progression.AdvancePests(grid,1,9).changed && date.RestoreSnapshot({9,0,1}) &&
         docs.SaveAs("Spread",grid,economy,selection), "spread save");
     const auto id=docs.GetActiveDocumentId(),path=docs.GetPath();
-    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==25, "schema25");
+    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==FarmDocumentSystem::kCurrentSchemaVersion, "current schema");
     Pest::DismissActive(grid);
     Check(docs.Load(id,grid,economy,selection) && Pest::CountActive(grid)==3 &&
         progression.PestSpread()==Spread{1,9}, "multiple warning roundtrip");
@@ -133,7 +133,7 @@ void Persistence() {
         if(kind==11) bad["tiles"][5]["pests"]["damageDays"]=1;
         if(kind==12) bad["pestSpread"].erase("lastProcessedDay");
         if(kind==13) bad["pestSpread"]["lastProcessedDay"]=-1;
-        if(kind==14) bad["schemaVersion"]=26;
+        if(kind==14) bad["schemaVersion"]=FarmDocumentSystem::kCurrentSchemaVersion + 1;
         const auto generation=grid.GetGeneration(), inventory=economy.GetInventoryGeneration();
         const auto previous=progression.CaptureSnapshot();
         Check(JsonFile::Save(path,bad) && !docs.Load(id,grid,economy,selection) &&

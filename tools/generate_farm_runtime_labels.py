@@ -219,12 +219,12 @@ labels.extend([
     ["SpeedCompact1", "1倍"], ["SpeedCompact2", "2倍"], ["SpeedCompact4", "4倍"],
 ])
 labels.extend([
-    ["ShopTitle", "種屋"], ["ShopMoney", "所持金"],
+    ["ShopTitle", "農業用品店"], ["ShopMoney", "所持金"],
     ["ShopTurnip", "カブの種"], ["ShopCarrot", "ニンジンの種"],
-    ["ShopOwned", "持っている種"], ["ShopUnitPrice", "単価"],
+    ["ShopOwned", "所持数"], ["ShopUnitPrice", "単価"],
     ["ShopQuantity", "購入数"], ["ShopTotal", "合計"],
     ["ShopMinus", "－"], ["ShopPlus", "＋"],
-    ["ShopChoose", "購入する種と個数を選択"], ["ShopReview", "購入内容を確認"],
+    ["ShopChoose", "商品と個数を選択"], ["ShopReview", "購入内容を確認"],
     ["ShopConfirm", "右の内容で購入しますか？"], ["ShopPay", "この内容で購入"],
     ["ShopPurchased", "選んだ種を購入しました"],
     ["ShopChanged", "所持金などが変わりました。もう一度確認"],
@@ -554,7 +554,7 @@ labels.extend([
     ["ExperienceSoil", "土づくり・品質"], ["ExperienceSoilGoal", "種まき前に土の栄養を補給する"],
     ["ExperienceTrade", "売買・保護"], ["ExperienceTradeGoal", "保護した野菜を残して、在庫を売却する"],
     ["ExperienceWater", "水源・水路・高低差"], ["ExperienceWaterGoal", "水路と高さを工夫し、畑に水を届ける"],
-    ["ExperienceRain", "雨・給水"], ["ExperienceRainGoal", "雨が降っている農場で水分管理を試す"],
+    ["ExperienceRain", "雨・給水"], ["ExperienceRainGoal", "雨の日のトマトを水カビから守る"],
     ["ExperiencePests", "害虫・駆除"], ["ExperiencePestsGoal", "発生した害虫を駆除して、被害を抑える"],
     ["ExperienceRepellent", "防虫・被害の広がり"], ["ExperienceRepellentGoal", "防虫植物で新しい害虫の発生を防ぐ"],
     ["ExperienceTime", "時間送り・次の目標"], ["ExperienceTimeGoal", "収穫や出来事までの待ち時間を短くする"],
@@ -576,8 +576,8 @@ labels.extend([
     ["ExperienceTradeWatch", "注目：保護した野菜と売却後の所持金"],
     ["ExperienceWaterStep", "まず：水路・地形で給水経路を確認"],
     ["ExperienceWaterWatch", "注目：水の届くマスと畑の水分"],
-    ["ExperienceRainStep", "まず：畑の給水を「切」にする"],
-    ["ExperienceRainWatch", "注目：雨の見た目・音と畑の水分"],
+    ["ExperienceRainStep", "まず：左のトマトの給水を切る"],
+    ["ExperienceRainWatch", "注目：左は回復、右は放置で発病"],
     ["ExperiencePestsStep", "まず：害虫の畑を選び、駆除する"],
     ["ExperiencePestsWatch", "注目：害虫の印。受けた被害は残る"],
     ["ExperienceRepellentStep", "まず：作物の隣の空きマスに植える"],
@@ -633,6 +633,45 @@ for pair in cheer_data["pairs"]:
     for side in ("L", "R"):
         assert len(pair[side]) == 2
         labels.extend([f"Cheer{pair['id']}{side}{i}", line] for i, line in enumerate(pair[side]))
+labels.extend([
+    ["RainCanClose", "雨：この株は取水を止めても育つ"],
+    ["RainOnly", "雨：この株は雨だけで水分が足りる"],
+    ["MoldWarning", "水カビ予兆：取水を切る"], ["MoldWait", "水カビ予兆：乾き待ち"],
+    ["MoldSick", "水カビ発病：取水を切る"], ["MoldSickClosed", "水カビ発病：乾き待ち"],
+    ["MoldRecovery", "水カビ：回復中"], ["TimeMold", "水カビ：畑を確認"],
+    ["Fungicide", "防カビ剤"], ["FungicideInfo", "１株の水カビを20秒予防。発病後は使えません"],
+    ["FungicideBought", "購入しました。畑で株を選んで散布できます"],
+    ["FungicideApply", "この株に防カビ剤"], ["FungicideActive", "水カビ予防中"],
+    ["FungicideSick", "発病後は散布できません"], ["FungicidePick", "生育中の株を選択"],
+])
+labels.extend([
+    ["MainPurpose", "水路で畑に水を届け、育てた野菜を品評会に出そう。"],
+    ["MainFirstPlot", "まずは畑を１マス選び、クワで耕してみよう。"],
+    ["MainEnter", "畑へ"], ["MainTill", "クワを選び、右下で耕す"],
+    ["MainBuy", "右の店で種を１つ買う"], ["MainPlant", "種を選び、右下で植える"],
+    ["MainWater", "じょうろで水をやる"], ["MainHarvest", "かごを選んで収穫する"],
+])
+labels.extend([
+    ["LessonBegin", "水路を体験して畑へ"], ["LessonIntro", "まずは水路を１マスつないでみよう。"],
+    ["LessonTitle", "水路の練習畑"], ["LessonMoisture", "トマトの水分"],
+    ["LessonChoose", "水路の間の空きマスを選んでみよう。"],
+    ["LessonSecond", "右のトマトにも水を届けてみよう。"],
+    ["LessonMiss", "そこには置けません。空きマスを選ぼう。"],
+    ["LessonYes", "仮置き：この水路ならトマトに届きます。"],
+    ["LessonNo", "仮置き：ここではトマトに届きません。"],
+    ["LessonFlow", "水路がつながりました。水が流れています。"],
+    ["LessonReached", "水が届いて、トマトの水分が増えました。"],
+    ["LessonPreview", "選んだマスに仮置き"], ["LessonConnect", "ここにつなぐ"],
+    ["LessonUndo", "選び直す"], ["LessonAgain", "別の株にも挑戦"],
+    ["LessonExit", "練習を終えて畑へ"],
+])
+labels.extend([
+    ["ForecastGain", "＋ 給水が強まる畑"], ["ForecastLoss", "－ 給水が弱まる畑"],
+    ["ForecastStrength", "水源からの給水力（目安）"],
+    ["ForecastHover", "畑にカーソルを重ねて給水力を比較"],
+    ["ForecastEmpty", "耕した畑が比較の対象です"],
+    ["ForecastClosed", "この畑は取水を停止しています"],
+])
 clear_font = ImageFont.truetype(str(font_path), 72)
 clear_font.set_variation_by_axes([700])
 def label_font(name):

@@ -9,8 +9,11 @@ class LineDrawer;
 
 namespace farm {
 
+inline constexpr float kFarmSoilRidgeHeight = .024f;
+
 class FarmGrid;
 class FarmIrrigationSystem;
+class FarmIrrigationForecast;
 
 struct FarmVisualLayout {
 	Vector3 center = { 0.0f, 0.05f, 8.0f };
@@ -58,7 +61,8 @@ public:
 		const FarmToolActionResult& selectedAction,
 		LineDrawer& lineDrawer,
 		const std::vector<int>* irrigationPreviewChangedTiles = nullptr,
-		bool debugGuides = true, bool wireCrops = true) const;
+		bool debugGuides = true, bool wireCrops = true,
+		const FarmIrrigationForecast* forecast = nullptr) const;
 
 	[[nodiscard]] const FarmVisualLayout& GetLayout() const noexcept { return layout_; }
 	[[nodiscard]] bool TryGetSoilHeight(const FarmGrid& grid, const Vector3& position, float& height) const noexcept;

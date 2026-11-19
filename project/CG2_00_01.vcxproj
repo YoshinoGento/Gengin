@@ -187,7 +187,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\system\FarmContestAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmPestAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmRainAudioSystem.cpp" />
-    <ClCompile Include="application\farm\render\FarmRainRenderer.cpp" />
+    <ClCompile Include="application\farm\render\FarmFieldEffectRenderer.cpp" />
     <ClCompile Include="application\farm\render\FarmCelebrationRenderer.cpp" />
 	<ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
 	<ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
@@ -201,6 +201,8 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClCompile Include="application\farm\system\FarmRuntimeController.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeMenu.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExperience.cpp" />
+    <ClCompile Include="application\farm\system\FarmRuntimeCanalLesson.cpp" />
+    <ClCompile Include="application\farm\system\FarmRuntimeForecast.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExhibition.cpp" />
     <ClCompile Include="application\farm\system\FarmExhibitionSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmLayoutSystem.cpp" />
@@ -527,7 +529,10 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\system\FarmRainPresentationSystem.h" />
     <ClInclude Include="application\farm\system\FarmRainAudioSystem.h" />
     <ClInclude Include="application\farm\render\FarmRainGeometry.h" />
-    <ClInclude Include="application\farm\render\FarmRainRenderer.h" />
+    <ClInclude Include="application\farm\render\FarmFieldEffectRenderer.h" />
+    <ClInclude Include="application\farm\render\FarmMoldGeometry.h" />
+    <ClInclude Include="application\farm\system\FarmMoldVisualSystem.h" />
+    <ClInclude Include="application\farm\system\FarmFungicideSystem.h" />
     <ClInclude Include="application\farm\render\FarmCelebrationRenderer.h" />
     <ClInclude Include="application\farm\render\FarmCelebrationGeometry.h" />
     <ClInclude Include="application\farm\system\FarmCelebrationSystem.h" />
@@ -557,6 +562,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
 	<ClInclude Include="application\farm\render\FarmContestStageLayout.h" />
 	<ClInclude Include="application\farm\system\FarmHarvestVisualSystem.h" />
     <ClInclude Include="application\farm\system\FarmGrowthSystem.h" />
+    <ClInclude Include="application\farm\system\FarmMoldSystem.h" />
     <ClInclude Include="application\farm\system\FarmSoilSystem.h" />
     <ClInclude Include="application\farm\system\FarmGrowthComparisonSystem.h" />
     <ClInclude Include="application\farm\system\FarmInputSystem.h" />
@@ -594,6 +600,9 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\farm\ui\FarmTerrainView.h" />
     <ClInclude Include="application\farm\ui\FarmObservationView.h" />
     <ClInclude Include="application\farm\ui\FarmPlayFlowView.h" />
+    <ClInclude Include="application\farm\ui\FarmCanalLessonView.h" />
+    <ClInclude Include="application\farm\system\FarmCanalLessonSystem.h" />
+    <ClInclude Include="application\farm\system\FarmIrrigationForecast.h" />
     <ClInclude Include="application\farm\ui\FarmFieldActionView.h" />
     <ClInclude Include="application\farm\ui\FarmCameraView.h" />
     <ClInclude Include="application\farm\system\FarmOverviewCamera.h" />

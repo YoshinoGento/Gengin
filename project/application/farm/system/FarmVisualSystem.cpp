@@ -5,6 +5,7 @@
 #include "3d/LineDrawer.h"
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmIrrigationSystem.h"
+#include "farm/system/FarmIrrigationForecast.h"
 
 #include <algorithm>
 #include <cmath>
@@ -351,7 +352,7 @@ void FarmVisualSystem::Draw(
 	const FarmToolActionResult& selectedAction,
 	LineDrawer& lineDrawer,
 	const std::vector<int>* irrigationPreviewChangedTiles,
-	bool debugGuides, bool wireCrops) const
+	bool debugGuides, bool wireCrops, const FarmIrrigationForecast* forecast) const
 {
 	const float halfExtent = layout_.tileSize * 0.5f;
 	for (int index = 0; index < grid.GetTileCount(); ++index) {
@@ -363,6 +364,17 @@ void FarmVisualSystem::Draw(
 		const auto visual = GetTileVisualData(grid, index);
 		if (!visual.valid) { continue; }
 		const Vector3 center = visual.center;
+		if (const auto* field = forecast ? forecast->Inspect(index) : nullptr; field && field->before != field->after) {
+			const bool gain = field->after > field->before;
+			constexpr Vector4 gainColor{0.22f,1.0f,0.92f,1.0f}, lossColor{1.0f,0.56f,0.18f,1.0f};
+			const auto& color = gain ? gainColor : lossColor;
+			// Put the sign on the front of the central plateau, clear of the crop and sloping edges.
+			const Vector3 mark{center.x,center.y + kSelectionLift,center.z - halfExtent*0.60f};
+			const float arm = halfExtent*0.22f;
+			lineDrawer.DrawLine({mark.x-arm,mark.y,mark.z},{mark.x+arm,mark.y,mark.z},color);
+			if (gain) lineDrawer.DrawLine({mark.x,mark.y,mark.z-arm},{mark.x,mark.y,mark.z+arm},color);
+			DrawHorizontalRectangle(lineDrawer,{center.x,mark.y,center.z},halfExtent*0.83f,color);
+		}
 		const FarmWaterStatus waterStatus = irrigationSystem.GetWaterStatus(grid, index);
 		const Vector4 tileColor = GetTileColor(*tile, waterStatus);
 		if (debugGuides) {

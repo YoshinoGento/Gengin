@@ -49,6 +49,28 @@ void ScheduleAndViews() {
         Check(item.rect.width - 20 >= label.width * 20.0f / 26.0f, "weather label overflow");
     }
     Fixture f;
+    farm::FarmTile tomato;
+    tomato.state = farm::FarmTileState::Planted;
+    tomato.crop = farm::CropType::Tomato;
+    tomato.moisture = 0.6f;
+    using Hint = FarmRainIntakeAdvice;
+    for (bool open : {true, false}) {
+        tomato.irrigationEnabled = open;
+        const auto rain = W::Inspect(18, 1);
+        const auto forecast = f.growth.Evaluate(tomato, tomato.crop, 1, open ? 0.9f : 0.0f, rain.soilRainPerSecond);
+        Check(forecast.rainAdvice == (open ? Hint::CanClose : Hint::RainOnly), "tomato rain advice");
+        farmui::View hud; farmui::BuildWeatherView(hud, rain, forecast.rainAdvice);
+        const auto item = hud.items[0];
+        Check(item.label == (open ? farmui::Label::RainCanClose : farmui::Label::RainOnly) &&
+            farmui::kLabels.at(static_cast<std::size_t>(item.label)).width <= item.rect.width - 20, "rain hint does not fit");
+        Check(f.growth.Evaluate(tomato, tomato.crop, 1, 0.9f, 0).rainAdvice == Hint::None, "no rain on clear day");
+    }
+    tomato.moisture = 0.35f;
+    Check(f.growth.Evaluate(tomato, tomato.crop, 1, 0, W::kSoilRainPerSecond).rainAdvice == Hint::None,
+        "dry bed must not claim enough rain");
+    tomato.crop = farm::CropType::Carrot; tomato.moisture = 0.6f;
+    Check(f.growth.Evaluate(tomato, tomato.crop, 1, 0, W::kSoilRainPerSecond).rainAdvice == Hint::None,
+        "rain cannot replace carrot decay indefinitely");
     auto snapshot = f.progression.CaptureSnapshot();
     snapshot.weatherVersion = 2;
     Check(!f.progression.RestoreSnapshot(snapshot) && f.progression.WeatherVersion() == 1, "invalid policy mutates");
@@ -156,7 +178,7 @@ void SaveCompatibility() {
     Check(f.date.RestoreSnapshot({17, 59.5f, 2}) && docs.SaveAs("WeatherTest", f.grid, f.economy, selection), "weather save");
     const auto id = docs.GetActiveDocumentId(), path = docs.GetPath();
     nlohmann::json saved;
-    Check(JsonFile::Load(path, saved) && saved["schemaVersion"] == 25 && saved["weatherVersion"] == 1, "weather schema");
+    Check(JsonFile::Load(path, saved) && saved["schemaVersion"] == FarmDocumentSystem::kCurrentSchemaVersion && saved["weatherVersion"] == 1, "weather schema");
     for (int kind = 0; kind < 7; ++kind) {
         auto bad = saved;
         if (kind == 0) bad.erase("weatherVersion");

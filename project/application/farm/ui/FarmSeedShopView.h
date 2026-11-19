@@ -41,22 +41,24 @@ inline void BuildSeedShopView(View& view, const FarmSeedShopSystem& shop, const 
     view.Add(Label::Paused, {350, 24, 240, 44});
     view.Metric(Label::ShopMoney, {866, 24, 382, 44}, 136, std::to_string(quote.money) + "G");
     for (int product=0;product<FarmSeedShopSystem::kProductCount;++product)
-        view.Add(CropLabel(FarmSeedShopSystem::Product(product)), {182.0f+220*product,96,208,44},
+        view.Add(product == shop.kFungicideProduct ? Label::Fungicide : CropLabel(shop.Product(product)), {182.0f+220*product,96,208,44},
             {Action::ShopProduct,product}, !confirming, shop.Selection()==product);
     const int first = (shop.Selection() / 2) * 2;
     for (int i = 0; i < 2 && first+i < FarmSeedShopSystem::kProductCount; ++i) {
         const int product = first+i;
         const auto crop = FarmSeedShopSystem::Product(product);
         const auto& rect = SeedShopLayout::products[i];
-        view.Add(CropLabel(crop), SeedShopLayout::SelectionTarget(i), {Action::ShopSelect, product}, !confirming, shop.Selection() == product);
-        view.Add(CropLabel(crop), {rect.x, 454, 240, 40}, {}, true, shop.Selection() == product);
+        const bool bottle = product == shop.kFungicideProduct;
+        const auto name = bottle ? Label::Fungicide : CropLabel(crop);
+        view.Add(name, SeedShopLayout::SelectionTarget(i), {Action::ShopSelect, product}, !confirming, shop.Selection() == product);
+        view.Add(name, {rect.x, 454, 240, 40}, {}, true, shop.Selection() == product);
         view.items[view.count-1].darkInk = true;
-        const bool available = economy.IsCropUnlocked(crop);
+        const bool available = bottle || economy.IsCropUnlocked(crop);
         view.Metric(available ? Label::ShopUnitPrice : Label::StageUnlockDay, {rect.x, 498, 300, 38}, 100,
-            available ? std::to_string(economy.GetSeedPrice(crop)) + "G" : std::to_string(FarmStageAccessSystem::UnlockDay(crop)));
+            available ? std::to_string(bottle ? economy.kFungicidePrice : economy.GetSeedPrice(crop)) + "G" : std::to_string(FarmStageAccessSystem::UnlockDay(crop)));
         view.items[view.count-1].darkInk = true;
     }
-    constexpr std::array<Label,3> titles{Label::ShopCarrot, Label::ShopTomato, Label::ShopPumpkin};
+    constexpr std::array<Label,FarmSeedShopSystem::kProductCount> titles{Label::ShopCarrot, Label::ShopTomato, Label::ShopPumpkin, Label::Fungicide};
     view.Add(titles[shop.Selection()], {882, 164, 346, 42});
     view.Metric(Label::ShopOwned, {882, 218, 346, 38}, 174, std::to_string(quote.owned));
     view.Metric(Label::ShopUnitPrice, {882, 266, 346, 38}, 174, std::to_string(quote.price) + "G");
@@ -67,9 +69,9 @@ inline void BuildSeedShopView(View& view, const FarmSeedShopSystem& shop, const 
         quote.available ? std::to_string(quote.money-quote.total)+"G" : "--");
     view.Add(Label::ShopMinus, {888, 356, 156, 44}, {Action::ShopQuantity, -1}, !confirming && shop.Quantity() > 1);
     view.Add(Label::ShopPlus, {1060, 356, 156, 44}, {Action::ShopQuantity, 1}, !confirming && shop.Quantity() < FarmSeedShopSystem::kMaxQuantity);
-    Label notice = confirming ? Label::ShopConfirm : Label::ShopChoose;
+    Label notice = confirming ? Label::ShopConfirm : (quote.fungicide ? Label::FungicideInfo : Label::ShopChoose);
     if (!confirming) {
-        if (shop.GetNotice() == FarmSeedShopSystem::Notice::Purchased) notice = Label::ShopPurchased;
+        if (shop.GetNotice() == FarmSeedShopSystem::Notice::Purchased) notice = quote.fungicide ? Label::FungicideBought : Label::ShopPurchased;
         else if (shop.GetNotice() == FarmSeedShopSystem::Notice::Changed) notice = Label::ShopChanged;
         else if (shop.GetNotice() == FarmSeedShopSystem::Notice::Failed) notice = Label::Failure;
         else if (!quote.available) notice = quote.total > quote.money ? Label::ShopNoMoney : Label::ShopUnavailable;

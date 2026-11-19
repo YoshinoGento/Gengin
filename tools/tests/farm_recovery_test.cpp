@@ -102,8 +102,8 @@ void Save() {
     Check(Claim(grid,e,1) && e.RemoveSeed(Crop::Carrot), "save aid");
     Check(docs.SaveAs("Recovery",grid,e,selection), "save aid state");
     const auto path=docs.GetPath(), id=docs.GetActiveDocumentId();
-    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==25 &&
-        saved["economy"]["lastRecoveryDay"]==1, "schema25");
+    nlohmann::json saved; Check(JsonFile::Load(path,saved) && saved["schemaVersion"]==FarmDocumentSystem::kCurrentSchemaVersion &&
+        saved["economy"]["lastRecoveryDay"]==1, "current schema");
     Empty(e);
     Check(docs.Load(id,grid,e,selection) && e.GetLastRecoveryDay()==1 && !Claim(grid,e,1), "reload bypassed daily cap");
     for (int kind=0;kind<8;++kind) {
@@ -116,7 +116,7 @@ void Save() {
         case 4: bad["economy"]["lastRecoveryDay"]=1.0; break;
         case 5: bad["economy"]["lastRecoveryDay"]=nullptr; break;
         case 6: bad["economy"]["lastRecoveryDay"]=std::numeric_limits<std::uint64_t>::max(); break;
-        default: bad["schemaVersion"]=26; break;
+        default: bad["schemaVersion"]=FarmDocumentSystem::kCurrentSchemaVersion + 1; break;
         }
         const auto generation=grid.GetGeneration(), inventory=e.GetInventoryGeneration();
         Check(JsonFile::Save(path,bad) && !docs.Load(id,grid,e,selection) &&

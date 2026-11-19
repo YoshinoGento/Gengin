@@ -98,7 +98,7 @@ bool FarmRuntimeController::HandleExperienceRequest(const FarmRuntimeContext& s,
         case Topic::Soil: action = Action::SoilCare; break;
         case Topic::Trade: action = Action::HarvestInventory; break;
         case Topic::Water: action = Action::TerrainField; break;
-        case Topic::Rain: action = Action::TerrainField; break;
+        case Topic::Rain: action = Action::SetIrrigation; argument = 0; break;
         case Topic::Pests: action = Action::PestFocus; argument = FarmPestSystem::FindActive(s.farmGrid); break;
         case Topic::Repellent: action = Action::Repellent; break;
         case Topic::Time: action = Action::TimeAdvance; break;

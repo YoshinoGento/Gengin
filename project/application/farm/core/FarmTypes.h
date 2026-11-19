@@ -176,6 +176,33 @@ struct FarmPestState {
 	bool operator==(const FarmPestState&) const noexcept = default;
 };
 
+enum class MoldPhase { Healthy, Warning, Sick, Recovering };
+
+struct FarmMoldState {
+	static constexpr float kWarningSeconds = 6.0f;
+	static constexpr float kOnsetSeconds = 26.0f;
+	static constexpr float kProtectionSeconds = 20.0f;
+	float exposure = 0.0f;
+	float lastMoisture = 0.0f; // End of previous growth step, not the pre-irrigation sample.
+	bool sick = false;
+	bool recovering = false;
+	float protectedSeconds = 0.0f;
+	bool operator==(const FarmMoldState&) const noexcept = default;
+	[[nodiscard]] MoldPhase Phase() const noexcept {
+		if (recovering) return MoldPhase::Recovering;
+		if (sick) return MoldPhase::Sick;
+		return exposure >= kWarningSeconds ? MoldPhase::Warning : MoldPhase::Healthy;
+	}
+	[[nodiscard]] bool Valid() const noexcept {
+		return std::isfinite(protectedSeconds) && protectedSeconds >= 0 && protectedSeconds <= kProtectionSeconds &&
+			(protectedSeconds == 0 || (!sick && !recovering && exposure == 0)) &&
+			std::isfinite(exposure) && exposure >= 0 && exposure <= kOnsetSeconds &&
+			std::isfinite(lastMoisture) && lastMoisture >= 0 && lastMoisture <= 1 &&
+			(exposure > 0 || (!sick && !recovering && lastMoisture == 0)) &&
+			(exposure < kOnsetSeconds || sick);
+	}
+};
+
 struct FarmTile {
 	int heightLevel = 0;
 	FarmTileFeature feature = FarmTileFeature::None;
@@ -191,6 +218,7 @@ struct FarmTile {
 	FarmCropCareHistory careHistory{};
 	FarmPestState pests{};
 	bool repellentPlant = false;
+	FarmMoldState mold{};
 };
 
 inline bool IsValidFarmTileFeature(FarmTileFeature feature) noexcept

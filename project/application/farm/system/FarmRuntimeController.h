@@ -12,16 +12,19 @@
 #include "farm/system/FarmPestAudioSystem.h"
 #include "farm/system/FarmExhibitionSystem.h"
 #include "farm/system/FarmDevelopmentSystem.h"
+#include "farm/system/FarmCanalLessonSystem.h"
+#include <optional>
 
 struct FarmRuntimeContext;
+namespace farmui { struct TerrainViewState; }
 class Input;
 
 // Routes Release controls to existing gameplay Systems; owns only menu/input state.
 class FarmRuntimeController final {
 public:
-    bool Initialize(SpriteCommon* common) { exhibition_.Initialize(); ready_ = ui_.Initialize(common); return ready_; }
+    bool Initialize(SpriteCommon* common) { InitializeEdition(); ready_ = ui_.Initialize(common); return ready_; }
     InitializationTask InitializeIncrementally(SpriteCommon* common) {
-        exhibition_.Initialize();
+        InitializeEdition();
         ready_ = co_await ui_.InitializeIncrementally(common);
         co_return ready_;
     }
@@ -43,6 +46,7 @@ public:
     bool BlocksSimulation() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || paused_ || terrain_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool ConsumesInput() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool IsOpen() const noexcept { return open_; }
+    const farm::FarmCanalLessonSystem* CanalLesson() const noexcept { return lesson_ ? &*lesson_ : nullptr; }
     bool RequestsTitle() const noexcept { return flow_.RequestsTitle(); }
     bool PresentsFarmResult() const noexcept { return ready_ &&
         (flow_.GetPhase() == FarmPlayFlow::Phase::Result || flow_.GetPhase() == FarmPlayFlow::Phase::Review); }
@@ -50,6 +54,7 @@ public:
     bool PresentsIntroduction() const noexcept { return ready_ &&
         (flow_.GetPhase() == FarmPlayFlow::Phase::Briefing || flow_.GetPhase() == FarmPlayFlow::Phase::Starting); }
     bool ShowsSeedShop() const noexcept { return view_.seedShop; }
+    bool ShowsIrrigationForecast() const noexcept { return view_.irrigationForecast; }
     int SeedShopSelection() const noexcept { return shop_.Selection(); }
     bool ShowsHarvestDisplay() const noexcept { return view_.harvestDisplay; }
     int HarvestDisplaySelection() const noexcept { return view_.counterSelection; }
@@ -65,6 +70,16 @@ public:
     void OpenLayoutLibrary(const FarmRuntimeContext& context);
     void UpdateFollowCamera(const FarmRuntimeContext& context) { FrameFarm(context, true); }
 private:
+    void InspectForecast(const FarmRuntimeContext& context, farmui::TerrainViewState& state);
+    struct ForecastPick {
+        std::uint64_t revision{};
+        Vector3 origin{}, direction{};
+        int index = -1;
+        bool valid = false;
+    } forecastPick_;
+    bool OffersCanalLesson(const FarmRuntimeContext& context) const;
+    bool UpdateCanalLesson(const FarmRuntimeContext& context, const Input& input, bool click, farmui::Action action);
+    std::optional<farm::FarmCanalLessonSystem> lesson_;
     static constexpr int kExperiencePage = 19;
     bool HandleExperienceRequest(const FarmRuntimeContext& context, farmui::Request request);
     void BuildExperienceMenu();
@@ -104,6 +119,8 @@ private:
     FarmPestAudioSystem pestAudio_;
     FarmContestOutcomeSystem contestOutcome_;
     FarmExhibitionSystem exhibition_;
+    void InitializeEdition();
+    bool mainGameOnly_ = false;
     title::TitleAudioSettingsSystem menuAudio_;
     bool menuDetails_ = false;
     bool seasonRetryFailed_ = false;

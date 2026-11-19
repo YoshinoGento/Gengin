@@ -121,7 +121,20 @@ inline FarmCropMeshParts BuildFarmCropMeshParts(
 inline FarmCropMeshParts BuildFarmCropMeshParts(
 	const FarmGrid& grid, int index, const FarmVisualSystem& system) noexcept {
 	const auto* tile = grid.GetTile(index);
-	return tile ? BuildFarmCropMeshParts(system.GetTileVisualData(grid, index), tile->growth) : FarmCropMeshParts{};
+	if (!tile) return {};
+	auto result = BuildFarmCropMeshParts(system.GetTileVisualData(grid, index), tile->growth);
+	for (std::size_t i = 0; i < result.count; ++i) {
+		auto& part = result.parts[i];
+		if (part.shape != FarmMeshShape::CarrotLeaves && part.shape != FarmMeshShape::TomatoStems &&
+			part.shape != FarmMeshShape::PumpkinVines) continue;
+		switch (tile->mold.Phase()) {
+		case MoldPhase::Warning: part.color = {.80f,.64f,.21f,1}; break;
+		case MoldPhase::Sick: part.color = {.71f,.68f,.58f,1}; part.scale.y *= .70f; break;
+		case MoldPhase::Recovering: part.color = {.52f,.67f,.30f,1}; break;
+		default: break;
+		}
+	}
+	return result;
 }
 
 // Target markers are transient presentation, not part of terrain/save or its per-tile budget.
@@ -240,8 +253,8 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 			}
 		} else {
 			for (int ridge = -1; ridge <= 1; ++ridge) {
-				add({visual.center.x + ridge * half * 0.52f, visual.center.y + 0.012f, visual.center.z},
-					{half * 0.12f, 0.012f, half * 0.83f}, soil, false, {}, FarmMeshShape::Box, FarmMeshSurface::Soil);
+				add({visual.center.x + ridge * half * 0.52f, visual.center.y + kFarmSoilRidgeHeight*.5f, visual.center.z},
+					{half * 0.12f, kFarmSoilRidgeHeight*.5f, half * 0.83f}, soil, false, {}, FarmMeshShape::Box, FarmMeshSurface::Soil);
 			}
 		}
 		return result;

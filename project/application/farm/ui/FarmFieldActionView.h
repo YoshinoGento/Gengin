@@ -1,9 +1,25 @@
 #pragma once
 #include "farm/ui/FarmRuntimeUI.h"
 #include "farm/system/FarmToolActionSystem.h"
+#include "farm/system/FarmFungicideSystem.h"
 #include "farm/ui/FarmHUD.h"
 
 namespace farmui {
+inline void BuildFungicideView(View& view, FarmFungicideSystem::Status status, int stock,
+    float seconds, int tileIndex, bool unlocked) {
+    using S = FarmFungicideSystem::Status;
+    if ((!stock && status != S::Protected) || view.count >= view.items.size()) return;
+    constexpr Rect row{24, 404, 314, 46};
+    const auto label = status == S::Protected ? Label::FungicideActive : status == S::Sick ?
+        Label::FungicideSick : status == S::Ready ? Label::FungicideApply : Label::FungicidePick;
+    view.Add(label,row,{Action::ApplyFungicide,tileIndex},unlocked && status == S::Ready);
+    auto& item = view.items[view.count-1];
+    if (status == S::Ready || status == S::Protected) {
+        item.valueOffset = 226;
+        item.value = status == S::Protected ? std::to_string(static_cast<int>(std::ceil(seconds)))+"s" :
+            (stock > 99 ? "99+" : std::to_string(stock));
+    }
+}
 inline void BuildFieldActionView(View& view, const FarmToolActionResult& evaluation,
     bool paused, bool cleared, FarmHUDNextAction nextAction = FarmHUDNextAction::SelectTile,
     bool contestSeason = false) {
