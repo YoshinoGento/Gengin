@@ -172,6 +172,7 @@ namespace DirectX
         DXGI_FORMAT     format;
         TEX_DIMENSION   dimension;
 
+
         size_t __cdecl ComputeIndex(_In_ size_t mip, _In_ size_t item, _In_ size_t slice) const noexcept;
             // Returns size_t(-1) to indicate an out-of-range error
 
