@@ -1,6 +1,7 @@
 #pragma once
 
 #include "2d/TextureManager.h"
+#include "environment/VegetationWind.h"
 #include "farm/render/FarmMeshLayout.h"
 #include <memory>
 #include <vector>
@@ -28,14 +29,14 @@ public:
 	bool IsVisible() const { return visible_; }
 	void Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
         int hoveredTileIndex = -1, const FarmHarvestVisualSystem* harvest = nullptr, bool showSelection = true,
-        const FarmPestVisualSystem* pests = nullptr);
+        const FarmPestVisualSystem* pests = nullptr, const vegetation::WindFrame& wind = {});
 	void Draw();
 	void DrawShadow();
 	int GetLastDrawTileCount() const { return lastDrawTileCount_; }
 	int GetPartCount() const { return static_cast<int>(parts_.size()); }
-	bool IsReady() const { return common_ != nullptr && model_ != nullptr; }
+	bool IsReady() const { return common_ != nullptr; }
 	bool IsLimitExceeded() const { return limitExceeded_; }
-	bool HasCropMeshes() const { for (const auto* model : cropModels_) if (!model) return false; return true; }
+	bool HasCropMeshes() const { return cropsReady_; }
 
 private:
 	bool visible_ = true;
@@ -46,10 +47,8 @@ private:
 	static constexpr std::size_t kMaximumCropParts = kMaximumParts * 2;
 	static constexpr std::size_t kMaximumHarvestParts = 16;
 	Object3dCommon* common_ = nullptr; // Framework-owned, outlives scene.
-	Model* model_ = nullptr; // ModelManager-owned immutable static mesh.
-	Model* triangleLower_ = nullptr; // Same ModelManager lifetime as the box.
-	Model* triangleUpper_ = nullptr;
-	std::array<Model*, 8> cropModels_{}; // ModelManager-owned; shared by all tiles.
+	std::array<Model*,kFarmMeshPaths.size()> meshModels_{}; // ModelManager-owned; shared by all tiles.
+	bool cropsReady_ = false;
 	Texture2DHandle whiteTexture_{};
 	std::vector<std::unique_ptr<Object3d>> objects_;
 	std::vector<FarmMeshPart> parts_;

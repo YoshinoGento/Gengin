@@ -8,9 +8,24 @@
 
 namespace farm {
 enum class FarmMeshShape { Box, TriangleLower, TriangleUpper, Turnip, Carrot, Leaves, CarrotLeaves,
-    Tomato, TomatoStems, Pumpkin, PumpkinVines };
+    Tomato, TomatoStems, Pumpkin, PumpkinVines, SoilRidge, BankStone, Count };
+inline constexpr std::array kFarmMeshPaths{"farm/unit_box.obj","farm/triangle_lower.obj","farm/triangle_upper.obj",
+    "farm/crop_turnip.obj","farm/crop_carrot.obj","farm/crop_turnip_leaves.obj","farm/crop_carrot_leaves.obj",
+    "farm/crop_tomato.obj","farm/crop_tomato_stems.obj","farm/crop_pumpkin.obj","farm/crop_pumpkin_vines.obj",
+    "farm/soil_ridge.obj","farm/bank_stone.obj"};
+static_assert(kFarmMeshPaths.size()==static_cast<std::size_t>(FarmMeshShape::Count));
 enum class FarmMeshSurface { None, CanalBed, CanalBank, SoilBoundary, Selection, Hover, Crop,
 	Earth, Soil, Grass, PestCue };
+inline constexpr float CropWindResponse(FarmMeshShape shape) noexcept {
+    switch (shape) {
+    case FarmMeshShape::Leaves:
+    case FarmMeshShape::CarrotLeaves: return .31f;
+    case FarmMeshShape::Tomato:
+    case FarmMeshShape::TomatoStems: return .14f;
+    case FarmMeshShape::PumpkinVines: return .065f;
+    default: return 0;
+    }
+}
 struct FarmMeshPart {
 	Vector3 position{};
 	Vector3 scale{1.0f, 1.0f, 1.0f}; // Box: half-size. Crop: radius/height in its base-anchored OBJ space.
@@ -254,14 +269,13 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 		} else {
 			for (int ridge = -1; ridge <= 1; ++ridge) {
 				add({visual.center.x + ridge * half * 0.52f, visual.center.y + kFarmSoilRidgeHeight*.5f, visual.center.z},
-					{half * 0.12f, kFarmSoilRidgeHeight*.5f, half * 0.83f}, soil, false, {}, FarmMeshShape::Box, FarmMeshSurface::Soil);
+					{half * 0.12f, kFarmSoilRidgeHeight*.5f, half * 0.83f}, soil, false, {}, FarmMeshShape::SoilRidge, FarmMeshSurface::Soil);
 			}
 		}
 		return result;
 	}
 	const float bottom = visual.center.y + layout.waterBottomOffset;
 	const float rimHeight = layout.waterMaxDepth + kRimFreeboard;
-	const Vector4 stone{0.43f, 0.44f, 0.39f, 1.0f};
 	const int width = grid.GetWidth();
 	const int column = index % width;
 	const int row = index / width;
@@ -308,11 +322,13 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 			const float rimWidth = half * 0.14f;
 			// Split side banks with the bed so their ends follow the same transition.
 			for (int section = 0; section < 3; ++section) {
+				constexpr std::array<Vector4,3> stoneTones{{{.40f,.43f,.39f,1},{.46f,.46f,.40f,1},{.43f,.45f,.42f,1}}};
+				const auto& stone=stoneTones[(index+edge+section)%stoneTones.size()];
 				const float rise = alongX ? zRise[section] : xRise[section];
 				const Vector2 slope = alongX ? Vector2{0.0f, zSlopes[section]} : Vector2{xSlopes[section], 0.0f};
 				add({visual.center.x + (alongX ? sign * (cellHalf - rimWidth) : offsets[section]), bottom + rise + rimHeight * 0.5f,
 					visual.center.z + (alongX ? offsets[section] : sign * (cellHalf - rimWidth))},
-					{alongX ? rimWidth : extents[section], rimHeight * 0.5f, alongX ? extents[section] : rimWidth}, stone, false, slope, FarmMeshShape::Box, FarmMeshSurface::CanalBank);
+					{alongX ? rimWidth : extents[section], rimHeight * 0.5f, alongX ? extents[section] : rimWidth}, stone, false, slope, FarmMeshShape::BankStone, FarmMeshSurface::CanalBank);
 			}
 			continue;
 		}

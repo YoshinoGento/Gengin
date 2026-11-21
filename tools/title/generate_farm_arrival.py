@@ -89,7 +89,7 @@ def cylinder(mesh, start, end, radius, material, section, segments=12):
         mesh.triangle((end,ring(end,i),ring(end,i+1)),((.5,.5),(0,0),(1,1)),material,section)
 
 
-def build_scenery():
+def build_scenery(crowns=None):
     mesh = Mesh()
     mesh.ground()
     # Below all legal terrain levels (minimum=0); replaces only the flat ground draw.
@@ -97,13 +97,95 @@ def build_scenery():
     mesh.rectangle(7.1,7.7,-15,24,-.227,landscape.DIRT,"road",1)
     mesh.rectangle(8.35,8.95,-15,24,-.227,landscape.DIRT,"road",1)
     for index,(x,z) in enumerate(TREE_POSITIONS):
-        mesh.tree(x,z,4.3,1.45,20261041+index,"trunk")
+        tree = Mesh()
+        tree.tree(x,z,4.3,1.45,20261041+index,"trunk")
+        pivot = (x, landscape.ground_height(x,z)+2.0, z)
+        crown = Mesh()
+        for tri in tree.triangles:
+            if tri[3] != landscape.FOLIAGE:
+                mesh.triangles.append(tri)
+                continue
+            local = tuple(tuple(p[i]-pivot[i] for i in range(3)) for p in tri[0])
+            crown.triangles.append((local,*tri[1:]))
+        if crowns is not None:
+            crowns.append((pivot,crown))
     return mesh
+
+
+def save_scenery():
+    crowns = []
+    counts = {"scenery":save(build_scenery(crowns),"scenery")}
+    for i,(_,mesh) in enumerate(crowns):
+        name = f"crown_{i}"
+        counts[name] = save(mesh,name)
+    return counts,[p for p,_ in crowns]
+
+
+def closed_rings(mesh,rings,material,section):
+    n=len(rings[0])
+    for a,b in zip(rings,rings[1:]):
+        for i in range(n):
+            j=(i+1)%n
+            mesh.quad((a[i],b[i],b[j],a[j]),material,section)
+    for ring,reverse in ((rings[0],False),(rings[-1],True)):
+        center=tuple(sum(p[k] for p in ring)/n for k in range(3))
+        for i in range(n):
+            a,b=ring[i],ring[(i+1)%n]
+            mesh.triangle((center,b,a) if reverse else (center,a,b),
+                          ((.5,.5),(0,0),(1,1)),material,section)
+
+
+def bent_pipe(mesh,profile,sides,section):
+    rings=[]
+    for i,(x,y,z,r) in enumerate(profile):
+        a,b=profile[max(0,i-1)],profile[min(i+1,len(profile)-1)]
+        dx,dy=b[0]-a[0],b[1]-a[1]
+        length=math.hypot(dx,dy)
+        rings.append([(x+r*dy/length*math.cos(t),y-r*dx/length*math.cos(t),z+r*math.sin(t))
+                      for t in (j*math.tau/sides for j in range(sides))])
+    closed_rings(mesh,rings,0,section)
+
+
+def tool_models():
+    wood,metal=Mesh(),Mesh()
+    for z in (-.266,0,.266):
+        wood.box(0,.075,z,.85,.065,.129,landscape.WOOD,"bench_board")
+    for x in (-.68,.68):
+        wood.box(x,.002,0,.061,.041,.38,landscape.WOOD,"crossrail")
+        for z in (-.26,.26):
+            wood.box(x,-.105,z,.052,.116,.052,landscape.WOOD,"leg")
+    cylinder(wood,(-.68,.212,-.24),(-.68,1.26,.07),.030,landscape.WOOD,"hoe_handle")
+    cylinder(metal,(-.68,.208,-.246),(-.68,.331,-.206),.041,0,"socket")
+    # A slightly dished blade widens toward its thin cutting edge.
+    blade=[]
+    for z,y,w,t in [(-.22,.207,.060,.016),(-.30,.175,.133,.015),(-.385,.145,.178,.005)]:
+        dish=t*.6
+        blade.append([(-.68-w,y+t,z),(-.68,y+t-dish,z),(-.68+w,y+t,z),
+                      (-.68+w,y-t,z),(-.68,y-t-dish,z),(-.68-w,y-t,z)])
+    closed_rings(metal,[list(reversed(r)) for r in blade],0,"hoe_blade")
+    # Rolled upper lip returns into a recessed opening instead of a closed cylindrical lid.
+    can=[]
+    for y,rx,rz in [(.149,.207,.151),(.169,.240,.171),(.196,.239,.170),(.425,.217,.153),
+                    (.467,.187,.135),(.476,.192,.138),(.476,.166,.114),(.413,.163,.110)]:
+        can.append([(.35+rx*math.cos(j*math.tau/18),y,.03+rz*math.sin(j*math.tau/18)) for j in range(18)])
+    closed_rings(metal,can,0,"watering_can")
+    bent_pipe(metal,[(.506,.245,.03,.074),(.622,.263,.03,.065),(.730,.346,.03,.050),
+                     (.842,.461,.03,.038),(.901,.495,.03,.034),(.944,.527,.03,.083),
+                     (.954,.535,.03,.078)],12,"spout_and_rose")
+    arc=[(.35+.160*math.cos(a),.45+.204*math.sin(a),.03,.016)
+         for a in (math.pi*i/12 for i in range(13))]
+    bent_pipe(metal,arc,8,"bail")
+    return wood,metal
+
+
+def save_tools():
+    wood,metal=tool_models()
+    return {"tools_wood":save(wood,"tools_wood"),"tools_metal":save(metal,"tools_metal",True)}
 
 
 def build():
     OUT.mkdir(parents=True, exist_ok=True)
-    counts = {"scenery": save(build_scenery(),"scenery")}
+    counts,pivots = save_scenery()
 
     leaf = Mesh()
     # All blades grow upward from one rooted clump. The hero tip droops without folding back in X.
@@ -143,21 +225,7 @@ def build():
                      ((.5,.5),(0,0),(1,1)),0,"wet")
     counts["wet"]=save(wet,"wet",True)
 
-    wood,metal=Mesh(),Mesh()
-    wood.box(0,.07,0,.85,.07,.40,landscape.WOOD,"bench")
-    for x in (-.68,.68):
-        wood.box(x,-.01,.25,.08,.20,.08,landscape.WOOD,"leg")
-    cylinder(wood,(-.68,.20,-.25),(-.68,1.26,.07),.035,landscape.WOOD,"hoe_handle")
-    metal.box(-.68,.22,-.39,.20,.035,.17,0,"hoe_blade")
-    cylinder(metal,(.40,.15,.02),(.40,.52,.02),.22,0,"watering_can",20)
-    cylinder(metal,(.53,.25,.02),(.91,.49,.02),.045,0,"spout")
-    cylinder(metal,(.91,.49,.02),(.97,.53,.02),.095,0,"rose")
-    for i in range(12):
-        a,b=math.pi*i/12,math.pi*(i+1)/12
-        cylinder(metal,(.40+.19*math.cos(a),.50+.24*math.sin(a),.02),
-                 (.40+.19*math.cos(b),.50+.24*math.sin(b),.02),.020,0,"handle",6)
-    counts["tools_wood"]=save(wood,"tools_wood")
-    counts["tools_metal"]=save(metal,"tools_metal",True)
+    counts.update(save_tools())
     for name,slot in (("packet_carrot",1),("packet_tomato",0),("packet_pumpkin",1)):
         packet=Mesh()
         packet.quad(((-.14,0,0),(-.14,.38,0),(.14,.38,0),(.14,0,0)),0,"packet",
@@ -181,7 +249,7 @@ def build():
         with wave.open(str(OUT/'morning.wav'),'wb') as target:
             target.setparams(source.getparams())
             target.writeframes(source.readframes(source.getframerate()*16))
-    (OUT/"manifest.json").write_text(json.dumps({"triangles":counts,"grassInstances":grass_count,
+    (OUT/"manifest.json").write_text(json.dumps({"triangles":counts,"crownPivots":pivots,"grassInstances":grass_count,
         "plotKeepout":PLOT_KEEPOUT,"authorship":"Original procedural geometry and impact sound; existing project countryside/packet textures and grass models reused."},indent=2)+'\n',encoding="ascii")
     print(json.dumps(counts),grass_count,"grass instances")
 
@@ -191,15 +259,22 @@ if __name__ == '__main__':
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--scenery-only', action='store_true')
     group.add_argument('--grass-only', action='store_true')
+    group.add_argument('--tools-only', action='store_true')
     args = parser.parse_args()
     if args.scenery_only:
-        count = save(build_scenery(), 'scenery')
+        counts,pivots = save_scenery()
         path = OUT/'manifest.json'
         manifest = json.loads(path.read_text(encoding='ascii'))
-        manifest['triangles']['scenery'] = count
+        manifest['triangles'].update(counts)
+        manifest['crownPivots'] = pivots
         manifest['plotKeepout'] = PLOT_KEEPOUT
         path.write_text(json.dumps(manifest,indent=2)+'\n',encoding='ascii')
-        print(f'PASS arrival scenery: {count} triangles; other assets untouched')
+        print(f'PASS arrival scenery: {counts}')
+    elif args.tools_only:
+        path=OUT/'manifest.json'
+        manifest=json.loads(path.read_text(encoding='ascii'))
+        manifest['triangles'].update(save_tools())
+        path.write_text(json.dumps(manifest,indent=2)+'\n',encoding='ascii')
     elif args.grass_only:
         count = save_grass()
         path = OUT/'manifest.json'

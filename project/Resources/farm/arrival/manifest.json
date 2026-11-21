@@ -1,14 +1,19 @@
 {
   "triangles": {
-    "scenery": 4748,
+    "scenery": 2136,
     "leaf": 192,
     "drop": 200,
     "wet": 32,
-    "tools_wood": 84,
-    "tools_metal": 476,
+    "tools_wood": 156,
+    "tools_metal": 748,
     "packet_carrot": 2,
     "packet_tomato": 2,
-    "packet_pumpkin": 2
+    "packet_pumpkin": 2,
+    "crown_0": 480,
+    "crown_1": 488,
+    "crown_2": 550,
+    "crown_3": 576,
+    "crown_4": 518
   },
   "grassInstances": 560,
   "plotKeepout": [
@@ -17,5 +22,32 @@
     3.2,
     12.8
   ],
-  "authorship": "Original procedural geometry and impact sound; existing project countryside/packet textures and grass models reused."
+  "authorship": "Original procedural geometry and impact sound; existing project countryside/packet textures and grass models reused.",
+  "crownPivots": [
+    [
+      -13,
+      1.7650000000000001,
+      22
+    ],
+    [
+      -22,
+      1.8017321301451399,
+      36
+    ],
+    [
+      6,
+      1.7650000000000001,
+      30
+    ],
+    [
+      18,
+      1.7650000000000001,
+      25
+    ],
+    [
+      28,
+      2.0006803248719933,
+      42
+    ]
+  ]
 }

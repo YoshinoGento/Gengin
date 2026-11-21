@@ -167,7 +167,6 @@ Frame TitlePresentationSystem::GetFrame() const noexcept {
     frame.waterColor = Mix(kWater[from], kWater[to], blend);
     frame.groundExposure = Mix(kGroundExposure[from], kGroundExposure[to], blend);
     frame.waterPhase = std::fmod(cycleTime_ / 2.0f, 1.0f);
-    frame.windAngle = std::sin(cycleTime_ * kTau / 5.0f) * 0.028f;
     frame.grassWindXZ = GrassWindFromCloudVelocity(cloudMotion_.Velocity());
     frame.grassPhase = grassTime_*kTau/kGrassFlutterPeriod;
     frame.skyOffset = std::sin(cycleTime_ * kTau / kCycleSeconds) * 10.0f;

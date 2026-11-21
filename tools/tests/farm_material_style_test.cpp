@@ -8,7 +8,7 @@ int main() {
 	using namespace farm;
 	unsigned cases = 0;
 	for (int surface = 0; surface <= static_cast<int>(FarmMeshSurface::Grass); ++surface) {
-		for (int shape = 0; shape <= static_cast<int>(FarmMeshShape::PumpkinVines); ++shape) {
+		for (int shape = 0; shape < static_cast<int>(FarmMeshShape::Count); ++shape) {
 			for (float wet : {-1.0f, 0.0f, 0.1f, 0.5f, 1.0f, 2.0f,
 				std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
 				FarmMeshPart part;

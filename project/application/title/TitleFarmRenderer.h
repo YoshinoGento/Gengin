@@ -55,7 +55,7 @@ private:
     Model* reflectedScenery_ = nullptr;
     Texture2DHandle whiteTexture_{}, landscapeTexture_{};
     // Models/textures are manager-owned; instances and upload buffers are scene-owned.
-    std::array<Model*,11> models_{};
+    std::array<Model*,farm::kFarmMeshPaths.size()> models_{};
     std::vector<farm::FarmMeshPart> parts_;
     std::vector<std::unique_ptr<Object3d>> objects_;
     std::vector<unsigned char> visible_;

@@ -598,11 +598,13 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
         TextureManager::GetInstance())) AddLog("Arrival scenery unavailable; using the safe farm overview.");
     farmRuntimeController_.InitializePresentationAudio(framework_->GetAudio());
     co_await std::suspend_always{};
-	// Build the initial view before reveal; no input or simulation update is needed.
+	// A loaded farm needs its result snapshot before the first draw, not its ceremony yet.
+	farmRuntimeController_.ObserveProgress(RuntimeContext());
 	farmRuntimeController_.Refresh(RuntimeContext());
 #endif
 	// Reveal can draw before the first input/simulation update.
     farmRainPresentation_.Reset();
+    farmWind_ = {};
     if (!farmFieldEffectRenderer_.Initialize(framework_->GetDxCommon())) AddLog("Farm field effects unavailable.");
     if (!farmRainAudio_.Initialize(framework_->GetAudio())) AddLog("Rain ambience unavailable.");
     co_await std::suspend_always{};
@@ -673,6 +675,9 @@ void GamePlaySessionSystem::Update() {
     }
 
 	// Collect frame requests before scheduling Scene systems.
+#ifndef USE_IMGUI
+	farmRuntimeController_.ObserveProgress(RuntimeContext());
+#endif
 	Input* frameInput = framework_ ? framework_->GetInput() : nullptr;
 	const bool controlHeld = frameInput && (frameInput->PushKey(DIK_LCONTROL) || frameInput->PushKey(DIK_RCONTROL));
 	bool levelReloadRequested = frameInput &&
@@ -730,7 +735,7 @@ void GamePlaySessionSystem::Update() {
     else farmMoldVisual_.Update(viewportFocused_ ? realDeltaTime_ : 0.0f);
 	// Committed harvest feedback must finish even when pause or clear stops world time.
 	farmHarvestVisualSystem_.Update(farmGrid_, realDeltaTime_);
-    UpdateRainPresentation(viewportFocused_ ? realDeltaTime_ : 0.0f, viewportFocused_);
+    UpdateOutdoorPresentation(viewportFocused_ ? realDeltaTime_ : 0.0f, viewportFocused_);
 	PrepareRenderFrame(sceneDeltaTime_);
 
 	// スペースキー入力時の分岐（activeParticleType_ は Game.cpp の ImGui から書き換わる）
@@ -764,13 +769,14 @@ void GamePlaySessionSystem::Update() {
 	framework_->GetParticleManager()->Update(camera_.get(), timelineScrubbing_ ? 0.0f : sceneDeltaTime_);
 }
 
-void GamePlaySessionSystem::UpdateRainPresentation(float realSeconds, bool audible) {
+void GamePlaySessionSystem::UpdateOutdoorPresentation(float realSeconds, bool audible) {
     const bool outdoor = farmGameMode_ && !timelineScrubbing_ &&
         !farmRuntimeController_.PresentsIntroduction() && !farmRuntimeController_.PresentsFarmResult() &&
         !farmRuntimeController_.ShowsSeedShop() && !farmRuntimeController_.ShowsHarvestDisplay() &&
         !farmRuntimeController_.ShowsContestDetail() && !farmRuntimeController_.RequestsTitle();
     const auto weather = FarmWeatherSystem::Inspect(farmDateSystem_.GetDay(), farmProgressionSystem_.WeatherVersion());
     farmRainPresentation_.Update(weather.phase, outdoor, realSeconds);
+    farmWind_.Update(realSeconds, farmRainPresentation_.GetFrame().cloud);
     farmRainAudio_.Update(farmRainPresentation_.GetFrame().rain, farmRuntimeController_.EnvironmentVolume(),
         audible && !farmRainAudioSuspended_ && outdoor && weather.phase != FarmWeatherSystem::Phase::Disabled, realSeconds);
 }
@@ -1125,7 +1131,7 @@ void GamePlaySessionSystem::CreateLevelObjectsFromLevel() {
 void GamePlaySessionSystem::OnScreenTransitionCovered() {
 	farmRuntimeController_.CommitScreenTransition(RuntimeContext());
     farmRainAudioSuspended_ = false;
-    UpdateRainPresentation(0.0f, false);
+    UpdateOutdoorPresentation(0.0f, false);
 	PrepareRenderFrame(0.0f);
 }
 
@@ -1673,13 +1679,13 @@ void GamePlaySessionSystem::Draw() {
     const bool arrivalScenery = farmGameMode_ && farmArrivalRenderer_.IsReady() &&
         FarmDevelopmentSystem::StandardSize(displayedFarmGrid.GetWidth(), displayedFarmGrid.GetHeight());
     farmArrivalRenderer_.Prepare(camera_.get(),farmRuntimeController_.StartFrame(),arrivalScenery,realDeltaTime_,
-        farmRainPresentation_.GetFrame());
+        farmRainPresentation_.GetFrame(),farmWind_.GetFrame());
 	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : lesson ? lesson->Water() : farmIrrigationSystem_;
 	farmRenderer_.Prepare(displayedFarmGrid, farmVisualSystem_, camera_.get(),
 		lesson ? lesson->Target() : farmRuntimeController_.ResolveHoveredTile(RuntimeContext()), irrigationPreviewActive || lesson ? nullptr : &farmHarvestVisualSystem_,
         lesson || !farmRuntimeController_.PresentsIntroduction(),
         !irrigationPreviewActive && !timelineScrubbing_ && farmProgressionSystem_.PestsEnabled() &&
-        !farmRuntimeController_.PresentsIntroduction() ? &farmPestVisualSystem_ : nullptr);
+        !farmRuntimeController_.PresentsIntroduction() ? &farmPestVisualSystem_ : nullptr, farmWind_.GetFrame());
 
 	auto DrawLevelObjects = [&]() {
 		if (!showLevelObjects_) {

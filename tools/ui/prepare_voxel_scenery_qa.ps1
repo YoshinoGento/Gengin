@@ -45,9 +45,19 @@ if (!$VerifyOnly) {
     }
     Copy-Item -LiteralPath (Join-Path $root 'generated/outputs/Release/CG2_00_01.exe') -Destination $exe -Force
     Copy-Item -LiteralPath (Join-Path $root 'project/Resources/shader') -Destination (Join-Path $runtime 'Resources') -Recurse -Force
-    foreach ($path in @('title/countryside.obj','title/reflection_scenery.obj','title/pond_shore.obj',
+    $paths = @('title/countryside.obj','title/reflection_scenery.obj','title/pond_shore.obj',
         'title/countryside_mesh.json','farm/arrival/scenery.obj','farm/arrival/manifest.json',
-        'farm/arrival/grass_layout.json')) {
+        'title/grass_patch.obj','title/grass_far_patch.obj','farm/arrival/grass_layout.json',
+        'farm/arrival/crown_0.obj','farm/arrival/crown_1.obj','farm/arrival/crown_2.obj',
+        'farm/arrival/crown_3.obj','farm/arrival/crown_4.obj','farm/soil_ridge.obj','farm/bank_stone.obj',
+        'farm/arrival/tools_wood.obj','farm/arrival/tools_metal.obj','ui/farm_hud_icons.png',
+        'farm/contest/ceremony/manifest.json')
+    foreach ($part in @('carrot','carrot_leaves','tomato','tomato_stems','pumpkin','pumpkin_vines')) {
+        $paths += "farm/crop_$part.obj","farm/contest/ceremony/crop_$part.obj"
+    }
+    foreach ($path in $paths) {
+        $parent = Split-Path -Parent (Join-Path $runtime "Resources/$path")
+        if (!(Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
         Copy-Item -LiteralPath (Join-Path $root "project/Resources/$path") -Destination (Join-Path $runtime "Resources/$path") -Force
     }
 }

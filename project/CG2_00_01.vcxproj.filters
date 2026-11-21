@@ -857,6 +857,7 @@
     <ClInclude Include="application\title\TitleReflectionRenderer.h"><Filter>Title</Filter></ClInclude>
     <ClInclude Include="application\title\TitleGrassRenderer.h"><Filter>Title</Filter></ClInclude>
     <ClInclude Include="application\title\TitleGrassPresentation.h"><Filter>Title</Filter></ClInclude>
+    <ClInclude Include="application\environment\VegetationWind.h" />
     <ClInclude Include="application\title\TitleView.h"><Filter>Title</Filter></ClInclude>
     <ClInclude Include="application\title\TitleLogoRippleRenderer.h"><Filter>Title</Filter></ClInclude>
     <ClInclude Include="application\scene\SceneTransitionSystem.h"><Filter>Scene</Filter></ClInclude>

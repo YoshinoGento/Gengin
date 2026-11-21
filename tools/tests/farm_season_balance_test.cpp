@@ -227,7 +227,8 @@ private:
         ending.Observe(date_.GetDay(),economy_.GetContestResults(),true,staged_);
         Require(ending.GetFrame().season.finalized && !ending.GetFrame().missedDay,
             "grown ending blocked by missed popup");
-        Require(ending.ConsumeOpening() && !ending.ConsumeOpening(),"grown ending duplicate cue");
+        constexpr auto notice = FarmContestOutcomeSystem::Notice::Season;
+        Require(ending.ConsumeOpening(notice) && !ending.ConsumeOpening(notice),"grown ending duplicate cue");
         for (int tick=0;tick<120;++tick) {
             ending.Update(kTickSeconds);
             ending.Observe(date_.GetDay(),economy_.GetContestResults(),true,staged_);

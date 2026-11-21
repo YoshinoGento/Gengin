@@ -158,7 +158,8 @@ void TitleGrassRenderer::Update(const Frame& frame, const Camera& camera) noexce
     const float exposure = GrassExposure(frame.groundExposure);
     mainMapped_->lightDirectionIntensity = {light.direction.x,light.direction.y,light.direction.z,exposure};
     mainMapped_->wind = {frame.grassWindXZ.x,frame.grassWindXZ.y,frame.grassPhase,1/kGrassBendHeight};
-    mainMapped_->wave = {std::cos(kCameraRotation.y),-std::sin(kCameraRotation.y),
+    const auto windAxis = vegetation::WaveAxis();
+    mainMapped_->wave = {windAxis.x,windAxis.y,
         kGrassWaveSpatialFrequency,kGrassTuftPhaseSpread};
 }
 void TitleGrassRenderer::BindAndDraw(bool shadow) {

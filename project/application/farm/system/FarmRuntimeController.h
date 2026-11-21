@@ -42,15 +42,15 @@ public:
     void Draw() { ui_.Draw(view_, pointer_); }
     void PauseForPestWarning() noexcept { paused_ = true; }
     void PauseForWeatherChange() noexcept { paused_ = true; }
-    bool BlocksTimeAdvance() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || terrain_ || observation_ || (ready_ && flow_.BlocksSimulation()); }
-    bool BlocksSimulation() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || paused_ || terrain_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
-    bool ConsumesInput() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
+    bool BlocksTimeAdvance() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || terrain_ || observation_ || (ready_ && flow_.BlocksSimulation()); }
+    bool BlocksSimulation() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
+    bool ConsumesInput() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool IsOpen() const noexcept { return open_; }
     const farm::FarmCanalLessonSystem* CanalLesson() const noexcept { return lesson_ ? &*lesson_ : nullptr; }
     bool RequestsTitle() const noexcept { return flow_.RequestsTitle(); }
     bool PresentsFarmResult() const noexcept { return ready_ &&
         (flow_.GetPhase() == FarmPlayFlow::Phase::Result || flow_.GetPhase() == FarmPlayFlow::Phase::Review); }
-    bool HidesFarmHUD() const noexcept { return exhibition_.Active() || shop_.IsOpen() || contestNotice_ || open_ || observation_ || terrain_ || (ready_ && flow_.BlocksSimulation()); }
+    bool HidesFarmHUD() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || observation_ || terrain_ || (ready_ && flow_.BlocksSimulation()); }
     bool PresentsIntroduction() const noexcept { return ready_ &&
         (flow_.GetPhase() == FarmPlayFlow::Phase::Briefing || flow_.GetPhase() == FarmPlayFlow::Phase::Starting); }
     bool ShowsSeedShop() const noexcept { return view_.seedShop; }
@@ -61,10 +61,11 @@ public:
     bool ShowsContestDetail() const noexcept { return view_.contestDetail; }
     FarmContestPresentationSystem::Frame ContestFrame() const noexcept { return exhibition_.Active() ? exhibition_.ContestFrame() : contestPresentation_.GetFrame(); }
     [[nodiscard]] int ResolveHoveredTile(const FarmRuntimeContext& context) const;
+    void ObserveProgress(const FarmRuntimeContext& context);
     void Refresh(const FarmRuntimeContext& context) { BuildView(context); }
     void RequestSeasonRetry(const FarmRuntimeContext& context) {
         if (!ready_) return;
-        BuildView(context); Execute(context, {farmui::Action::SeasonRetry}); BuildView(context);
+        Execute(context, {farmui::Action::SeasonRetry}); BuildView(context);
     }
     void CommitScreenTransition(const FarmRuntimeContext& context);
     void OpenLayoutLibrary(const FarmRuntimeContext& context);
@@ -95,6 +96,10 @@ private:
     bool UpdateMenuAudio(const FarmRuntimeContext& context, const Input& input);
     void ExecuteExhibition(const FarmRuntimeContext& context, farmui::Request request);
     void BuildView(const FarmRuntimeContext& context);
+    [[nodiscard]] FarmContestOutcomeSystem::Notice CurrentContestNotice() const noexcept;
+    [[nodiscard]] bool HasBlockingContestNotice() const noexcept;
+    void UpdateContestScreen();
+    void BeginContestAudio();
     void OpenContestDetail(const FarmRuntimeContext& context, int index, bool replay);
     void Execute(const FarmRuntimeContext& context, farmui::Request request, bool allowTransition = true);
     bool DeferScreenTransition(const FarmRuntimeContext& context, farmui::Request request);
@@ -118,6 +123,7 @@ private:
     FarmContestAudioSystem contestAudio_;
     FarmPestAudioSystem pestAudio_;
     FarmContestOutcomeSystem contestOutcome_;
+    int dueContestDay_ = 0; // Snapshot of the day system, refreshed on update and acknowledgement.
     FarmExhibitionSystem exhibition_;
     void InitializeEdition();
     bool mainGameOnly_ = false;
@@ -144,7 +150,6 @@ private:
     bool paused_ = false;
     bool ready_ = false;
     bool frameCaptured_ = false;
-    bool contestNotice_ = false;
     bool observation_ = false;
     bool terrain_ = false;
     bool pauseBeforeObservation_ = false;

@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/system/FarmContestGoalSystem.h"
+#include "farm/system/FarmContestPresentationSystem.h"
 #include <algorithm>
 #include <cmath>
 
@@ -7,6 +8,13 @@
 class FarmContestOutcomeSystem final {
 public:
     enum class Ending { Pending, Cleared, Failed, Missed, LegacyCompleted };
+    enum class Notice { None, Missed, Season, RetryConfirmation, DueToday };
+    struct NoticeAccess {
+        bool seasonPage{};
+        bool confirmingRetry{};
+        bool missedPage{};
+        bool dueToday{};
+    };
     struct Frame {
         Ending ending = Ending::Pending;
         FarmContestSeasonSummary season{};
@@ -68,8 +76,9 @@ public:
         Update(0);
     }
     // Consume only when the notice is actually visible, not while another modal covers it.
-    [[nodiscard]] bool ConsumeOpening() noexcept {
-        if (openingConsumed_ || (!frame_.season.finalized && !frame_.missedDay)) return false;
+    [[nodiscard]] bool ConsumeOpening(Notice visible) noexcept {
+        if (openingConsumed_ || !((visible == Notice::Season && frame_.season.finalized) ||
+            (visible == Notice::Missed && frame_.missedDay))) return false;
         openingConsumed_ = true;
         return true;
     }
@@ -80,15 +89,31 @@ public:
         frame_.missedDay = 0;
         return true;
     }
-    // Called only when the corresponding notice/final result is about to be displayed.
-    [[nodiscard]] int ConsumeUnsubmittedCeremony() noexcept {
-        const int day=frame_.season.finalized && frame_.goals.back().status==FarmContestGoalStatus::Missed ?
-            FarmContestEntrySystem::kContestDays.back() : frame_.missedDay;
+    [[nodiscard]] Notice SelectNotice(NoticeAccess access) const noexcept {
+        if (frame_.season.valid && frame_.season.finalized) {
+            if (access.confirmingRetry) return Notice::RetryConfirmation;
+            if (access.seasonPage) return Notice::Season;
+        }
+        if (frame_.missedDay && access.missedPage) return Notice::Missed;
+        return access.dueToday ? Notice::DueToday : Notice::None;
+    }
+    // Claim the day before starting either effect; rebuilding a view never claims it.
+    template<class BeginAudio>
+    [[nodiscard]] bool TryBeginCeremony(Notice notice, FarmContestPresentationSystem& presentation, BeginAudio&& beginAudio) {
+        if (presentation.Active()) return false;
+        int day = 0;
+        if (notice == Notice::Missed) day = frame_.missedDay;
+        if (notice == Notice::Season && frame_.season.finalized && frame_.goals.back().status == FarmContestGoalStatus::Missed)
+            day = FarmContestEntrySystem::kContestDays.back();
+        if (!day) return false;
         for (std::size_t i=0;i<presented_.size();++i)
             if (day==FarmContestEntrySystem::kContestDays[i] && !presented_[i]) {
-                presented_[i]=true; return day;
+                presented_[i] = true;
+                presentation.BeginUnsubmitted(day);
+                beginAudio();
+                return true;
             }
-        return 0;
+        return false;
     }
     [[nodiscard]] const Frame& GetFrame() const noexcept { return frame_; }
     [[nodiscard]] static Ending EvaluateEnding(const FarmContestSeasonSummary& season,
@@ -107,8 +132,8 @@ private:
         return t * t * (3 - 2 * t);
     }
     Frame frame_{};
-    std::array<bool, 3> acknowledged_{};
-    std::array<bool, 3> presented_{};
+    std::array<bool, FarmContestEntrySystem::kContestDays.size()> acknowledged_{};
+    std::array<bool, FarmContestEntrySystem::kContestDays.size()> presented_{};
     int lastDay_ = 0;
     float elapsed_ = 0;
     bool openingConsumed_ = false;

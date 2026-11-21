@@ -15,6 +15,20 @@ import generate_title_landscape as landscape
 
 
 class ArrivalAssets(unittest.TestCase):
+    def test_crowns_reassemble_at_rest(self):
+        crowns = []
+        static = arrival.build_scenery(crowns)
+        self.assertFalse(any(tri[3]==landscape.FOLIAGE for tri in static.triangles))
+        manifest = json.loads((OUT/'manifest.json').read_text())
+        self.assertEqual(manifest["crownPivots"],[list(p) for p,_ in crowns])
+        for i,((x,z),(pivot,crown)) in enumerate(zip(arrival.TREE_POSITIONS,crowns,strict=True)):
+            tree = landscape.Mesh()
+            tree.tree(x,z,4.3,1.45,20261041+i,"trunk")
+            original = [p for t in tree.triangles if t[3]==landscape.FOLIAGE for p in t[0]]
+            restored = [tuple(p[k]+pivot[k] for k in range(3)) for t in crown.triangles for p in t[0]]
+            self.assertEqual(len(restored),manifest['triangles'][f'crown_{i}']*3)
+            self.assertTrue(all(math.dist(a,b)<1e-10 for a,b in zip(original,restored,strict=True)))
+
     def test_rooted_leaf_no_backward_hook(self):
         vertices=[]
         for line in (OUT/'leaf.obj').read_text().splitlines():

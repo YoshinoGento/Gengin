@@ -1,6 +1,7 @@
 #include "farm_test_edit.h"
 #include "io/MouseButtonEdges.h"
 #include "farm/render/FarmMeshLayout.h"
+#include "farm/system/FarmTerrainQuerySystem.h"
 #include "3d/LineDrawer.h"
 #include <cassert>
 #include <cstdlib>
@@ -56,6 +57,33 @@ int main() {
         assert(parts.count == 6); total += parts.count;
     }
     assert(total == 120); // 40 existing soil parts + 80 no-shadow markers for the default field.
+    {
+        farm::FarmGrid strip;
+        assert(strip.Initialize(3,1));
+        for (int i=0;i<2;++i)
+            assert(EditFarmTile(strip,i,[i](auto& t){ t.feature=farm::FarmTileFeature::Canal; t.heightLevel=i; }));
+        assert(EditFarmTile(strip,2,[](auto& t){ t.state=farm::FarmTileState::Tilled; }));
+        const auto soil=farm::BuildFarmTileMeshParts(strip,2,visual);
+        int ridges=0;
+        for (std::size_t i=0;i<soil.count;++i) ridges+=soil.parts[i].shape==farm::FarmMeshShape::SoilRidge;
+        assert(ridges==3);
+        const auto canal=farm::BuildFarmTileMeshParts(strip,0,visual);
+        const auto center=visual.GetTileCenter(strip,0);
+        int banks=0;
+        for (std::size_t i=0;i<canal.count;++i) {
+            const auto& part=canal.parts[i];
+            if (part.surface!=farm::FarmMeshSurface::CanalBank) continue;
+            assert(part.shape==farm::FarmMeshShape::BankStone);
+            assert(!(part.position.x>center.x && part.position.z==center.z));
+            const auto ground=farm::FarmTerrainQuerySystem::SampleGround(strip,visual,part.position,{0,0});
+            assert(ground.valid && ground.kind==farm::FarmGroundKind::CanalBank);
+            assert(std::abs(ground.height-part.position.y-part.scale.y)<.0001f);
+            ++banks;
+        }
+        assert(banks==9);
+        assert(farm::FarmTerrainQuerySystem::SampleGround(strip,visual,center,{}).kind==farm::FarmGroundKind::CanalBed);
+        std::cout<<"PASS: three soil ridges; open edge, sloped bank crests and bed support\n";
+    }
     assert(farm::BuildFarmTileMeshParts(grid,-1,visual).count == 0);
     assert(farm::BuildFarmTileMeshParts(grid,20,visual).count == 0);
     for (int invalid : {-1, 20, (std::numeric_limits<int>::max)()})

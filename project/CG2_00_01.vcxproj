@@ -738,6 +738,7 @@ copy "$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64\dxil.dll" "$(TargetDir)dx
     <ClInclude Include="application\title\TitleReflectionRenderer.h" />
     <ClInclude Include="application\title\TitleGrassRenderer.h" />
     <ClInclude Include="application\title\TitleGrassPresentation.h" />
+    <ClInclude Include="application\environment\VegetationWind.h" />
     <ClInclude Include="application\title\TitleView.h" />
     <ClInclude Include="application\title\TitleLogoRippleRenderer.h" />
     <ClInclude Include="application\title\TitleLogoRipplePoints.h" />

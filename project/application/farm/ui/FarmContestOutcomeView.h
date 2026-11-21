@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/ui/FarmQualityView.h"
+#include "farm/ui/FarmContestDetailView.h"
 #include "farm/system/FarmContestOutcomeSystem.h"
 
 namespace farmui {
@@ -76,5 +77,20 @@ inline void BuildContestOutcomeView(View& view, const FarmContestOutcomeSystem::
     } else {
         view.Add(Label::ContestReveal, {740,600,460,52}, {Action::ContestOutcomeReveal});
     }
+}
+
+[[nodiscard]] inline bool BuildContestScreenView(View& view, FarmContestOutcomeSystem::Notice notice,
+    const FarmContestOutcomeSystem& outcome, const FarmContestPresentationSystem& presentation,
+    const FarmEconomySystem::ContestResults& results, int dueDay, bool offerExperience, bool retryFailed) {
+    using Notice = FarmContestOutcomeSystem::Notice;
+    if (presentation.Active()) BuildContestDetailView(view, presentation.GetFrame());
+    else if (notice == Notice::Missed) BuildContestMissedView(view, outcome.GetFrame());
+    else if (notice == Notice::DueToday) BuildContestDayNoticeView(view, dueDay);
+    else if (notice == Notice::Season || notice == Notice::RetryConfirmation) {
+        BuildContestOutcomeView(view, outcome.GetFrame(), results, notice == Notice::RetryConfirmation, retryFailed);
+        if (offerExperience && notice == Notice::Season)
+            view.Add(Label::Experience, {80, 660, 350, 44}, {Action::ExperienceOpen});
+    } else return false;
+    return true;
 }
 }

@@ -1,0 +1,42 @@
+classDiagram
+    direction TB
+    class FarmToolActionSystem {
+        -CommandHistory history_
+        +Undo() bool
+        +Redo() bool
+    }
+    class CommandHistory {
+        -size_t cursor_
+        -size_t capacity_
+        +Execute(command) bool
+        +Undo() bool
+        +Redo() bool
+    }
+    class IUndoableCommand {
+        <<abstract>>
+        +Execute() bool*
+        +Undo() bool*
+        +GetName() string_view*
+    }
+    class FarmIntakeCommand {
+        -bool before_
+        -bool after_
+        +Execute() bool
+        +Undo() bool
+    }
+    class FarmTileEditCommand {
+        -FarmTile before_
+        -FarmTile after_
+        +Execute() bool
+        +Undo() bool
+    }
+    class FarmTileBatchEditCommand {
+        -vector~FarmTileBatchEntry~ entries_
+        +Execute() bool
+        +Undo() bool
+    }
+    FarmToolActionSystem "1" *-- "1" CommandHistory : history_
+    CommandHistory "1" *-- "0..*" IUndoableCommand : commands_
+    FarmIntakeCommand --|> IUndoableCommand
+    FarmTileEditCommand --|> IUndoableCommand
+    FarmTileBatchEditCommand --|> IUndoableCommand

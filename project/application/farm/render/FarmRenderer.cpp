@@ -15,43 +15,36 @@ FarmRenderer::~FarmRenderer() = default;
 
 bool FarmRenderer::Initialize(Object3dCommon* common, ModelManager* models, Texture2DHandle whiteTexture) {
 	if (IsReady()) { return true; }
-	std::error_code error;
-	if (!common || !models || !std::filesystem::is_regular_file("Resources/farm/unit_box.obj", error)) { return false; }
-	if (!std::filesystem::is_regular_file("Resources/farm/triangle_lower.obj", error) ||
-		!std::filesystem::is_regular_file("Resources/farm/triangle_upper.obj", error)) { return false; }
-	models->LoadModel("farm/unit_box.obj");
-	Model* model = models->GetModel("farm/unit_box.obj");
-	if (!model || model->HasSkinCluster()) { return false; }
-	models->LoadModel("farm/triangle_lower.obj");
-	models->LoadModel("farm/triangle_upper.obj");
-	Model* lower = models->GetModel("farm/triangle_lower.obj");
-	Model* upper = models->GetModel("farm/triangle_upper.obj");
-	if (!lower || !upper || lower->HasSkinCluster() || upper->HasSkinCluster()) { return false; }
-	common_ = common;
-	model_ = model;
-	triangleLower_ = lower;
-	triangleUpper_ = upper;
-	whiteTexture_ = whiteTexture;
-	constexpr std::array<const char*,8> cropPaths{"farm/crop_turnip.obj", "farm/crop_carrot.obj",
-		"farm/crop_turnip_leaves.obj", "farm/crop_carrot_leaves.obj", "farm/crop_tomato.obj",
-		"farm/crop_tomato_stems.obj", "farm/crop_pumpkin.obj", "farm/crop_pumpkin_vines.obj"};
-	static_assert(cropPaths.size() == std::tuple_size_v<decltype(cropModels_)>);
-	bool cropFilesPresent = true;
-	for (const auto* path : cropPaths) cropFilesPresent &= std::filesystem::is_regular_file(std::filesystem::path("Resources") / path, error);
-	if (cropFilesPresent) {
-		for (std::size_t i=0; i<cropPaths.size(); ++i) {
-			models->LoadModel(cropPaths[i]);
-			cropModels_[i] = models->GetModel(cropPaths[i]);
-			if (cropModels_[i] && cropModels_[i]->HasSkinCluster()) cropModels_[i] = nullptr;
+	if (!common || !models) return false;
+	std::array<Model*,kFarmMeshPaths.size()> loaded{};
+	bool cropsReady=true;
+	for (std::size_t i=0;i<loaded.size();++i) {
+		const auto shape=static_cast<FarmMeshShape>(i);
+		const bool crop=shape>=FarmMeshShape::Turnip && shape<=FarmMeshShape::PumpkinVines;
+		const char* path=kFarmMeshPaths[i];
+		std::error_code error;
+		if (std::filesystem::is_regular_file(std::filesystem::path("Resources")/path,error)) {
+			models->LoadModel(path);
+			loaded[i]=models->GetModel(path);
+			if (loaded[i] && loaded[i]->HasSkinCluster()) loaded[i]=nullptr;
+		}
+		if (!loaded[i]) {
+			if (!crop) return false;
+			cropsReady=false;
 		}
 	}
+	meshModels_=loaded;
+	cropsReady_=cropsReady;
+	common_=common;
+	whiteTexture_=whiteTexture;
 	parts_.reserve(kMaximumParts + kMaximumTargetParts + kMaximumCropParts + kMaximumHarvestParts + FarmPestMeshParts::kCapacity);
 	objects_.reserve(kMaximumParts + kMaximumTargetParts + kMaximumCropParts + kMaximumHarvestParts + FarmPestMeshParts::kCapacity);
 	return true;
 }
 
 void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
-	int hoveredTileIndex, const FarmHarvestVisualSystem* harvest, bool showSelection, const FarmPestVisualSystem* pests) {
+	int hoveredTileIndex, const FarmHarvestVisualSystem* harvest, bool showSelection, const FarmPestVisualSystem* pests,
+	const vegetation::WindFrame& wind) {
 	parts_.clear();
 	lastDrawTileCount_ = 0;
 	limitExceeded_ = false;
@@ -76,6 +69,7 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 		plantCount += repellent.count + crops.count;
 		lastDrawTileCount_ += tileParts.count > 0 ? 1 : 0;
 	}
+	const auto livePartEnd = parts_.size();
 	static_assert(kMaximumHarvestParts == FarmHarvestVisualSystem::kCapacity * 2);
 	if (harvest && HasCropMeshes()) {
 		for (std::size_t i = 0; i < FarmHarvestVisualSystem::kCapacity; ++i) {
@@ -99,25 +93,19 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 	while (objects_.size() < parts_.size()) {
 		auto object = std::make_unique<Object3d>();
 		object->Initialize(common_);
-		object->SetModel(model_);
+		object->SetModel(meshModels_[static_cast<std::size_t>(FarmMeshShape::Box)]);
 		object->SetTexture(whiteTexture_);
 		objects_.push_back(std::move(object));
 	}
 	for (std::size_t index = 0; index < parts_.size(); ++index) {
 		const auto& part = parts_[index];
 		auto& object = *objects_[index];
-		Model* desired = part.shape == FarmMeshShape::TriangleLower ? triangleLower_ :
-			(part.shape == FarmMeshShape::TriangleUpper ? triangleUpper_ : model_);
-		if (part.shape == FarmMeshShape::Turnip) desired = cropModels_[0];
-		if (part.shape == FarmMeshShape::Carrot) desired = cropModels_[1];
-		if (part.shape == FarmMeshShape::Leaves) desired = cropModels_[2];
-		if (part.shape == FarmMeshShape::CarrotLeaves) desired = cropModels_[3];
-		if (part.shape == FarmMeshShape::Tomato) desired = cropModels_[4];
-		if (part.shape == FarmMeshShape::TomatoStems) desired = cropModels_[5];
-		if (part.shape == FarmMeshShape::Pumpkin) desired = cropModels_[6];
-		if (part.shape == FarmMeshShape::PumpkinVines) desired = cropModels_[7];
+		const auto shape=static_cast<std::size_t>(part.shape);
+		if (shape>=meshModels_.size() || !meshModels_[shape]) { parts_.clear(); lastDrawTileCount_=0; return; }
+		Model* desired=meshModels_[shape];
 		if (object.GetModel() != desired) { object.SetModel(desired); }
 		object.SetPosition(part.position);
+		object.SetRotation(index < livePartEnd ? wind.Tilt(part.position, CropWindResponse(part.shape)) : Vector3{});
 		if (!object.SetShearY(part.slope)) { parts_.clear(); lastDrawTileCount_ = 0; return; }
 		if (!object.SetScale(part.scale)) { parts_.clear(); lastDrawTileCount_ = 0; return; }
 		object.SetColor(part.color);

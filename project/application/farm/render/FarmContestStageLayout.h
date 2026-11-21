@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/core/FarmTypes.h"
+#include "farm/render/FarmMeshLayout.h"
 #include "farm/system/FarmContestPresentationSystem.h"
 #include "math/Struct.h"
 #include "title/TitlePresentationSystem.h"
@@ -50,9 +51,9 @@ struct FarmContestStageLayout {
         const float fit = kCeremonySpecimenHeight/kSummarySpecimenHeight;
         pose.bodyScale = {pose.bodyScale.x*fit,pose.bodyScale.y*fit,pose.bodyScale.z*fit};
         pose.leafScale = {pose.leafScale.x*fit,pose.leafScale.y*fit,pose.leafScale.z*fit};
-        pose.position = {-3.3f,.94f,0};
-        pose.leafY = crop==farm::CropType::Tomato || crop==farm::CropType::Pumpkin ?
-            pose.position.y : pose.position.y+pose.bodyScale.y*.96f;
+        const float base=(std::min)(pose.position.y,pose.leafY);
+        pose.leafY=.94f+(pose.leafY-base)*fit;
+        pose.position = {-3.3f,.94f+(pose.position.y-base)*fit,0};
         return pose;
     }
     [[nodiscard]] static float UnitsPerPixel() noexcept {
@@ -69,11 +70,21 @@ struct FarmContestStageLayout {
         const float x = side==0 ? 320.f : 960.f;
         const float baseline = kSpecimenBaseline;
         pose.position = {(x-kWidth*.5f)*UnitsPerPixel(), (kHeight*.5f-baseline)*UnitsPerPixel(), 0};
-        pose.bodyScale = carrot ? Vector3{.30f*scale,scale,.30f*scale} :
-            tomato ? Vector3{.65f*scale,.85f*scale,.65f*scale} : Vector3{.65f*scale,.75f*scale,.65f*scale};
-        pose.leafScale = tomato ? Vector3{.5f*scale,scale,.5f*scale} : pumpkin ?
-            Vector3{.6f*scale,.85f*scale,.6f*scale} : Vector3{.4f*scale,.4f*scale,.4f*scale};
-        pose.leafY = tomato || pumpkin ? pose.position.y : pose.position.y+pose.bodyScale.y*.96f;
+        if (carrot || pumpkin || tomato) {
+            farm::FarmTileVisualData plant{};
+            plant.valid=true; plant.crop=crop; plant.cropStage=farm::FarmCropGrowthStage::Ready;
+            plant.cropScale=scale/(carrot ? .70f : pumpkin ? .75f : 1.f);
+            const auto meshes=farm::BuildFarmCropMeshParts(plant,1.f);
+            // Rebase the complete mature plant to the stand, keeping its joint and proportions.
+            const auto& body=meshes.parts[0]; const auto& foliage=meshes.parts[1];
+            const float lift=pose.position.y-(std::min)(body.position.y,foliage.position.y);
+            pose.bodyScale=body.scale; pose.leafScale=foliage.scale;
+            pose.position.y=lift+body.position.y; pose.leafY=lift+foliage.position.y;
+        } else {
+            pose.bodyScale={.65f*scale,.75f*scale,.65f*scale};
+            pose.leafScale={.4f*scale,.4f*scale,.4f*scale};
+            pose.leafY=pose.position.y+pose.bodyScale.y*.96f;
+        }
         return pose;
     }
 };

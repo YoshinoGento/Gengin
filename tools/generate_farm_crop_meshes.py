@@ -122,14 +122,21 @@ def pumpkin_mesh():
     return [tuple(rib(p) for p in tri) for tri in mesh]
 
 
+def generate_authored_crops(destination):
+    import sys
+    sys.path.insert(0,str(Path(__file__).resolve().parent/"art_studies"))
+    from field_crops_revision import carrot_sculpt, pumpkin_sculpt
+    from tomato_revision import make as tomato_sculpt
+    from study_mesh import export_part
+    for name,leaf,sculpt in (("carrot","leaves",carrot_sculpt),("tomato","stems",tomato_sculpt),
+                             ("pumpkin","vines",pumpkin_sculpt)):
+        body,foliage=sculpt()
+        export_part(destination/f"crop_{name}.obj",body,smooth=True)
+        export_part(destination/f"crop_{name}_{leaf}.obj",foliage)
+
+
 if __name__ == "__main__":
     write_mesh("crop_turnip", root_mesh([(0,.06),(.12,.62),(.42,1),(.72,.90),(1,.32)]))
-    write_mesh("crop_carrot", root_mesh([(0,.035),(.45,.40),(.84,1),(1,.80)]))
     write_mesh("crop_leaves", leaves_mesh())
     write_mesh("crop_turnip_leaves", crop_foliage_mesh())
-    write_mesh("crop_carrot_leaves", crop_foliage_mesh(carrot=True))
-    write_mesh("crop_tomato", tomato_mesh())
-    write_mesh("crop_tomato_stems", tomato_stems())
-    write_mesh("crop_pumpkin", pumpkin_mesh())
-    write_mesh("crop_pumpkin_vines", transformed(leaves_mesh(), (1,.25,1), (0,0,0)) +
-               transformed(root_mesh([(0,.10),(1,.07)],6), (.6,1,.6), (0,0,0)))
+    generate_authored_crops(ROOT)

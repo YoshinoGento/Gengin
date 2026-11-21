@@ -1,4 +1,5 @@
 #include "title/TitleFarmRenderer.h"
+#include "environment/VegetationWind.h"
 #include "title/TitleCelestialGeometry.h"
 #include "title/TitleCropPresentation.h"
 #include "farm/render/FarmMaterialStyle.h"
@@ -23,14 +24,12 @@ InitializationTask TitleFarmRenderer::InitializeIncrementally(Object3dCommon* co
     TextureManager* textures, const farm::FarmGrid& grid, const PondLayout* pond) {
     if (common_ || !common || !modelManager || !textures || !common->GetLightingSystem() ||
         grid.GetTileCount() != static_cast<int>(kTitleTileCount)) co_return false;
-    constexpr std::array<const char*,11> paths{"farm/unit_box.obj", "farm/triangle_lower.obj",
-        "farm/triangle_upper.obj", "farm/crop_turnip.obj", "farm/crop_carrot.obj",
-        "farm/crop_turnip_leaves.obj", "farm/crop_carrot_leaves.obj", "farm/crop_tomato.obj",
-        "farm/crop_tomato_stems.obj", "farm/crop_pumpkin.obj", "farm/crop_pumpkin_vines.obj"};
+    constexpr auto& paths=farm::kFarmMeshPaths;
     std::error_code error;
     for (std::size_t i=0; i<paths.size(); ++i) {
         // Turnip is not displayed by the staged farm; avoid loading an excluded submission asset.
-        if (i == 3 || i == 5) continue;
+        const auto shape=static_cast<farm::FarmMeshShape>(i);
+        if (shape==farm::FarmMeshShape::Turnip || shape==farm::FarmMeshShape::Leaves) continue;
         if (!std::filesystem::is_regular_file(std::filesystem::path("Resources")/paths[i],error)) co_return false;
         modelManager->LoadModel(paths[i]); models_[i] = modelManager->GetModel(paths[i]);
         if (!models_[i] || models_[i]->HasSkinCluster()) co_return false;
@@ -223,9 +222,8 @@ void TitleFarmRenderer::Update(const Frame& frame) {
                 if (!object.SetScale(mesh.scale)) break;
                 object.SetColor(mesh.color);
                 drawColors_[index] = mesh.color;
-                const bool foliage = mesh.shape == farm::FarmMeshShape::CarrotLeaves ||
-                    mesh.shape == farm::FarmMeshShape::TomatoStems || mesh.shape == farm::FarmMeshShape::PumpkinVines;
-                object.SetRotation({0,0,foliage ? frame.windAngle : 0});
+                const vegetation::WindFrame wind{frame.grassWindXZ,frame.grassPhase};
+                object.SetRotation(wind.Tilt(mesh.position, farm::CropWindResponse(mesh.shape)));
                 object.Update(&camera_,0);
                 visible_[index] = 1;
                 break;

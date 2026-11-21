@@ -113,7 +113,7 @@ private:
 	void AddLog(const std::string& message);
 	void UpdateSceneDeltaTime();
 	void PrepareRenderFrame(float presentationDeltaTime);
-    void UpdateRainPresentation(float realSeconds, bool audible);
+    void UpdateOutdoorPresentation(float realSeconds, bool audible);
 	void HandleKeyboardMovement();
 	void HandleCameraInput(float deltaTime, bool suppressArrowKeys);
 	void ClampCameraPitch();
@@ -310,6 +310,7 @@ private:
 	farm::FarmHarvestVisualSystem farmHarvestVisualSystem_;
 	farm::FarmPestVisualSystem farmPestVisualSystem_;
     farm::FarmRainPresentationSystem farmRainPresentation_;
+    vegetation::FarmWindSystem farmWind_;
     FarmRainAudioSystem farmRainAudio_;
     FarmFieldEffectRenderer farmFieldEffectRenderer_;
     farm::FarmMoldVisualSystem farmMoldVisual_;

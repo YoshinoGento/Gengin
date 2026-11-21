@@ -13,12 +13,12 @@
     "name_face": 2,
     "crop_turnip": 2318,
     "crop_turnip_leaves": 340,
-    "crop_carrot": 1644,
-    "crop_carrot_leaves": 460,
-    "crop_tomato": 1388,
-    "crop_tomato_stems": 144,
-    "crop_pumpkin": 2174,
-    "crop_pumpkin_vines": 64
+    "crop_carrot": 1304,
+    "crop_carrot_leaves": 760,
+    "crop_tomato": 1010,
+    "crop_tomato_stems": 724,
+    "crop_pumpkin": 1710,
+    "crop_pumpkin_vines": 556
   },
   "lighting": "runtime directional shadow map; albedo atlas",
   "cropCell": 0.065,

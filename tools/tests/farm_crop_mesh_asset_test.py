@@ -1,6 +1,7 @@
 """Validate the original crop foliage geometry without a graphics device."""
 import importlib.util
 import math
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -28,19 +29,24 @@ def validate(triangles):
     assert all(count == edges[(q,p)] for (p,q),count in edges.items())
 
 turnip = generator.crop_foliage_mesh()
-carrot = generator.crop_foliage_mesh(True)
-assert turnip != carrot and turnip == generator.crop_foliage_mesh()
-for name, triangles in (("crop_turnip_leaves", turnip), ("crop_carrot_leaves", carrot),
-                        ("crop_tomato", generator.tomato_mesh()),
-                        ("crop_tomato_stems", generator.tomato_stems()),
-                        ("crop_pumpkin", generator.pumpkin_mesh()),
-                        ("crop_pumpkin_vines", generator.transformed(generator.leaves_mesh(), (1,.25,1), (0,0,0)) +
-                         generator.transformed(generator.root_mesh([(0,.10),(1,.07)],6), (.6,1,.6), (0,0,0)))):
-    validate(triangles)
-    lines = (generator.ROOT / (name + ".obj")).read_text(encoding="ascii").splitlines()
-    points = [tuple(map(float, line.split()[1:])) for line in lines if line.startswith("v ")]
-    assert len(points) == len(triangles)*3
-    rounded = [tuple(round(v,7) for v in p) for tri in triangles for p in tri]
-    assert points == rounded
-    validate([tuple(points[i:i+3]) for i in range(0,len(points),3)])
-    print(f"PASS: {name}: {len(triangles)} triangles, finite/unit bounds, closed winding, deterministic OBJ")
+validate(turnip)
+points = [tuple(map(float,s.split()[1:])) for s in (generator.ROOT/"crop_turnip_leaves.obj").read_text().splitlines() if s.startswith("v ")]
+assert points == [tuple(round(v,7) for v in p) for tri in turnip for p in tri]
+with tempfile.TemporaryDirectory() as folder:
+    out=Path(folder)
+    generator.generate_authored_crops(out)
+    files=sorted(out.glob("*.obj"))
+    assert len(files)==6
+    for asset in files:
+        shipped=generator.ROOT/asset.name
+        assert shipped.read_bytes()==asset.read_bytes(),shipped
+        vertices,faces=[],[]
+        for row in shipped.read_text().splitlines():
+            fields=row.split()
+            if fields[:1]==["v"]: vertices.append(tuple(map(float,fields[1:])))
+            if fields[:1]==["f"]:
+                face=[int(token.split("/")[0])-1 for token in fields[1:]]
+                assert len(face)==3 and all(0<=i<len(vertices) for i in face)
+                faces.append(tuple(vertices[i] for i in face))
+        validate(faces)
+        print(f"PASS {asset.name}: {len(faces)} triangles, deterministic indexed OBJ")

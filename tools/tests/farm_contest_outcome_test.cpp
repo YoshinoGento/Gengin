@@ -40,7 +40,90 @@ FarmEconomySystem::HarvestRecord Record(int i) {
     r.quality.nutrientBalance=.9f; r.quality.nutrientKnown=true; r.quality.harvestSize={1.6f,true};
     return r;
 }
+using Notice = FarmContestOutcomeSystem::Notice;
+
+void CheckCeremonyLifecycle() {
+    FarmContestOutcomeSystem outcome;
+    FarmContestPresentationSystem presentation;
+    FarmEconomySystem::ContestResults results{};
+    int starts = 0, audioStarts = 0;
+    auto update = [&](Notice notice) {
+        if (outcome.TryBeginCeremony(notice, presentation, [&] { ++audioStarts; })) ++starts;
+    };
+    auto rebuild = [&](Notice notice) {
+        farmui::View view{};
+        const bool built = farmui::BuildContestScreenView(view, notice, outcome, presentation, results, 10, false, false);
+        Check(built == (presentation.Active() || notice != Notice::None), "wrong contest screen");
+        return view;
+    };
+    const auto due = outcome.SelectNotice({.dueToday = true});
+    update(due);
+    Check(due == Notice::DueToday && rebuild(due).Hit({720,520}).action == farmui::Action::ContestDayResume &&
+        !presentation.Active() && audioStarts == 0, "due date should only display a notice");
+    for (int deadline : FarmContestEntrySystem::kContestDays) {
+        const bool final = deadline == FarmContestEntrySystem::kContestDays.back();
+        const int before = starts;
+        const FarmContestOutcomeSystem::NoticeAccess visible{final, false, !final};
+        outcome.Observe(deadline + 1, results, true, true);
+        const auto notice = outcome.SelectNotice(visible);
+        Check(notice == (final ? Notice::Season : Notice::Missed), "wrong deadline selected");
+        for (int i = 0; i < 100; ++i) {
+            const auto hidden = outcome.SelectNotice({false, false, false});
+            Check(hidden == Notice::None, "hidden notice selected");
+            update(hidden);
+            const auto view = rebuild(notice);
+            Check(!presentation.Active() && view.contestOutcome && !view.contestDetail &&
+                view.outcomeReveal == 0 && starts == before && audioStarts == before, "refresh started presentation");
+        }
+        if (final) {
+            const auto retry = outcome.SelectNotice({false, true, false});
+            update(retry);
+            Check(retry == Notice::RetryConfirmation && !presentation.Active() &&
+                !outcome.ConsumeOpening(retry), "retry confirmation consumed opening");
+        }
+        // Another detail owns the screen; the eligible day must survive until it closes.
+        presentation.BeginUnsubmitted(deadline == 10 ? 20 : 10);
+        update(notice);
+        Check(presentation.GetFrame().comparison.day != deadline && audioStarts == before, "replaced active detail");
+        presentation.Close();
+        update(notice);
+        Check(presentation.Active() && presentation.GetFrame().comparison.day == deadline, "wrong ceremony started");
+        presentation.Update(.1f);
+        const auto elapsed = presentation.GetFrame().ceremonyTime;
+        for (int i = 0; i < 100; ++i) {
+            outcome.Observe(deadline + 1, results, true, true);
+            update(outcome.SelectNotice(visible));
+            const auto view = rebuild(notice);
+            Check(view.contestDetail && view.contestFrame.unsubmitted && view.contestFrame.ceremonyTime == elapsed,
+                "redraw or observation restarted/advanced timeline");
+        }
+        presentation.Reveal();
+        presentation.Close();
+        for (int i = 0; i < 100; ++i) {
+            outcome.Observe(deadline + 1, results, true, true);
+            update(outcome.SelectNotice(visible));
+            Check(rebuild(notice).contestOutcome && !presentation.Active(), "closed ceremony reopened");
+        }
+        Check(starts == before + 1 && audioStarts == starts, "ceremony/audio not exactly once per deadline");
+        if (!final) Check(outcome.AcknowledgeMissed(deadline), "missed deadline not acknowledged");
+    }
+    outcome.Reset();
+    outcome.Observe(11, results, true, true);
+    update(outcome.SelectNotice({false, false, true}));
+    Check(starts == 4 && audioStarts == 4 && presentation.Active(), "new season could not start its own ceremony");
+    presentation.Close();
+    outcome.Reset();
+    results.back().contestDay = FarmContestEntrySystem::kContestDays.back();
+    results.back().harvest = Record(2);
+    outcome.Observe(31, results, true, true);
+    const auto submitted = outcome.SelectNotice({true, false, false});
+    update(submitted);
+    Check(submitted == Notice::Season && !presentation.Active() && audioStarts == 4, "submitted final treated as missed");
+    std::cout << "PASS: 3 missed deadlines, 100 refreshes per phase, one ceremony/audio start each, reset and submitted final\n";
+}
+
 void Run() {
+    CheckCeremonyLifecycle();
     FarmContestOutcomeSystem system;
     FarmEconomySystem::ContestResults results{};
     for (int day : {1,10,11,20,21,30,31}) {
@@ -73,7 +156,7 @@ void Run() {
     // The displayed action is captured before time advances, including the final reveal frame.
     for (int skipFrame = 0; skipFrame < 120; ++skipFrame) {
         system.Reset(); system.Observe(31,results,true,true);
-        Check(system.ConsumeOpening() && !system.ConsumeOpening(),"opening cue is once-only");
+        Check(system.ConsumeOpening(Notice::Season) && !system.ConsumeOpening(Notice::Season),"opening cue is once-only");
         system.Update(std::numeric_limits<float>::infinity());
         system.Update(std::numeric_limits<float>::quiet_NaN()); system.Update(-1);
         Check(system.GetFrame().reveal==0,"season invalid dt");
@@ -97,14 +180,14 @@ void Run() {
             Check(focused>=0 && (ready || view.items[focused].request.action==farmui::Action::ContestOutcomeReveal),"focus gate");
             system.Update(1.0f/60);
             system.Observe(31,results,true,true);
-            Check(!system.ConsumeOpening(),"observe replayed cue");
+            Check(!system.ConsumeOpening(Notice::Season),"observe replayed cue");
         }
         system.Reveal(); system.Reveal();
         Check(system.GetFrame().controlsReveal==1 && system.GetFrame().summaryReveal==1,"season skip completes");
         for (float row : system.GetFrame().rowReveal) Check(row==1,"skip rows");
         system.Observe(31,results,true,true);
-        Check(system.GetFrame().controlsReveal==1 && !system.ConsumeOpening(),"detail return replayed ending");
-        system.Reset(); Check(!system.ConsumeOpening(),"reset cue");
+        Check(system.GetFrame().controlsReveal==1 && !system.ConsumeOpening(Notice::Season),"detail return replayed ending");
+        system.Reset(); Check(!system.ConsumeOpening(Notice::Season),"reset cue");
     }
     int combinations=0;
     // Submitted score combinations, missing entries and legacy rules never share a false verdict.

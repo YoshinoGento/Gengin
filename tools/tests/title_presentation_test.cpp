@@ -18,6 +18,26 @@ void Check(bool value, std::source_location location = std::source_location::cur
     throw std::runtime_error("title presentation assertion failed");
 }
 bool Near(float a, float b) { return std::abs(a-b) < 0.002f; }
+void VegetationWindRegression() {
+    vegetation::FarmWindSystem wind;
+    wind.Update(.1f,0);
+    const auto clear = wind.GetFrame();
+    wind.Update(std::numeric_limits<float>::quiet_NaN(),std::numeric_limits<float>::infinity());
+    Check(wind.GetFrame().phase == clear.phase && wind.GetFrame().bend.x == clear.bend.x);
+    wind.Update(-1,1);
+    Check(wind.GetFrame().phase == clear.phase && wind.GetFrame().bend.x > clear.bend.x);
+    auto later = clear;
+    const auto axis = vegetation::WaveAxis();
+    later.phase += vegetation::kSpatialFrequency;
+    const auto here = clear.Tilt({},1);
+    const auto there = later.Tilt({axis.x,0,axis.y},1);
+    Check(Near(here.x,there.x) && Near(here.z,there.z));
+    Check(!Near(here.z,later.Tilt({},1).z));
+    Check(here.x>0 && here.z<0 && clear.Tilt({},0).z==0);
+    for(int i=0;i<1000;++i) wind.Update(.1f,1);
+    Check(wind.GetFrame().phase>=0 && wind.GetFrame().phase<2*std::numbers::pi_v<float>);
+    std::cout<<"PASS vegetation wind: signed lean, rain strength, travelling crest, bounded clock\n";
+}
 void CloudMotionRegression() {
     for (const std::uint32_t seed : {0u,0x5A17u,12345u}) {
         title::TitleCloudMotionSystem motion;
@@ -56,6 +76,7 @@ void CloudMotionRegression() {
 }
 }
 int main() {
+    VegetationWindRegression();
     CloudMotionRegression();
     title::TitlePresentationSystem blink;
     Check(blink.Initialize(1,2));
@@ -251,7 +272,7 @@ int main() {
     const auto wrapped = system.GetFrame();
     Check(wrapped.skyFrom == initial.skyFrom && Near(wrapped.waterPhase, initial.waterPhase));
     Check(Near(wrapped.lightColor.x,initial.lightColor.x));
-    Check(Near(wrapped.windAngle,initial.windAngle));
+    Check(std::isfinite(wrapped.grassPhase));
     Check(Near(wrapped.sun.center.x,initial.sun.center.x));
     Check(Near(wrapped.sun.center.y,initial.sun.center.y));
     Check(Near(wrapped.moon.center.x,initial.moon.center.x));

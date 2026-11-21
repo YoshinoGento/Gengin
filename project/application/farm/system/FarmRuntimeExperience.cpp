@@ -76,7 +76,7 @@ bool FarmRuntimeController::HandleExperienceRequest(const FarmRuntimeContext& s,
         s.farmCropSelectionSystem.Cancel(); s.farmTimeAdvance.Reset();
         flow_.Reset();
         if (static_cast<Topic>(activeExperience_) != Topic::CampaignStart) flow_.Continue();
-        open_ = observation_ = terrain_ = paused_ = contestNotice_ = false;
+        open_ = observation_ = terrain_ = paused_ = false;
         pending_ = Action::None; pendingSubmission_ = {}; pendingExpansion_ = {}; pendingScreenTransition_ = {};
         pendingDocumentId_.clear(); pendingContestDay_ = 0;
         pickingSlot_ = -1; brush_ = 0; page_ = 0; harvestPage_ = 0;

@@ -4,6 +4,7 @@
 #include "3d/Object3dCommon.h"
 #include "3d/LightingSystem.h"
 #include "3d/Camera.h"
+#include "io/JsonFile.h"
 #include <filesystem>
 
 bool FarmArrivalRenderer::Initialize(Object3dCommon* common, ModelManager* models, TextureManager* textures) {
@@ -13,7 +14,20 @@ InitializationTask FarmArrivalRenderer::InitializeIncrementally(Object3dCommon* 
     if (ready_) co_return true;
     if (!common || !models || !textures || !common->GetLightingSystem()) co_return false;
     constexpr std::array<const char*,Count> paths{"scenery","leaf","drop","wet","tools_wood","tools_metal",
-        "packet_carrot","packet_tomato","packet_pumpkin","drop","drop","drop","drop"};
+        "packet_carrot","packet_tomato","packet_pumpkin","drop","drop","drop","drop",
+        "crown_0","crown_1","crown_2","crown_3","crown_4"};
+    nlohmann::json manifest;
+    if (!JsonFile::Load("Resources/farm/arrival/manifest.json",manifest) || !manifest.contains("crownPivots"))
+        co_return false;
+    const auto& pivots = manifest.at("crownPivots");
+    if (!pivots.is_array() || pivots.size()!=crownPivots_.size()) co_return false;
+    for (std::size_t i=0; i<pivots.size(); ++i) {
+        const auto& p=pivots[i];
+        if (!p.is_array() || p.size()!=3) co_return false;
+        for (const auto& v:p)
+            if (!v.is_number() || !std::isfinite(v.get<float>()) || std::abs(v.get<float>())>200.f) co_return false;
+        crownPivots_[i]={p[0].get<float>(),p[1].get<float>(),p[2].get<float>()};
+    }
     std::array<Model*,Count> loaded{};
     for(std::size_t i=0;i<Count;++i) {
         const std::string path=std::string("farm/arrival/")+paths[i]+".obj";
@@ -38,11 +52,11 @@ InitializationTask FarmArrivalRenderer::InitializeIncrementally(Object3dCommon* 
     for(std::size_t i=0;i<Count;++i) {
         auto& object=objects_[i];
         object.Initialize(common); object.SetModel(loaded[i]);
-        object.SetTexture(i==Scenery || i==Leaf || i==Wood ? land : i==Carrot ? seeds :
+        object.SetTexture(i==Scenery || i==Leaf || i==Wood || i>=Crown0 ? land : i==Carrot ? seeds :
             i==Tomato || i==Pumpkin ? formal : white);
         object.SetCullMode(0);
         object.SetSpecularType(Object3d::SpecularType::None);
-        object.SetEnableLighting(i<=Metal && i!=Wet);
+        object.SetEnableLighting((i<=Metal && i!=Wet) || i>=Crown0);
         co_await std::suspend_always{};
     }
     for(const auto index:{Drop,Metal}) {
@@ -54,7 +68,7 @@ InitializationTask FarmArrivalRenderer::InitializeIncrementally(Object3dCommon* 
 }
 
 void FarmArrivalRenderer::Prepare(Camera* camera, const FarmStartPresentationSystem::Frame& frame,
-    bool supported, float deltaSeconds, const farm::FarmRainFrame& weather) {
+    bool supported, float deltaSeconds, const farm::FarmRainFrame& weather, const vegetation::WindFrame& wind) {
     visibleScene_=ready_ && supported && camera;
     if(!visibleScene_) return;
     using namespace farm::arrival;
@@ -71,7 +85,7 @@ void FarmArrivalRenderer::Prepare(Camera* camera, const FarmStartPresentationSys
     title::Frame atmosphere;
     atmosphere.skyTop={.19f,.48f,.69f,1}; atmosphere.skyHorizon={.79f,.83f,.69f,1};
     atmosphere.cloudColor={.92f,.92f,.84f,1};
-    atmosphere.groundExposure=.55f; atmosphere.grassWindXZ={.30f,.10f};
+    atmosphere.groundExposure=.55f; atmosphere.grassWindXZ=wind.bend;
     const float overcast=std::isfinite(weather.cloud) ? std::clamp(weather.cloud,0.0f,1.0f) : 0;
     const auto tint=[overcast](Vector4 clear,Vector4 rainy) {
         return Vector4{clear.x+(rainy.x-clear.x)*overcast,clear.y+(rainy.y-clear.y)*overcast,
@@ -81,7 +95,7 @@ void FarmArrivalRenderer::Prepare(Camera* camera, const FarmStartPresentationSys
     atmosphere.skyHorizon=tint(atmosphere.skyHorizon,{.52f,.59f,.61f,1});
     atmosphere.cloudColor=tint(atmosphere.cloudColor,{.48f,.54f,.57f,1});
     atmosphere.groundExposure*=1-.30f*overcast;
-    atmosphere.grassPhase=time*1.1f; atmosphere.skyYaw=time*.001f;
+    atmosphere.grassPhase=wind.phase; atmosphere.skyYaw=time*.001f;
     // Keep celestial discs below the terrain; this opening uses dawn illumination, not another sky clock.
     atmosphere.sun.center={.5f,3}; atmosphere.moon.center={.5f,4};
     sky_.Update(atmosphere,*camera); grass_.Update(atmosphere,*camera);
@@ -92,7 +106,13 @@ void FarmArrivalRenderer::Prepare(Camera* camera, const FarmStartPresentationSys
         object.SetColor(color);
     };
     pose(Scenery,{}, {1,1,1},{1,1,1,1});
-    pose(Leaf,kAnchor,{1,1,1},{.72f,.90f,.55f,1},{0,0,arrival.leafAngle});
+    for (std::size_t i=0;i<crownPivots_.size();++i) {
+        const auto pivot=crownPivots_[i];
+        pose(static_cast<Part>(Crown0+i),pivot,{1,1,1},{1,1,1,1},wind.Tilt(pivot,vegetation::kCrownResponse));
+    }
+    auto leafTilt = frame.arrival ? Vector3{} : wind.Tilt(kAnchor,.18f);
+    leafTilt.z += arrival.leafAngle;
+    pose(Leaf,kAnchor,{1,1,1},{.72f,.90f,.55f,1},leafTilt);
     pose(Drop,arrival.drop,{(std::max)(arrival.dropScale,.001f), (std::max)(arrival.dropScale,.001f), (std::max)(arrival.dropScale,.001f)},
         {.48f,.78f,.86f,1});
     visible_[Drop]=frame.arrival && arrival.dropScale>0;
@@ -128,6 +148,7 @@ void FarmArrivalRenderer::Draw() {
 }
 void FarmArrivalRenderer::DrawShadow() {
     if(!visibleScene_) return;
-    for(std::size_t i=0;i<Count;++i) if(visible_[i] && i!=Wet && i!=Drop && i!=Shine && i<Splash1) objects_[i].DrawShadow();
+    for(std::size_t i=0;i<Count;++i)
+        if(visible_[i] && (i>=Crown0 || (i!=Wet && i!=Drop && i!=Shine && i<Splash1))) objects_[i].DrawShadow();
     grass_.DrawShadow();
 }

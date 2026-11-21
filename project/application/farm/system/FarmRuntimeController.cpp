@@ -92,15 +92,56 @@ void FarmRuntimeController::OpenContestDetail(const FarmRuntimeContext& s, int i
         s.farmProgressionSystem.StagePolicy().enabled, s.farmToolActionSystem.MaximumHarvestSize(crop));
     if (!comparison.valid) { status_ = Label::ContestInvalid; return; }
     contestPresentation_.Begin(comparison, replay);
+    BeginContestAudio();
+    shop_.Close(); open_ = true; page_ = kContestResultsPage; focusedItem_ = -1;
+}
+
+void FarmRuntimeController::BeginContestAudio() {
     title::TitleAudioSettingsSystem settings;
     settings.Initialize();
     contestAudio_.Begin(settings.GetContestVolume());
-    shop_.Close(); open_ = true; page_ = kContestResultsPage; focusedItem_ = -1;
+}
+
+void FarmRuntimeController::ObserveProgress(const FarmRuntimeContext& s) {
+    dueContestDay_ = s.farmProgressionSystem.IsCleared() ? 0 : s.farmContestDaySystem.PendingDay();
+    if (!ready_ || lesson_ || menuAudio_.GetFrame().open || exhibition_.Active() || (open_ && page_ == kExperiencePage)) return;
+    const bool season = s.farmProgressionSystem.IsContestSeason();
+    contestOutcome_.Observe(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
+        season, s.farmProgressionSystem.StagePolicy().enabled);
+    const auto previous = flow_.GetPhase();
+    flow_.Observe(s.farmProgressionSystem.IsCleared());
+    if (season && previous != FarmPlayFlow::Phase::Result && flow_.GetPhase() == FarmPlayFlow::Phase::Result) {
+        open_ = contestPresentation_.Active(); pending_ = Action::None; observation_ = false; terrain_ = false; pickingSlot_ = -1;
+    }
+}
+
+FarmContestOutcomeSystem::Notice FarmRuntimeController::CurrentContestNotice() const noexcept {
+    if (!ready_ || lesson_ || menuAudio_.GetFrame().open || exhibition_.Active() ||
+        (open_ && page_ == kExperiencePage) || contestPresentation_.Active()) return FarmContestOutcomeSystem::Notice::None;
+    const bool idle = pending_ == Action::None;
+    const bool finalPage = open_ ? page_ == kContestOutcomePage : flow_.GetPhase() == FarmPlayFlow::Phase::Result;
+    return contestOutcome_.SelectNotice({.seasonPage = idle && finalPage, .confirmingRetry = pending_ == Action::SeasonRetry,
+        .missedPage = idle && !open_ && flow_.GetPhase() == FarmPlayFlow::Phase::Playing && !dueContestDay_,
+        .dueToday = dueContestDay_ > 0 && idle && (open_ || !flow_.BlocksSimulation())});
+}
+
+bool FarmRuntimeController::HasBlockingContestNotice() const noexcept {
+    const auto notice = CurrentContestNotice();
+    return notice == FarmContestOutcomeSystem::Notice::Missed || notice == FarmContestOutcomeSystem::Notice::DueToday;
+}
+
+void FarmRuntimeController::UpdateContestScreen() {
+    const auto notice = CurrentContestNotice();
+    if (notice == FarmContestOutcomeSystem::Notice::None) return;
+    shop_.Close();
+    if (contestOutcome_.TryBeginCeremony(notice, contestPresentation_, [this] { BeginContestAudio(); })) {
+        open_ = true;
+        focusedItem_ = -1;
+    }
 }
 
 void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
     view_ = {};
-    contestNotice_ = false;
     if (lesson_) { farmui::BuildCanalLessonView(view_,lesson_->Read()); return; }
     if (menuAudio_.GetFrame().open) {
         farmui::BuildMenuAudioView(view_, menuAudio_.GetFrame());
@@ -112,51 +153,9 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
         return;
     }
     if (open_ && page_ == kExperiencePage) { BuildExperienceMenu(); return; }
-    contestOutcome_.Observe(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
-        s.farmProgressionSystem.IsContestSeason(), s.farmProgressionSystem.StagePolicy().enabled);
-    const auto previousPhase = flow_.GetPhase();
-    flow_.Observe(s.farmProgressionSystem.IsCleared());
-    if (s.farmProgressionSystem.IsContestSeason() && previousPhase != FarmPlayFlow::Phase::Result &&
-        flow_.GetPhase() == FarmPlayFlow::Phase::Result) {
-        open_ = false; pending_ = Action::None; observation_ = false; terrain_ = false; pickingSlot_ = -1;
-    }
-    if (contestPresentation_.Active()) {
-        open_ = true;
-        farmui::BuildContestDetailView(view_, contestPresentation_.GetFrame());
-        if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
-        return;
-    }
     const auto& outcome = contestOutcome_.GetFrame();
-    const bool finalPage = (!open_ && flow_.GetPhase() == FarmPlayFlow::Phase::Result) ||
-        (open_ && page_ == kContestOutcomePage);
-    if (outcome.season.valid && outcome.season.finalized &&
-        ((finalPage && pending_ == Action::None) || pending_ == Action::SeasonRetry)) {
-        shop_.Close();
-        if (pending_==Action::None) {
-            if (const int day=contestOutcome_.ConsumeUnsubmittedCeremony()) {
-                contestPresentation_.BeginUnsubmitted(day);
-                title::TitleAudioSettingsSystem settings; settings.Initialize();
-                contestAudio_.Begin(settings.GetContestVolume());
-                farmui::BuildContestDetailView(view_,contestPresentation_.GetFrame());
-                focusedItem_=-1; return;
-            }
-        }
-        farmui::BuildContestOutcomeView(view_, outcome, s.farmEconomySystem.GetContestResults(),
-            pending_ == Action::SeasonRetry, seasonRetryFailed_);
-        if (!mainGameOnly_ && s.farmDocumentSystem.IsPrepared() && pending_ == Action::None)
-            view_.Add(Label::Experience, {80, 660, 350, 44}, {Action::ExperienceOpen});
-        if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
-        return;
-    }
-    if (outcome.missedDay && flow_.GetPhase() == FarmPlayFlow::Phase::Playing && !open_ &&
-        pending_ == Action::None && !s.farmContestDaySystem.PendingDay()) {
-        shop_.Close(); contestNotice_ = true;
-        if (const int day=contestOutcome_.ConsumeUnsubmittedCeremony()) {
-            contestPresentation_.BeginUnsubmitted(day);
-            title::TitleAudioSettingsSystem settings; settings.Initialize();
-            contestAudio_.Begin(settings.GetContestVolume());
-            farmui::BuildContestDetailView(view_,contestPresentation_.GetFrame());
-        } else farmui::BuildContestMissedView(view_, outcome);
+    if (farmui::BuildContestScreenView(view_, CurrentContestNotice(), contestOutcome_, contestPresentation_,
+        s.farmEconomySystem.GetContestResults(), dueContestDay_, !mainGameOnly_ && s.farmDocumentSystem.IsPrepared(), seasonRetryFailed_)) {
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
@@ -173,14 +172,6 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 FarmContestGoalSystem::Evaluate(s.farmDateSystem.GetDay(), s.farmEconomySystem.GetContestResults(),
                     s.farmProgressionSystem.StagePolicy().enabled));
         else farmui::BuildPlayFlowView(view_, flow_.GetPhase(), s.host.BuildFarmHUDViewData(), s.farmProgressionSystem.StagePolicy().enabled, mainGameOnly_, OffersCanalLesson(s));
-        if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
-        return;
-    }
-    contestNotice_ = s.farmContestDaySystem.PendingDay() > 0 &&
-        !s.farmProgressionSystem.IsCleared() && pending_ == Action::None;
-    if (contestNotice_) {
-        shop_.Close();
-        farmui::BuildContestDayNoticeView(view_, s.farmContestDaySystem.PendingDay());
         if (focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count)) view_.items[focusedItem_].focused = true;
         return;
     }
@@ -643,14 +634,14 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         if (!contestPresentation_.Complete()) return;
         if (contestPresentation_.GetFrame().unsubmitted && !contestOutcome_.GetFrame().season.finalized) {
             (void)contestOutcome_.AcknowledgeMissed(contestPresentation_.GetFrame().comparison.day);
-            contestPresentation_.Close(); open_=false; contestNotice_=false; focusedItem_=-1; return;
+            contestPresentation_.Close(); open_=false; focusedItem_=-1; return;
         }
         contestPresentation_.Close();
         page_ = contestOutcome_.GetFrame().season.finalized ? kContestOutcomePage : kContestResultsPage;
         open_ = page_ != kContestOutcomePage || flow_.GetPhase() != FarmPlayFlow::Phase::Result;
         focusedItem_ = -1; return;
     case Action::ContestMissedContinue:
-        if (contestOutcome_.AcknowledgeMissed(request.argument)) { contestNotice_ = false; focusedItem_ = -1; }
+        if (contestOutcome_.AcknowledgeMissed(request.argument)) focusedItem_ = -1;
         return;
     case Action::ContestOutcome:
         if (contestOutcome_.GetFrame().season.finalized) { open_ = true; page_ = kContestOutcomePage; focusedItem_ = -1; }
@@ -714,6 +705,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
         command.farmGeneration = s.farmGrid.GetGeneration();
         command.contestDay = request.argument;
         if (!s.gamePlayEditorBridge.Execute(command)) return;
+        dueContestDay_ = s.farmContestDaySystem.PendingDay();
         if (terrain_) LeaveTerrain(s);
         observation_ = false; pickingSlot_ = -1;
         s.farmCropSelectionSystem.Cancel();
@@ -732,7 +724,7 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     case Action::TerrainExit: LeaveTerrain(s); return;
     case Action::PestFocus:
     case Action::PestCure: {
-        if (open_ || observation_ || terrain_ || flow_.BlocksSimulation() || contestNotice_ ||
+        if (open_ || observation_ || terrain_ || flow_.BlocksSimulation() || HasBlockingContestNotice() ||
             !s.farmProgressionSystem.PestsEnabled() || s.farmProgressionSystem.IsCleared() ||
             s.host.IsTimelineScrubbing() || s.farmIrrigationPreviewSystem.IsActive() ||
             s.farmCropSelectionSystem.IsOpen()) return;
@@ -1329,6 +1321,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     }
     s.host.ConvertMouseToVirtualScreen(input.GetMousePosition(), pointer_);
     if (UpdateMenuAudio(s, input)) return true;
+    UpdateContestScreen();
     BuildView(s);
     const bool click = input.TriggerMouseButton(InputMouseButton::Left);
     pointerTriggered_ = click || input.TriggerMouseButton(InputMouseButton::Right);
@@ -1364,17 +1357,16 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
             contestPresentation_.GetFrame().cheer);
         BuildView(s); frameCaptured_ = true; return true;
     }
-    if (view_.contestOutcome) {
+    using Notice = FarmContestOutcomeSystem::Notice;
+    const auto notice = CurrentContestNotice();
+    const auto isOutcome = [](Notice n) { return n == Notice::Season || n == Notice::RetryConfirmation || n == Notice::Missed; };
+    if (isOutcome(notice)) {
         const auto* framework = Framework::GetInstance();
         const auto* clock = framework ? framework->GetFrameClock() : nullptr;
-        const bool opening = contestOutcome_.ConsumeOpening();
-        if (opening) {
-            title::TitleAudioSettingsSystem settings;
-            settings.Initialize();
-            contestAudio_.Begin(settings.GetContestVolume());
-        }
+        const bool opening = contestOutcome_.ConsumeOpening(notice);
+        if (opening) BeginContestAudio();
         // Input uses the displayed snapshot: a skip cannot activate a newly revealed retry button.
-        const bool revealing = view_.seasonOutcome && contestOutcome_.GetFrame().controlsReveal < 1;
+        const bool revealing = notice == Notice::Season && contestOutcome_.GetFrame().controlsReveal < 1;
         contestOutcome_.Update(clock ? clock->GetRealDeltaSeconds() : 0);
         if (revealing && (input.TriggerKey(InputKey::Enter) || input.TriggerKey(InputKey::Space) ||
             input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::A) ||
@@ -1394,7 +1386,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         }
         BuildView(s);
         contestAudio_.Update(opening ? FarmContestPresentationSystem::Cue::Recorded : FarmContestPresentationSystem::Cue::None,
-            view_.contestOutcome, true);
+            isOutcome(CurrentContestNotice()), true);
         frameCaptured_ = true; return true;
     }
     contestAudio_.Update(contestPresentation_.ConsumeCue(),false,true);
@@ -1435,7 +1427,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         focusedItem_ = -1;
         Execute(s, hit); BuildView(s); frameCaptured_ = true; return true;
     }
-    if (!contestNotice_ && (input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::B))) {
+    if (!HasBlockingContestNotice() && (input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::B))) {
         if (saleReview_.Confirming()) Execute(s,{Action::SaleCancel});
         else if (pending_ != Action::None) Execute(s, {Action::Cancel});
         else if (open_ && (menuDetails_ || (page_ >= farmui::kMenuPageCount && view_.menuShell))) Execute(s, {Action::MenuDetails});
@@ -1447,9 +1439,9 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         else Execute(s, {Action::Menu});
         BuildView(s); frameCaptured_ = true; return true;
     }
-    if (contestNotice_ || open_ || flow_.BlocksSimulation()) {
+    if (HasBlockingContestNotice() || open_ || flow_.BlocksSimulation()) {
         s.farmIrrigationPreviewSystem.EndTerrainStroke();
-        if (!contestNotice_ && open_ && input.TriggerKey(InputKey::Tab) && pending_ == Action::None) {
+        if (!HasBlockingContestNotice() && open_ && input.TriggerKey(InputKey::Tab) && pending_ == Action::None) {
             Execute(s, {Action::Tab, (page_ + 1) % farmui::kMenuPageCount});
             BuildView(s); frameCaptured_ = true; return true;
         }

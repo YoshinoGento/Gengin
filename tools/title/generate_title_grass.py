@@ -72,25 +72,30 @@ def patch_layout():
 
 
 def build(blade_count=BLADE_COUNT, segment_count=SEGMENT_COUNT):
-    rng = random.Random(20261007)
     mesh = Mesh()
     for tuft in range(TUFT_COUNT):
+        # Each LOD starts from the same roots and retains the first three blades.
+        rng = random.Random(20261007+tuft)
         # Stratified square coverage removes circular-patch holes and uncontrolled overlap.
         x = ((tuft%12+rng.uniform(.08,.92))/12*2-1)*PATCH_RADIUS
         z = ((tuft//12+rng.uniform(.08,.92))/8*2-1)*PATCH_RADIUS
         tuft_height = rng.uniform(.24,MAX_HEIGHT)
+        fan = rng.uniform(0,math.tau)
         for blade in range(blade_count):
-            yaw = rng.uniform(0,math.tau)
-            height = tuft_height*rng.uniform(.65,1)
-            width = rng.uniform(.075,MAX_WIDTH)
-            lean = rng.uniform(.06,MAX_LEAN)
+            yaw = fan + blade*2.40 + rng.uniform(-.26,.26)
+            height = tuft_height*(rng.uniform(.87,1) if blade==0 else rng.uniform(.54,.89))
+            width = rng.uniform(.065,MAX_WIDTH)
+            lean = rng.uniform(.035,.09) if blade==0 else rng.uniform(.09,MAX_LEAN)
+            twist = rng.uniform(-.65,.65)
             shade = rng.randrange(2)
             def leaf_point(level, side):
-                # Continuous bent silhouette; width bands carry pixel character without cuboid stalks.
-                half_width = 0 if level == 1 else round(width*(1-level**1.4)*32)/64
-                along = lean*level*level
-                return (x+along*math.cos(yaw)-side*half_width*math.sin(yaw),
-                        height*level,z+along*math.sin(yaw)+side*half_width*math.cos(yaw))
+                # Narrow sheath, broad shoulder, then a twisted pointed tip.
+                profile = .52 + .48*math.sin(math.pi*level)
+                half_width = 0 if level == 1 else round(width*profile*40)/80
+                along = lean*level**1.7
+                edge_yaw = yaw + twist*level
+                return (x+along*math.cos(yaw)-side*half_width*math.sin(edge_yaw),
+                        height*level,z+along*math.sin(yaw)+side*half_width*math.cos(edge_yaw))
             for segment in range(segment_count):
                 low,high = segment/segment_count,(segment+1)/segment_count
                 a,b,c,d = leaf_point(low,-1),leaf_point(high,-1),leaf_point(high,1),leaf_point(low,1)

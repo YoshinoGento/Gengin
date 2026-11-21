@@ -28,7 +28,7 @@ farm::FarmGroundSample farm::FarmTerrainQuerySystem::SampleGround(
 		const auto mesh = BuildFarmTileMeshParts(grid, index, visual);
 		for (std::size_t i = 0; i < mesh.count; ++i) {
 			const auto& part = mesh.parts[i];
-			if (part.water || part.surface == FarmMeshSurface::None || part.shape != FarmMeshShape::Box) { continue; }
+			if (part.surface != FarmMeshSurface::CanalBank && part.surface != FarmMeshSurface::CanalBed) { continue; }
 			// Banks support the whole AABB foot area; bed/soil use the center to avoid floating over slopes.
 			const bool bank = part.surface == FarmMeshSurface::CanalBank;
 			const float extentX = bank ? halfFootprint.x : 0.0f;

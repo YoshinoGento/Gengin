@@ -66,7 +66,6 @@ struct Frame {
     float groundExposure = .25f;
     Vector4 waterColor{0.2f, 0.6f, 0.8f, 1.0f};
     float waterPhase = 0.0f;
-    float windAngle = 0.0f;
     Vector2 grassWindXZ{};
     float grassPhase = 0;
     float promptAlpha = 1.0f;
