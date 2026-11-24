@@ -15,10 +15,10 @@
     "crop_turnip_leaves": 340,
     "crop_carrot": 1304,
     "crop_carrot_leaves": 760,
-    "crop_tomato": 1010,
-    "crop_tomato_stems": 724,
     "crop_pumpkin": 1710,
-    "crop_pumpkin_vines": 556
+    "crop_tomato": 684,
+    "crop_tomato_stems": 144,
+    "crop_pumpkin_vines": 180
   },
   "lighting": "runtime directional shadow map; albedo atlas",
   "cropCell": 0.065,

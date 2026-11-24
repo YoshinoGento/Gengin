@@ -13,6 +13,7 @@ public:
 	void Initialize();
 
 	void SetTool(FarmTool tool);
+	void CycleTools(int steps);
 	void SelectNextTool();
 	void SelectPreviousTool();
 

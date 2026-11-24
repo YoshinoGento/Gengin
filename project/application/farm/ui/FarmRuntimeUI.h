@@ -118,6 +118,7 @@ struct View {
     bool waterGuidance = false;
     bool compactHUD = false;
     bool hotbarVisible = false;
+    bool hotbarAtFieldEdge = false;
     bool selectedTile = false;
     bool goalVisible = false;
     bool shortGoal = false;
@@ -174,7 +175,8 @@ struct View {
         // Disabled controls and labels still own their screen area.
         for (std::size_t i = 0; i < count && i < items.size(); ++i)
             if (items[i].rect.Contains(point) ||
-                (compactHUD && items[i].selected && items[i].request.action == Action::Tool &&
+                (compactHUD && ((items[i].selected && items[i].request.action == Action::Tool) ||
+                    (items[i].focused && (items[i].request.action == Action::Tool || items[i].request.action == Action::Crop))) &&
                     IsValidIcon(items[i].icon) && IconCaptionRect(items[i]).Contains(point))) return true;
         return false;
     }

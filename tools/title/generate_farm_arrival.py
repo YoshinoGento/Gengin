@@ -178,8 +178,31 @@ def tool_models():
     return wood,metal
 
 
+def save_hand_can(metal):
+    hand = Mesh()
+    for points, uv, normal, material, section in metal.triangles:
+        if section in ("watering_can", "spout_and_rose", "bail"):
+            local = tuple((x-.35, y-.315, z-.03) for x,y,z in points)
+            hand.triangles.append((local, uv, normal, material, section))
+    return save(hand, "hand_can", True)
+
+
+def save_hand_hoe(wood, metal):
+    # Share a grip pivot; the lower centre of the cutting lip lands at (-.385,-.883,0).
+    for source, sections, name in ((wood, ("hoe_handle",), "hoe_handle"),
+                                   (metal, ("hoe_blade", "socket"), "hoe_blade")):
+        hand = Mesh()
+        for points, uv, (nx,ny,nz), material, section in source.triangles:
+            if section in sections:
+                local = tuple((z, y-1.02, -(x+.68)) for x,y,z in points)
+                hand.triangles.append((local, uv, (nz,ny,-nx), material, section))
+        save(hand, name, True)
+
+
 def save_tools():
     wood,metal=tool_models()
+    save_hand_can(metal)
+    save_hand_hoe(wood,metal)
     return {"tools_wood":save(wood,"tools_wood"),"tools_metal":save(metal,"tools_metal",True)}
 
 

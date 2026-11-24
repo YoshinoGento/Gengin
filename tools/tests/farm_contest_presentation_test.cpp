@@ -120,7 +120,8 @@ void SpecimenFraming() {
             if (page==FarmContestPresentationSystem::Page::Result && side==1) continue;
             const auto pose=FarmContestStageLayout::Specimen(crop,2,2,side,page);
             for (int part=0;part<2;++part) {
-                std::ifstream file(std::string("project/Resources/farm/")+meshes[slot*2+part]+".obj");
+                const auto dir=FarmContestStageLayout::UsesHarvestedMesh(crop) ? "contest/ceremony/" : "";
+                std::ifstream file(std::string("project/Resources/farm/")+dir+meshes[slot*2+part]+".obj");
                 Check(file.good(),"mesh fixture opens");
                 const auto scale=part==0?pose.bodyScale:pose.leafScale;
                 const auto position=part==0?pose.position:Vector3{pose.position.x,pose.leafY,0};
@@ -152,6 +153,14 @@ void SpecimenFraming() {
             }
             const auto smallerPose=FarmContestStageLayout::Specimen(crop,.5f,2,side,page);
             Check(std::abs(pose.bodyScale.y/smallerPose.bodyScale.y-std::cbrt(4.f))<.0001f,"common volume scale");
+            const float joint=(pose.leafY-pose.position.y)/pose.bodyScale.y;
+            for (float size : {.01f,.5f,1.f,3.f,8.f}) {
+                const auto exhibit=FarmContestStageLayout::CeremonySpecimen(crop,size);
+                Check(std::abs((exhibit.leafY-exhibit.position.y)/exhibit.bodyScale.y-joint)<.0001f,
+                    "ceremony changed relative stalk attachment at harvest size");
+                Check(std::abs(exhibit.leafScale.y/exhibit.bodyScale.y-pose.leafScale.y/pose.bodyScale.y)<.0001f,
+                    "ceremony changed relative stalk height");
+            }
         }
     }
     Check(checked>1000,"actual geometry checked");

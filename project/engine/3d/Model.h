@@ -135,6 +135,8 @@ public:
 	const SkinCluster& GetSkinCluster() const { return skinCluster_; }
 	uint32_t GetVertexCount() const { return static_cast<uint32_t>(vertices_.size()); }
 	uint32_t GetIndexCount() const { return static_cast<uint32_t>(indices_.size()); }
+    // Local-space ray, not necessarily unit length. Limit is in the caller's ray parameterization.
+    bool IntersectStaticTriangles(Vector3 origin,Vector3 direction,float& limit) const noexcept;
 	bool UseComputeSkinning() const;
 	void SetUseComputeSkinning(bool useComputeSkinning) { skinCluster_.useComputeSkinning = useComputeSkinning; }
 

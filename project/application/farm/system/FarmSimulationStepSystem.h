@@ -27,6 +27,7 @@ public:
     struct Result {
         bool advanced = false, dayChanged = false, pestWarning = false, weatherChanged = false;
         double rainDelivered = 0, canalDelivered = 0;
+        bool comparisonEnded = false;
     };
 
     [[nodiscard]] static Result Step(Context c, float requestedDelta, int targetDay = 0) {
@@ -49,7 +50,7 @@ public:
             delta = static_cast<float>((std::min)(static_cast<double>(delta), remaining / clock.timeScale));
         }
         if (!std::isfinite(delta) || delta <= 0) return {};
-        if (c.comparison) c.comparison->ObserveBeforeStep(c.grid);
+        const bool endedBefore = c.comparison && c.comparison->ObserveBeforeStep(c.grid);
         const auto weather = FarmWeatherSystem::Inspect(clock.day, c.progression.WeatherVersion());
         c.irrigation.UpdateWater(c.grid, delta, clock.timeScale, weather.soilRainPerSecond);
         // Growth can change tile identity at maturity; capture flow while it is still valid.
@@ -57,12 +58,12 @@ public:
         const auto beforeMold = c.moldVisual ? c.moldVisual->Capture(c.grid) : farm::FarmMoldVisualSystem::Cases{};
         c.growth.Update(c.grid, delta, clock.timeScale);
         if (c.moldVisual) c.moldVisual->AfterGrowth(c.grid, beforeMold);
-        if (c.comparison) c.comparison->ObserveAfterStep(c.grid, delta, clock.timeScale);
+        const bool endedAfter = c.comparison && c.comparison->ObserveAfterStep(c.grid, delta, clock.timeScale);
         c.contest.Advance(c.date, delta, c.economy.GetContestResults(), boundary, !c.progression.IsFreeFarming());
         const auto pests = c.progression.AdvancePests(c.grid, clock.day, c.date.GetDay());
         static_cast<void>(c.progression.EvaluateSeason(FarmContestSeasonSystem::Evaluate(c.date.GetDay(), c.economy.GetContestResults())));
         return {true, c.date.GetDay() != clock.day, pests.warningStarted,
             FarmWeatherSystem::Changed(clock.day, c.date.GetDay(), c.progression.WeatherVersion()),
-            water.rainDelivered, water.soilDelivered};
+            water.rainDelivered, water.soilDelivered, endedBefore || endedAfter};
     }
 };

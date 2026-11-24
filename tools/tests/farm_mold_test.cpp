@@ -3,6 +3,7 @@
 #include "farm/ui/FarmFieldActionView.h"
 #include "farm/system/FarmSeedShopSystem.h"
 #include "farm/render/FarmMoldGeometry.h"
+#include "farm/render/FarmMeshLayout.h"
 #include "3d/LineDrawer.h"
 #include "farm/system/FarmTimeAdvanceSystem.h"
 #include "farm/system/FarmToolActionSystem.h"
@@ -134,6 +135,18 @@ void PersistenceAndPlay() {
         pair.beds[0].puff>.70f && pair.beds[0].puff<1,"single real onset on open intake bed");
     Check(grid.GetTile(6)->mold == State{} && grid.GetTile(8)->mold.sick, "normal rain pair");
     const auto sick = *grid.GetTile(8);
+    for (auto crop : {farm::CropType::Tomato,farm::CropType::Pumpkin}) {
+        auto fruit=sick; fruit.crop=crop; fruit.growth=1.f;
+        Check(grid.SetTile(8,fruit),"sick fruit fixture");
+        const auto ill=farm::BuildFarmCropMeshParts(grid,8,visual);
+        fruit.mold={};
+        Check(grid.SetTile(8,fruit),"healthy fruit fixture");
+        const auto healthy=farm::BuildFarmCropMeshParts(grid,8,visual);
+        Check(ill.count==2 && healthy.count==2 && ill.parts[1].scale.y==healthy.parts[1].scale.y &&
+            ill.parts[1].position.y==healthy.parts[1].position.y && ill.parts[1].color.x!=healthy.parts[1].color.x,
+            "sick fruit changes colour without pulling the calyx through the flesh");
+    }
+    Check(grid.SetTile(8,sick),"restore original sick bed");
     auto well = sick; well.mold = {};
     const auto healthyRate = growth.Evaluate(well).growthPerSecond;
     Check(healthyRate > 0 && std::abs(growth.Evaluate(sick).growthPerSecond -

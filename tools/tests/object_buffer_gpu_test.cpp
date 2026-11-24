@@ -33,7 +33,7 @@ int main() try {
     HR(D3D12CreateDevice(nullptr,D3D_FEATURE_LEVEL_11_0,IID_PPV_ARGS(&device)));
     ComPtr<ID3D12InfoQueue> info;
     if (validation) HR(device.As(&info));
-    constexpr unsigned count = 8, fields = 11;
+    constexpr unsigned count = 8, fields = 12;
     std::array<ComPtr<ID3D12Resource>,count> resources;
     std::array<std::array<Vector4,fields>,count> expected{};
     const D3D12_RANGE noRead{0,0};
@@ -53,6 +53,7 @@ int main() try {
         std::memcpy(data->material.uvTransform.m[2],&expected[i][2],sizeof(Vector4));
         data->material.surfaceDetail = expected[i][3];
         data->material.outdoorAmbient = expected[i][4];
+        data->material.surfaceFront = expected[i][11];
         std::memcpy(data->transform.WVP.m[1],&expected[i][5],sizeof(Vector4));
         std::memcpy(data->transform.World.m[2],&expected[i][6],sizeof(Vector4));
         std::memcpy(data->transform.WorldInverseTranspose.m[3],&expected[i][7],sizeof(Vector4));
@@ -72,12 +73,13 @@ cbuffer ShadowTransform : register(b2) { float4x4 swvp; float4x4 sworld; float4x
 RWStructuredBuffer<float4> results : register(u0);
 cbuffer Index : register(b3) { uint index; };
 [numthreads(1,1,1)] void main() {
- uint p=index*11;
+ uint p=index*12;
  results[p]=mat.color;
  results[p+1]=float4(mat.enableLighting,mat.shininess,mat.environmentCoefficient,mat.specularType);
  results[p+2]=mat.uvTransform[2]; results[p+3]=mat.surfaceDetail; results[p+4]=mat.outdoorAmbient;
  results[p+5]=wvp[1]; results[p+6]=world[2]; results[p+7]=normal[3];
  results[p+8]=swvp[1]; results[p+9]=sworld[2]; results[p+10]=snormal[3];
+ results[p+11]=mat.surfaceFront;
 })";
     ComPtr<ID3DBlob> code, errors, serialized;
     const auto compiled = D3DCompile(shader,sizeof(shader),"project/Resources/shader/ObjectBufferValidation.hlsl",nullptr,
@@ -137,6 +139,6 @@ cbuffer Index : register(b3) { uint index; };
         HR(info->GetMessage(i,message,&bytes));
         Check(message->Severity != D3D12_MESSAGE_SEVERITY_ERROR && message->Severity != D3D12_MESSAGE_SEVERITY_CORRUPTION);
     }
-    std::cout << "Object buffer: 8 independent resources, 11 material/main/shadow fields, actual HLSL Material, GPU readback PASS; debugLayer=" << validation << '\n';
+    std::cout << "Object buffer: " << count << " independent resources, " << fields << " material/main/shadow fields, actual HLSL Material, GPU readback PASS; debugLayer=" << validation << '\n';
     return 0;
 } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

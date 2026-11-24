@@ -52,7 +52,7 @@ public:
 	bool ReleaseMouseButton(InputMouseButton button) const;
 	Vector2 GetMousePosition() const;
 	Vector2 GetMouseDelta() const;
-	float GetMouseWheelDelta() const;
+	int GetMouseWheelDelta() const;
 	bool IsGamepadConnected() const;
 	bool PushGamepadButton(InputGamepadButton button) const;
 	bool TriggerGamepadButton(InputGamepadButton button) const;
@@ -92,7 +92,7 @@ private:
 	bool mouseSynchronized_ = false;
 	Vector2 mousePosition_ = { 0.0f, 0.0f };
 	Vector2 mouseDelta_ = { 0.0f, 0.0f };
-	float mouseWheelDelta_ = 0.0f;
+	int mouseWheelDelta_ = 0;
 	bool isGamepadConnected_ = false;
 	unsigned short gamepadButtonsPre_ = 0;
 	unsigned short gamepadButtons_ = 0;

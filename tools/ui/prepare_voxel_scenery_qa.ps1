@@ -50,7 +50,11 @@ if (!$VerifyOnly) {
         'title/grass_patch.obj','title/grass_far_patch.obj','farm/arrival/grass_layout.json',
         'farm/arrival/crown_0.obj','farm/arrival/crown_1.obj','farm/arrival/crown_2.obj',
         'farm/arrival/crown_3.obj','farm/arrival/crown_4.obj','farm/soil_ridge.obj','farm/bank_stone.obj',
-        'farm/arrival/tools_wood.obj','farm/arrival/tools_metal.obj','ui/farm_hud_icons.png',
+        'farm/bend_water.obj','farm/bend_lining.obj','farm/bend_fillet.obj',
+        'farm/arrival/tools_wood.obj','farm/arrival/tools_metal.obj','farm/arrival/hand_can.obj','ui/farm_hud_icons.png',
+        'farm/arrival/hoe_handle.obj','farm/arrival/hoe_blade.obj',
+        'farm/arrival/harvest_basket.obj','farm/arrival/harvest_basket_rim.obj',
+        'farm/arrival/picked_tomato_0.obj','farm/arrival/picked_tomato_1.obj',
         'farm/contest/ceremony/manifest.json')
     foreach ($part in @('carrot','carrot_leaves','tomato','tomato_stems','pumpkin','pumpkin_vines')) {
         $paths += "farm/crop_$part.obj","farm/contest/ceremony/crop_$part.obj"

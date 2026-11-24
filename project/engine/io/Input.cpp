@@ -245,7 +245,7 @@ bool Input::UpdateMouseState()
 
 	mouseEdges_.BeginFrame();
 	mouseDelta_ = { 0.0f, 0.0f };
-	mouseWheelDelta_ = 0.0f;
+	mouseWheelDelta_ = 0;
 
 	DIMOUSESTATE2 mouseState{};
 	HRESULT result = mouse->GetDeviceState(sizeof(mouseState), &mouseState);
@@ -280,7 +280,7 @@ bool Input::UpdateMouseState()
 		static_cast<float>(mouseState.lX),
 		static_cast<float>(mouseState.lY)
 	};
-	mouseWheelDelta_ = static_cast<float>(mouseState.lZ);
+	mouseWheelDelta_ = mouseState.lZ;
 	return true;
 }
 
@@ -348,7 +348,7 @@ void Input::ClearMouseState()
 	mouseEdges_.Reset();
 	mouseSynchronized_ = false;
 	mouseDelta_ = { 0.0f, 0.0f };
-	mouseWheelDelta_ = 0.0f;
+	mouseWheelDelta_ = 0;
 }
 
 void Input::ClearGamepadState()
@@ -435,7 +435,7 @@ Vector2 Input::GetMouseDelta() const
 	return mouseDelta_;
 }
 
-float Input::GetMouseWheelDelta() const
+int Input::GetMouseWheelDelta() const
 {
 	return mouseWheelDelta_;
 }

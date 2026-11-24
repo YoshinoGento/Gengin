@@ -3,6 +3,8 @@ from pathlib import Path
 import json
 import math
 import random
+import sys
+from tempfile import TemporaryDirectory
 from PIL import Image, ImageDraw, ImageFont
 import generate_title_landscape as rural
 from voxel_scenery import append_volume
@@ -209,9 +211,9 @@ def crop_name_face():
     return save(m, 'name_face', True)
 
 
-def crop_copy(name, material):
+def crop_copy(name, material, source_dir=ROOT/'project/Resources/farm'):
     # Voxelize bodies for the ceremony only; leaf geometry keeps its authored silhouette.
-    source=(ROOT/'project/Resources/farm'/(name+'.obj')).read_text(encoding='utf-8')
+    source=(source_dir/(name+'.obj')).read_text(encoding='utf-8')
     if name in ('crop_turnip','crop_carrot','crop_tomato','crop_pumpkin'):
         mesh=Mesh(); append_crop(mesh,source,material)
         return save(mesh,name)
@@ -240,9 +242,14 @@ def build():
     atlas(); signs(); crop_name_signs()
     counts={'venue':save(scenery(),'venue'),**props(),'name_face':crop_name_face()}
     for name,material in (('crop_turnip',18),('crop_turnip_leaves',19),('crop_carrot',16),
-                          ('crop_carrot_leaves',19),('crop_tomato',17),('crop_tomato_stems',19),
-                          ('crop_pumpkin',20),('crop_pumpkin_vines',19)):
+                          ('crop_carrot_leaves',19),('crop_pumpkin',20)):
         counts[name]=crop_copy(name,material)
+    sys.path.insert(0, str(ROOT/'tools/art_studies'))
+    from harvested_crops import export_harvest
+    with TemporaryDirectory() as temp:
+        export_harvest(Path(temp))
+        for name,material in (('crop_tomato',17),('crop_tomato_stems',19),('crop_pumpkin_vines',19)):
+            counts[name]=crop_copy(name, material, Path(temp))
     assert sum(counts.values()) < MAX_TRIANGLES
     (OUT/'manifest.json').write_text(json.dumps({'original':True,'triangles':counts,
         'lighting':'runtime directional shadow map; albedo atlas','cropCell':CROP_CELL,

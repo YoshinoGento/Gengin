@@ -3,16 +3,20 @@
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmVisualSystem.h"
 #include "farm/render/FarmSoilSurface.h"
+#include "environment/VegetationWind.h"
 #include <array>
 #include <cmath>
 
 namespace farm {
 enum class FarmMeshShape { Box, TriangleLower, TriangleUpper, Turnip, Carrot, Leaves, CarrotLeaves,
-    Tomato, TomatoStems, Pumpkin, PumpkinVines, SoilRidge, BankStone, Count };
+    Tomato, TomatoStems, Pumpkin, PumpkinVines, SoilRidge, BankStone, BendWater, BendLining, BendFillet, WateringCan, HoeHandle, HoeBlade,
+    HarvestBasket, HarvestBasketRim, PickedTomatoLarge, PickedTomatoSmall, Count };
 inline constexpr std::array kFarmMeshPaths{"farm/unit_box.obj","farm/triangle_lower.obj","farm/triangle_upper.obj",
     "farm/crop_turnip.obj","farm/crop_carrot.obj","farm/crop_turnip_leaves.obj","farm/crop_carrot_leaves.obj",
     "farm/crop_tomato.obj","farm/crop_tomato_stems.obj","farm/crop_pumpkin.obj","farm/crop_pumpkin_vines.obj",
-    "farm/soil_ridge.obj","farm/bank_stone.obj"};
+    "farm/soil_ridge.obj","farm/bank_stone.obj","farm/bend_water.obj","farm/bend_lining.obj","farm/bend_fillet.obj","farm/arrival/hand_can.obj",
+    "farm/arrival/hoe_handle.obj","farm/arrival/hoe_blade.obj","farm/arrival/harvest_basket.obj","farm/arrival/harvest_basket_rim.obj",
+    "farm/arrival/picked_tomato_0.obj","farm/arrival/picked_tomato_1.obj"};
 static_assert(kFarmMeshPaths.size()==static_cast<std::size_t>(FarmMeshShape::Count));
 enum class FarmMeshSurface { None, CanalBed, CanalBank, SoilBoundary, Selection, Hover, Crop,
 	Earth, Soil, Grass, PestCue };
@@ -22,6 +26,7 @@ inline constexpr float CropWindResponse(FarmMeshShape shape) noexcept {
     case FarmMeshShape::CarrotLeaves: return .31f;
     case FarmMeshShape::Tomato:
     case FarmMeshShape::TomatoStems: return .14f;
+    case FarmMeshShape::Pumpkin:
     case FarmMeshShape::PumpkinVines: return .065f;
     default: return 0;
     }
@@ -35,12 +40,56 @@ struct FarmMeshPart {
 	FarmMeshShape shape = FarmMeshShape::Box;
 	FarmMeshSurface surface = FarmMeshSurface::None;
 	float wetness = 0.0f; // Presentation snapshot, never written back to the simulation.
+	float heightAboveWindPivot = 0.0f;
+	float yaw = 0.0f;
+    float roll = 0.0f;
+    Vector4 wetFront{}; // World XZ half-plane; w=0 disables the transient material mask.
 };
+
+struct FarmWindPose { Vector3 position, rotation; };
+inline FarmWindPose CropWindPose(const FarmMeshPart& part, const vegetation::WindFrame& wind,Vector3 touch={}) noexcept {
+	FarmWindPose pose{part.position, wind.Tilt(part.position, CropWindResponse(part.shape))};
+    pose.rotation=pose.rotation+touch;
+	const float h = part.heightAboveWindPivot;
+	if (h != 0.0f) {
+		// Rotate the offset from the stalk's pivot, in the engine's row-vector X then Z order.
+		const float y = h*std::cos(pose.rotation.x);
+		pose.position.x -= y*std::sin(pose.rotation.z);
+		pose.position.y += y*std::cos(pose.rotation.z)-h;
+		pose.position.z += h*std::sin(pose.rotation.x);
+	}
+	return pose;
+}
 struct FarmTileMeshParts {
 	// Soil: at most 26 patches plus either three ridges or four boundary strips.
 	std::array<FarmMeshPart, 32> parts{};
 	std::size_t count = 0;
 };
+
+inline void RevealFarmWater(FarmTileMeshParts& mesh,Vector3 center,Vector3 upstream,Vector3 downstream,float cellHalf,float fraction) noexcept {
+    if(fraction>=1.f) return;
+    const auto axis=[](float v){return v>0.f?1.f:v<0.f?-1.f:0.f;};
+    const Vector2 in{axis(center.x-upstream.x),axis(center.z-upstream.z)};
+    const Vector2 out{axis(downstream.x-center.x),axis(downstream.z-center.z)};
+    auto normal=in;
+    float x=center.x+in.x*(2.f*fraction-1.f)*cellHalf, z=center.z+in.y*(2.f*fraction-1.f)*cellHalf;
+    if(in.x*out.y!=0 || in.y*out.x!=0) {
+        // A radial cut about the inner corner meets both neighbouring cuts at their shared edges.
+        const float angle=1.570796327f*fraction;
+        normal={in.x*std::cos(angle)+out.x*std::sin(angle),in.y*std::cos(angle)+out.y*std::sin(angle)};
+        x=center.x+(out.x-in.x)*cellHalf; z=center.z+(out.y-in.y)*cellHalf;
+    }
+    const Vector4 front{normal.x,normal.y,x*normal.x+z*normal.y,.095f*cellHalf};
+    size_t kept=0;
+    for(size_t j=0;j<mesh.count;++j) {
+        auto& part=mesh.parts[j];
+        if(part.water && fraction<=0) continue;
+        if(part.water) part.wetFront=front;
+        if(kept!=j) mesh.parts[kept]=part;
+        ++kept;
+    }
+    mesh.count=kept;
+}
 
 struct FarmSelectionMeshParts {
 	std::array<FarmMeshPart, 8> parts{};
@@ -97,13 +146,14 @@ inline FarmCropMeshParts BuildFarmCropMeshParts(
 		const float size = (0.25f + 0.75f*growth)*scale;
 		// Tomato fruit hangs above soil; pumpkin sits on soil. Neither is a buried root.
 		if (fruit) result.parts[result.count++] = {
-			{visual.center.x,visual.center.y + (tomato ? .22f*size : .015f),visual.center.z},
+			{visual.center.x,visual.center.y + (tomato ? .22f : .015f)*size,visual.center.z},
 			{(tomato ? .42f : .46f)*size,(tomato ? .60f : .65f)*size,(tomato ? .42f : .46f)*size},
 			tomato ? Vector4{.87f,.12f,.07f,1} : Vector4{.12f,.36f,.16f,1},false,{},
 			tomato ? FarmMeshShape::Tomato : FarmMeshShape::Pumpkin,FarmMeshSurface::Crop};
-		result.parts[result.count++] = {{visual.center.x,visual.center.y+.02f,visual.center.z},
+		result.parts[result.count++] = {{visual.center.x,visual.center.y+.02f*size,visual.center.z},
 			{.58f*size,(tomato ? 1.05f : .80f)*size,.58f*size},{.24f,.50f,.18f,1},false,{},
 			tomato ? FarmMeshShape::TomatoStems : FarmMeshShape::PumpkinVines,FarmMeshSurface::Crop};
+		if (fruit) result.parts[0].heightAboveWindPivot = result.parts[0].position.y-result.parts[1].position.y;
 		return result;
 	}
 	const bool carrot = visual.crop == CropType::Carrot;
@@ -144,7 +194,11 @@ inline FarmCropMeshParts BuildFarmCropMeshParts(
 			part.shape != FarmMeshShape::PumpkinVines) continue;
 		switch (tile->mold.Phase()) {
 		case MoldPhase::Warning: part.color = {.80f,.64f,.21f,1}; break;
-		case MoldPhase::Sick: part.color = {.71f,.68f,.58f,1}; part.scale.y *= .70f; break;
+		case MoldPhase::Sick:
+			part.color = {.71f,.68f,.58f,1};
+			// A fruiting stalk includes its calyx; shortening only that mesh drives it through the fruit.
+			if (result.count == 1 || part.shape == FarmMeshShape::CarrotLeaves) part.scale.y *= .70f;
+			break;
 		case MoldPhase::Recovering: part.color = {.52f,.67f,.30f,1}; break;
 		default: break;
 		}
@@ -192,35 +246,37 @@ inline FarmSelectionMeshParts BuildFarmHoverMeshParts(
 
 // Pure presentation conversion, usable by CPU tests without allocating GPU resources.
 inline FarmTileMeshParts BuildFarmTileMeshParts(
-	const FarmGrid& grid, int index, const FarmVisualSystem& visualSystem) noexcept {
+	const FarmGrid& grid, int index, const FarmVisualSystem& visualSystem,float pendingWater=0.f,bool awaitingHoe=false) noexcept {
 	constexpr float kEarthDepth = 0.24f;
 	constexpr float kTopThickness = 0.04f;
 	constexpr float kWaterHalfThickness = 0.005f;
 	constexpr float kRimFreeboard = 0.045f;
-	const Vector4 waterColor{0.12f, 0.51f, 0.69f, 1.0f};
+	const Vector4 waterColor{0.095f, 0.39f, 0.43f, 1.0f};
 	FarmTileMeshParts result;
-	const auto visual = visualSystem.GetTileVisualData(grid, index);
+	auto visual = visualSystem.GetTileVisualData(grid, index);
+    visual.soilWetness=std::clamp(visual.soilWetness-pendingWater,0.f,1.f);
 	const auto* tile = grid.GetTile(index);
 	if (!visual.valid || !tile) { return result; }
 	const auto& layout = visualSystem.GetLayout();
 	const float cellHalf = (layout.tileSize + layout.tileGap) * 0.5f;
 	const float groundBottom = layout.center.y - kEarthDepth;
 	const float half = visual.halfExtent;
-	const auto add = [&](Vector3 position, Vector3 scale, Vector4 color, bool water = false, Vector2 slope = {}, FarmMeshShape shape = FarmMeshShape::Box, FarmMeshSurface surface = FarmMeshSurface::None) {
+	const auto add = [&](Vector3 position, Vector3 scale, Vector4 color, bool water = false, Vector2 slope = {}, FarmMeshShape shape = FarmMeshShape::Box, FarmMeshSurface surface = FarmMeshSurface::None, float rotation = 0.f) {
 		if (result.count >= result.parts.size() || !std::isfinite(position.x) ||
 			!std::isfinite(position.y) || !std::isfinite(position.z) || !std::isfinite(scale.x) ||
 			!std::isfinite(scale.y) || !std::isfinite(scale.z) || !std::isfinite(slope.x) || !std::isfinite(slope.y) ||
 			scale.x < 0.0001f || scale.y < 0.0001f || scale.z < 0.0001f) { return; }
 		result.parts[result.count++] = {position, scale, color, water, slope, shape, surface,
-			visual.soilWetness};
+			visual.soilWetness, 0.f, rotation};
 	};
 	if (visual.feature == FarmTileFeature::None) {
+        const bool uncultivated=tile->state==FarmTileState::Empty || (awaitingHoe && tile->state==FarmTileState::Tilled);
 		const float wetness = visual.soilWetness;
-		const Vector4 soil = tile->state == FarmTileState::Empty
+		const Vector4 soil = uncultivated
 			? Vector4{0.27f - 0.08f * wetness, 0.57f - 0.15f * wetness, 0.13f, 1.0f}
 			: Vector4{0.52f - 0.28f * wetness, 0.32f - 0.18f * wetness, 0.16f - 0.09f * wetness, 1.0f};
 		const Vector4 earth{0.43f - 0.16f * wetness, 0.24f - 0.10f * wetness, 0.10f, 1.0f};
-		const auto topSurface = tile->state == FarmTileState::Empty ? FarmMeshSurface::Grass : FarmMeshSurface::Soil;
+		const auto topSurface = uncultivated ? FarmMeshSurface::Grass : FarmMeshSurface::Soil;
 		const auto surface = BuildFarmSoilSurface(grid, index, visualSystem);
 		if (!surface.valid) { return {}; }
 		bool flat = true;
@@ -254,7 +310,7 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 				}
 			}
 		}
-		if (tile->state == FarmTileState::Empty) {
+		if (uncultivated) {
 			// Inset within the shared flat plateau: ramps and water connections remain untouched.
 			const float edge = half * 0.80f;
 			const float width = half * 0.032f;
@@ -294,6 +350,12 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 			bedSlope[edge] = (neighbor.center.y - visual.center.y) * 0.5f / run;
 		}
 	}
+	const auto connected = [&](int side) { return neighborData[side].valid && neighborData[side].feature != FarmTileFeature::None; };
+	const bool bend = visual.feature == FarmTileFeature::Canal &&
+		connected(0) != connected(1) && connected(2) != connected(3);
+	constexpr float quarterTurn = 1.570796327f;
+	const float yaw = connected(0) ? (connected(2) ? 0.f : quarterTurn)
+		: (connected(2) ? -quarterTurn : 2.f*quarterTurn);
 	const float offsets[3] = {-(cellHalf + inner) * 0.5f, 0.0f, (cellHalf + inner) * 0.5f};
 	const float extents[3] = {run * 0.5f, inner, run * 0.5f};
 	const float xSlopes[3] = {-bedSlope[0], 0.0f, bedSlope[1]};
@@ -306,12 +368,33 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 	for (int z = 0; z < 3; ++z) {
 		for (int x = 0; x < 3; ++x) {
 			add({visual.center.x + offsets[x], bottom + xRise[x] + zRise[z] - bodyHalfDepth, visual.center.z + offsets[z]},
-				{extents[x], bodyHalfDepth, extents[z]}, {0.43f, 0.24f, 0.10f, 1.0f}, false, {xSlopes[x], zSlopes[z]}, FarmMeshShape::Box, FarmMeshSurface::CanalBed);
+				{extents[x], bodyHalfDepth, extents[z]}, {0.29f, 0.25f, 0.15f, 1.0f}, false, {xSlopes[x], zSlopes[z]}, FarmMeshShape::Box, FarmMeshSurface::CanalBed);
 		}
 	}
 	if (visual.showWaterSurface) {
 		add({visual.center.x, visual.waterSurfaceCenter.y - kWaterHalfThickness, visual.center.z},
-			{inner, kWaterHalfThickness, inner}, waterColor, true);
+			{inner, kWaterHalfThickness, inner}, waterColor, true, {}, bend ? FarmMeshShape::BendWater : FarmMeshShape::Box,
+			FarmMeshSurface::None, bend ? yaw : 0.f);
+	}
+	if (bend) {
+		// The lining is a low toe inside the load-bearing bank; its mouth matches both ramp arms.
+		constexpr float apronScale = 1.25f;
+		const float height = rimHeight*.93f;
+		add({visual.center.x,bottom+height*.50f,visual.center.z},
+			{inner*apronScale,height*.5f,inner*apronScale},{.37f,.35f,.27f,1},false,{},FarmMeshShape::BendLining,
+			FarmMeshSurface::None,yaw);
+		const int xEdge=connected(0)?0:1, zEdge=connected(2)?2:3;
+		if (visual.showWaterSurface && neighborData[xEdge].showWaterSurface && neighborData[zEdge].showWaterSurface) {
+			const float sx=xEdge==0?-1.f:1.f, sz=zEdge==2?-1.f:1.f;
+			const float level=visual.waterSurfaceCenter.y;
+			const float gx=sx*(neighborData[xEdge].waterSurfaceCenter.y-level)*.5f/run;
+			const float gz=sz*(neighborData[zEdge].waterSurfaceCenter.y-level)*.5f/run;
+			const float c=std::cos(yaw), s=std::sin(yaw);
+			const float reach=run*.83f;
+			add({visual.center.x+sx*inner,level-kWaterHalfThickness,visual.center.z+sz*inner},
+				{reach,kWaterHalfThickness,reach},waterColor,true,{gx*c-gz*s,gx*s+gz*c},
+				FarmMeshShape::BendFillet,FarmMeshSurface::None,yaw);
+		}
 	}
 	for (int edge = 0; edge < 4; ++edge) {
 		const auto& neighbor = neighborData[edge];
@@ -319,16 +402,30 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 		const float sign = edge % 2 == 0 ? -1.0f : 1.0f;
 		const bool alongX = edge < 2;
 		if (!open) {
-			const float rimWidth = half * 0.14f;
+			const float rimWidth = run * .40f;
 			// Split side banks with the bed so their ends follow the same transition.
 			for (int section = 0; section < 3; ++section) {
 				constexpr std::array<Vector4,3> stoneTones{{{.40f,.43f,.39f,1},{.46f,.46f,.40f,1},{.43f,.45f,.42f,1}}};
 				const auto& stone=stoneTones[(index+edge+section)%stoneTones.size()];
+				// Only one wall owns each closed corner, even on a dead end.
+				const float trim = !alongX && section!=1 && !connected(section/2) ? rimWidth : 0.f;
+				const float shift = section==0 ? trim : -trim;
+				float along = offsets[section] + shift, span = extents[section]-trim;
+				// Flat banks use a running bond; on a grade each stone stays on its own ramp plane.
+				const int parallel = alongX ? 2 : 0;
+				if (bedSlope[parallel]==0.f && bedSlope[parallel+1]==0.f) {
+					const float lo=-cellHalf+(!alongX&&!connected(0)?2*rimWidth:0);
+					const float hi=cellHalf-(!alongX&&!connected(1)?2*rimWidth:0);
+					const float jog=((index+edge)%2?.045f:-.045f);
+					const float joints[]{lo,lo+(hi-lo)*(.30f+jog),lo+(hi-lo)*(.68f+jog),hi};
+					along=(joints[section]+joints[section+1])*.5f;
+					span=(joints[section+1]-joints[section])*.5f;
+				}
 				const float rise = alongX ? zRise[section] : xRise[section];
 				const Vector2 slope = alongX ? Vector2{0.0f, zSlopes[section]} : Vector2{xSlopes[section], 0.0f};
-				add({visual.center.x + (alongX ? sign * (cellHalf - rimWidth) : offsets[section]), bottom + rise + rimHeight * 0.5f,
-					visual.center.z + (alongX ? offsets[section] : sign * (cellHalf - rimWidth))},
-					{alongX ? rimWidth : extents[section], rimHeight * 0.5f, alongX ? extents[section] : rimWidth}, stone, false, slope, FarmMeshShape::BankStone, FarmMeshSurface::CanalBank);
+				add({visual.center.x + (alongX ? sign * (cellHalf - rimWidth) : along), bottom + rise + rimHeight * 0.5f,
+					visual.center.z + (alongX ? along : sign * (cellHalf - rimWidth))},
+					{alongX ? rimWidth : span, rimHeight * 0.5f, alongX ? span : rimWidth}, stone, false, slope, FarmMeshShape::BankStone, FarmMeshSurface::CanalBank);
 			}
 			continue;
 		}

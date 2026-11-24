@@ -114,6 +114,7 @@ private:
 	void UpdateSceneDeltaTime();
 	void PrepareRenderFrame(float presentationDeltaTime);
     void UpdateOutdoorPresentation(float realSeconds, bool audible);
+    void UpdateFieldPointerFeedback(bool active);
 	void HandleKeyboardMovement();
 	void HandleCameraInput(float deltaTime, bool suppressArrowKeys);
 	void ClampCameraPitch();
@@ -308,6 +309,10 @@ private:
 	FarmCropSelectionSystem farmCropSelectionSystem_;
 	FarmFeedbackSystem farmFeedbackSystem_;
 	farm::FarmHarvestVisualSystem farmHarvestVisualSystem_;
+	farm::FarmActionParticles farmActionParticles_;
+    farm::FarmWaterPlaySystem farmWaterPlay_;
+    farm::FarmBrushPlaySystem farmBrushPlay_;
+    int farmHoveredTile_=-1;
 	farm::FarmPestVisualSystem farmPestVisualSystem_;
     farm::FarmRainPresentationSystem farmRainPresentation_;
     vegetation::FarmWindSystem farmWind_;

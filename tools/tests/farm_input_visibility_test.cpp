@@ -85,6 +85,53 @@ int main() {
         std::cout<<"PASS: three soil ridges; open edge, sloped bank crests and bed support\n";
     }
     assert(farm::BuildFarmTileMeshParts(grid,-1,visual).count == 0);
+    for (unsigned mask=0;mask<16;++mask) {
+        farm::FarmGrid turn;
+        assert(turn.Initialize(3,3));
+        const int ends[]{3,5,1,7};
+        const auto channel=[](auto& t) { t.feature=farm::FarmTileFeature::Canal; t.waterAmount=.5f; };
+        assert(EditFarmTile(turn,4,channel));
+        for (int side=0;side<4;++side)
+            if ((mask>>side)&1u) assert(EditFarmTile(turn,ends[side],channel));
+        const bool elbow=(mask==5 || mask==6 || mask==9 || mask==10);
+        const auto mesh=farm::BuildFarmTileMeshParts(turn,4,visual);
+        int water=0, lining=0, fillet=0;
+        for (std::size_t i=0;i<mesh.count;++i) {
+            const auto& p=mesh.parts[i];
+            if (p.shape==farm::FarmMeshShape::BendWater) {
+                assert(p.water);
+                const float x=std::cos(p.yaw)+std::sin(p.yaw), z=std::cos(p.yaw)-std::sin(p.yaw);
+                assert((x>0)==bool(mask&1) && (z>0)==bool(mask&4));
+                ++water;
+            }
+            lining+=p.shape==farm::FarmMeshShape::BendLining;
+            fillet+=p.shape==farm::FarmMeshShape::BendFillet;
+        }
+        const int expected=elbow?1:0;
+        assert(water==expected && lining==expected && fillet==expected && mesh.count<mesh.parts.size());
+        if (elbow) {
+            const int ex=mask&1?0:1, ez=mask&4?2:3;
+            assert(EditFarmTile(turn,ends[ex],[](auto& t){ t.heightLevel=1; t.waterAmount=.8f; }));
+            assert(EditFarmTile(turn,ends[ez],[](auto& t){ t.waterAmount=.15f; }));
+            const auto graded=farm::BuildFarmTileMeshParts(turn,4,visual);
+            const auto mid=visual.GetTileVisualData(turn,4);
+            const float run=(visual.GetLayout().tileSize+visual.GetLayout().tileGap)*.5f-mid.waterHalfExtent;
+            for (std::size_t i=0;i<graded.count;++i) {
+                const auto& p=graded.parts[i];
+                if (p.shape!=farm::FarmMeshShape::BendFillet) continue;
+                const float c=std::cos(p.yaw), s=std::sin(p.yaw);
+                const float gx=c*p.slope.x+s*p.slope.y, gz=c*p.slope.y-s*p.slope.x;
+                for (int edge : {ex,ez}) {
+                    const auto end=visual.GetTileVisualData(turn,ends[edge]);
+                    const float slopeAlong=(edge<2?gx:gz)*(edge%2?1.f:-1.f);
+                    assert(std::abs(slopeAlong*run-.5f*(end.waterSurfaceCenter.y-mid.waterSurfaceCenter.y))<.00001f);
+                }
+            }
+            assert(EditFarmTile(turn,4,[](auto& t){ t.waterAmount=0; }));
+            const auto dry=farm::BuildFarmTileMeshParts(turn,4,visual);
+            for (std::size_t i=0;i<dry.count;++i) assert(!dry.parts[i].water);
+        }
+    }
     assert(farm::BuildFarmTileMeshParts(grid,20,visual).count == 0);
     for (int invalid : {-1, 20, (std::numeric_limits<int>::max)()})
         assert(farm::BuildFarmSelectionMeshParts(grid,invalid,visual).count == 0 &&

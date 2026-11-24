@@ -406,6 +406,9 @@
     <ClInclude Include="application\farm\system\FarmGrowthComparisonSystem.h">
       <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
     </ClInclude>
+    <ClInclude Include="application\farm\system\FarmFieldInput.h">
+      <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
+    </ClInclude>
     <ClInclude Include="application\farm\system\FarmInputSystem.h">
       <Filter>繧ｽ繝ｼ繧ｹ 繝輔ぃ繧､繝ｫ\application\farm\system</Filter>
     </ClInclude>
@@ -445,6 +448,14 @@
     <ClInclude Include="application\farm\system\FarmRainAudioSystem.h" />
     <ClInclude Include="application\farm\render\FarmRainGeometry.h" />
     <ClInclude Include="application\farm\render\FarmFieldEffectRenderer.h" />
+    <ClInclude Include="application\farm\render\FarmActionParticleGeometry.h" />
+    <ClInclude Include="application\farm\system\FarmActionParticles.h" />
+    <ClInclude Include="application\farm\system\FarmWateringPose.h" />
+    <ClInclude Include="application\farm\system\FarmHoeStroke.h" />
+    <ClInclude Include="application\farm\system\FarmCanalArrival.h" />
+    <ClInclude Include="application\farm\system\FarmBasketLanding.h" />
+    <ClInclude Include="application\farm\system\FarmWaterPlaySystem.h" />
+    <ClInclude Include="application\farm\system\FarmBrushPlaySystem.h" />
     <ClInclude Include="application\farm\render\FarmMoldGeometry.h" />
     <ClInclude Include="application\farm\system\FarmMoldVisualSystem.h" />
     <ClInclude Include="application\farm\system\FarmFungicideSystem.h" />
@@ -754,6 +765,9 @@
     <ClCompile Include="application\farm\system\FarmPestAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmRainAudioSystem.cpp" />
     <ClCompile Include="application\farm\render\FarmFieldEffectRenderer.cpp" />
+    <ClCompile Include="application\farm\system\FarmActionParticles.cpp" />
+    <ClCompile Include="application\farm\system\FarmWaterPlaySystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmBrushPlaySystem.cpp" />
     <ClCompile Include="application\farm\render\FarmSeedShopRenderer.cpp" />
     <ClCompile Include="application\farm\render\FarmContestRenderer.cpp" />
     <ClInclude Include="application\farm\render\FarmContestRenderer.h" />
@@ -774,6 +788,7 @@
     <ClInclude Include="application\farm\system\FarmHarvestDisplaySystem.h" />
     <ClInclude Include="application\farm\render\FarmRenderer.h" />
     <ClInclude Include="application\farm\render\FarmMeshLayout.h" />
+    <ClInclude Include="application\farm\render\FarmHarvestPose.h" />
     <ClInclude Include="application\farm\render\FarmMaterialStyle.h" />
     <ClInclude Include="application\farm\render\FarmOutdoorLighting.h" />
     <ClInclude Include="application\farm\render\FarmSoilSurface.h" />
@@ -788,6 +803,7 @@
     <ClCompile Include="application\farm\system\FarmCanalLessonSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmPlayFlow.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeForecast.cpp" />
+    <ClCompile Include="application\farm\system\FarmRuntimeHotbar.cpp" />
     <ClCompile Include="application\farm\system\FarmLayoutSystem.cpp" />
     <ClCompile Include="application\farm\ui\FarmRecordDialog.cpp" />
     <ClInclude Include="application\farm\ui\FarmRuntimeUI.h" />

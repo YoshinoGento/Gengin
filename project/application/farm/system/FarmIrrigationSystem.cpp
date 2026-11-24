@@ -308,7 +308,13 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 	const int count = grid.GetTileCount();
 	const auto size = static_cast<std::size_t>(count);
 	if (count <= 0) { return false; }
-	lastTileFlows_.assign(size, {});
+	const bool sameBoard=measuredGrid_==&grid && measuredGeneration_==grid.GetGeneration() && lastTileFlows_.size()==size;
+	lastTileFlows_.resize(size);
+	for (auto& flow:lastTileFlows_) {
+		const auto receipt=sameBoard?flow.firstInflowRevision:0;
+		flow={};
+		flow.firstInflowRevision=receipt;
+	}
 	measuredTiles_.resize(size);
 	measuredGrid_ = &grid;
 	measuredGeneration_ = grid.GetGeneration();
@@ -322,6 +328,7 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 	for (int i = 0; i < count; ++i) {
 		auto tile = *grid.GetTile(i);
 		const float oldWater = tile.waterAmount;
+		if (tile.feature!=FarmTileFeature::Canal || !IsSupplied(i)) lastTileFlows_[i].firstInflowRevision=0;
 		if (soilRainPerSecond > 0.0f && tile.feature == FarmTileFeature::None &&
 			tile.state != FarmTileState::Empty && std::isfinite(tile.moisture) && tile.moisture >= 0.0f &&
 			tile.moisture < FarmWeatherSystem::kRainMoistureLimit) {
@@ -362,6 +369,7 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 		waterDelta_[child] += amount;
 		lastTileFlows_[parent].outgoing += amount;
 		lastTileFlows_[child].incoming += amount;
+		if (amount>0 && waterBefore_[child]==0) lastTileFlows_[child].firstInflowRevision=measurementRevision_+1;
 		lastStep_.transferred += amount;
 	}
 	for (int i = 0; i < count; ++i) {
@@ -397,6 +405,7 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 		(void)grid.SetTile(i, soil);
         const float actual = soil.moisture - moistureBefore;
 		lastTileFlows_[i].soilReceived = actual;
+		if (actual > 0.f) lastTileFlows_[i].soilDonor = canal;
 		lastTileFlows_[canal].soilSent += actual;
 		lastStep_.soilDelivered += actual;
 	}
@@ -409,6 +418,7 @@ bool FarmIrrigationSystem::UpdateWater(FarmGrid& grid, float deltaTime, float ti
 	lastStep_.balanceError = lastStep_.stockBefore + lastStep_.sourceRefill -
 		lastStep_.soilDelivered - lastStep_.stockAfter;
 	lastStep_.valid = measurable;
+	if (measurable) ++measurementRevision_;
 	return changed;
 }
 

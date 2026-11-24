@@ -54,13 +54,21 @@ bool FarmFieldEffectRenderer::Initialize(DirectXCommon* dx) {
     return true;
 }
 void FarmFieldEffectRenderer::Draw(const farm::FarmRainFrame& frame, const farm::FarmMoldFrame& mold,
-    const Camera& camera, Vector3 center, float extentX, float extentZ) {
-    if (!pipeline_ || !dx_ || (frame.rain<=0 && !mold.count)) return;
+    const Camera& camera, Vector3 center, float extentX, float extentZ, std::span<const farm::FieldParticle> particles,
+    std::span<const farm::rain::Vertex> surfaceEffects,std::span<const farm::FieldParticle> brush) {
+    if (!pipeline_ || !dx_ || (frame.rain<=0 && !mold.count && particles.empty() && surfaceEffects.empty() && brush.empty())) return;
     const auto& world=camera.GetWorldMatrix();
     const Vector3 right{world.m[0][0],world.m[0][1],world.m[0][2]};
     std::span<farm::rain::Vertex> vertices{mappedVertices_,kCapacity};
-    auto count=farm::mold::Build(vertices.first(farm::mold::kVertexCount),mold,right,
-        {world.m[1][0],world.m[1][1],world.m[1][2]});
+    const Vector3 up{world.m[1][0],world.m[1][1],world.m[1][2]};
+    auto count=farm::mold::Build(vertices.first(farm::mold::kVertexCount),mold,right,up);
+    count+=farm::actionfx::Build(vertices.subspan(count),particles,right,up);
+    if (brush.size()<=farm::FarmBrushPlaySystem::kCapacity)
+        count+=farm::actionfx::Build(vertices.subspan(count),brush,right,up);
+    if (surfaceEffects.size()<=farm::FarmWaterPlaySystem::kMaxVertices) {
+        std::copy(surfaceEffects.begin(),surfaceEffects.end(),vertices.data()+count);
+        count+=surfaceEffects.size();
+    }
     count+=farm::rain::Build(vertices.subspan(count),frame,center,right,extentX,extentZ);
     if (!count) return;
     // One upload/draw per frame. DirectXCommon::PostDraw waits for its Fence before reuse/destruction.

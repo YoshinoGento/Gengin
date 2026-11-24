@@ -1,8 +1,19 @@
 #include "farm/system/FarmInputSystem.h"
+#include "farm/system/FarmFieldInput.h"
 
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmToolSystem.h"
 #include "io/Input.h"
+
+farm::FieldStep farm::ReadFieldStep(const Input& input, bool includeDPad) {
+    const auto pressed = [&](InputKey key, InputGamepadButton pad) {
+        return input.TriggerKey(key) || (includeDPad && input.TriggerGamepadButton(pad));
+    };
+    return FieldStep::FromArrows(pressed(InputKey::ArrowUp, InputGamepadButton::DPadUp),
+        pressed(InputKey::ArrowDown, InputGamepadButton::DPadDown),
+        pressed(InputKey::ArrowLeft, InputGamepadButton::DPadLeft),
+        pressed(InputKey::ArrowRight, InputGamepadButton::DPadRight));
+}
 
 FarmLockedInputResult FarmInputSystem::PollLockedInput(
 	const Input& input,
@@ -41,6 +52,20 @@ FarmLockedInputResult FarmInputSystem::PollLockedInput(
 	return result;
 }
 
+bool FarmInputSystem::SelectToolFromKeys(const Input& input, const FarmInputContext& context, FarmToolSystem& tools) {
+	if (!context.keyboardEnabled) return false;
+	if (context.directToolSelectionEnabled) {
+		if (input.TriggerKey(InputKey::Num1)) { tools.SetTool(FarmTool::Hoe); return true; }
+		if (input.TriggerKey(InputKey::Num2)) { tools.SetTool(FarmTool::Water); return true; }
+		if (input.TriggerKey(InputKey::Num3)) { tools.SetTool(FarmTool::Seed); return true; }
+		if (input.TriggerKey(InputKey::Num4)) { tools.SetTool(FarmTool::Harvest); return true; }
+	}
+	if (context.cameraDragActive) return false;
+	if (input.TriggerKey(InputKey::E)) { tools.SelectNextTool(); return true; }
+	if (input.TriggerKey(InputKey::Q)) { tools.SelectPreviousTool(); return true; }
+	return false;
+}
+
 FarmInputResult FarmInputSystem::Update(
 	const Input& input,
 	const FarmInputContext& context,
@@ -62,15 +87,8 @@ FarmInputResult FarmInputSystem::Update(
 		input.PushKey(InputKey::ArrowRight);
 
 	const int previousSelection = grid.GetSelectedIndex();
-	if (input.TriggerKey(InputKey::ArrowUp)) {
-		grid.MoveSelection(0, 1);
-	} else if (input.TriggerKey(InputKey::ArrowDown)) {
-		grid.MoveSelection(0, -1);
-	} else if (input.TriggerKey(InputKey::ArrowLeft)) {
-		grid.MoveSelection(-1, 0);
-	} else if (input.TriggerKey(InputKey::ArrowRight)) {
-		grid.MoveSelection(1, 0);
-	}
+	const auto step = farm::ReadFieldStep(input);
+	if (step.x || step.y) grid.MoveSelection(step.x, step.y);
 	result.selectionChanged = previousSelection != grid.GetSelectedIndex();
 
 	if (input.TriggerKey(InputKey::PageUp)) {
@@ -87,24 +105,7 @@ FarmInputResult FarmInputSystem::Update(
 	}
 
 	const FarmTool previousTool = toolSystem.GetCurrentTool();
-	if (context.directToolSelectionEnabled) {
-		if (input.TriggerKey(InputKey::Num1)) {
-			toolSystem.SetTool(FarmTool::Hoe);
-		} else if (input.TriggerKey(InputKey::Num2)) {
-			toolSystem.SetTool(FarmTool::Water);
-		} else if (input.TriggerKey(InputKey::Num3)) {
-			toolSystem.SetTool(FarmTool::Seed);
-		} else if (input.TriggerKey(InputKey::Num4)) {
-			toolSystem.SetTool(FarmTool::Harvest);
-		}
-	}
-	if (!context.cameraDragActive) {
-		if (input.TriggerKey(InputKey::E)) {
-			toolSystem.SelectNextTool();
-		} else if (input.TriggerKey(InputKey::Q)) {
-			toolSystem.SelectPreviousTool();
-		}
-	}
+	(void)SelectToolFromKeys(input, context, toolSystem);
 	result.toolChanged = previousTool != toolSystem.GetCurrentTool();
 
 	if (input.TriggerKey(InputKey::Enter)) {

@@ -1,5 +1,5 @@
 #pragma once
-#include "farm/render/FarmMeshLayout.h"
+#include "farm/render/FarmHarvestPose.h"
 #include <array>
 
 namespace farm {
@@ -7,10 +7,7 @@ namespace farm {
 class FarmHarvestVisualSystem final {
 public:
     static constexpr std::size_t kCapacity = 8;
-    static constexpr float kPullSeconds = 0.30f;
-    static constexpr float kHoldSeconds = 0.90f;
-    static constexpr float kShrinkSeconds = 0.40f;
-    static constexpr float kDuration = kPullSeconds + kHoldSeconds + kShrinkSeconds;
+    static constexpr float kDuration = harvest::kDuration;
 
     bool Start(const FarmToolActionResult& result, const FarmGrid& grid, const FarmVisualSystem& visualSystem) noexcept {
         if (result.status != FarmToolActionStatus::Harvested || !result.harvestedTile ||
@@ -26,8 +23,6 @@ public:
         auto meshes = BuildFarmCropMeshParts(visual, before.growth);
         if (meshes.count != 2) return false;
         for (const auto& mesh : meshes.parts) if (!IsValidPart(mesh)) return false;
-        // Fruit crops show only the picked fruit; roots retain their attached foliage.
-        if (before.crop == CropType::Tomato || before.crop == CropType::Pumpkin) meshes.count = 1;
         std::size_t slot = kCapacity;
         for (std::size_t i = 0; i < entries_.size(); ++i) {
             if (Matches(entries_[i], grid) && entries_[i].tileIndex == result.tileIndex) return false;
@@ -38,17 +33,26 @@ public:
             for (std::size_t i = 1; i < entries_.size(); ++i)
                 if (entries_[i].age > entries_[slot].age) slot = i;
         }
-        entries_[slot] = {meshes, grid.GetGeneration(), result.tileIndex, before.heightLevel, 0.0f,
-            (std::max)(0.16f, visual.center.y - meshes.parts[0].position.y + 0.16f), true};
+        // Anchor the basket on the bed's plateau, toward the interior of the board.
+        const float side=result.tileIndex%grid.GetWidth()<grid.GetWidth()/2?1.f:-1.f;
+        const auto basket=visual.center+Vector3{side*.70f*visual.halfExtent,kFarmSoilRidgeHeight,-.57f*visual.halfExtent};
+        entries_[slot] = {{meshes,visual.center,basket,1.30f*visual.halfExtent,before.moisture,harvest::CueFor(result.harvestQuality.harvestSize)}, &grid,grid.GetGeneration(),
+            result.tileIndex,before.heightLevel,0.f,true};
         return true;
     }
 
     void Clear() noexcept { entries_ = {}; }
     void Update(const FarmGrid& grid, float deltaTime) noexcept {
+        Update(grid,deltaTime,[](const harvest::BasketLanding&){});
+    }
+    template<class OnContact> void Update(const FarmGrid& grid,float deltaTime,OnContact onContact) noexcept {
         const float step = std::isfinite(deltaTime) && deltaTime > 0 ? (std::min)(deltaTime, kDuration) : 0;
         for (auto& entry : entries_) {
             if (!Matches(entry, grid)) { entry.active = false; continue; }
+            const float previous=entry.age;
             entry.age += step;
+            if(previous<harvest::kContact && entry.age>=harvest::kContact && entry.age<harvest::kDuration &&
+                entry.pickup.crop.parts[0].shape==FarmMeshShape::Pumpkin) onContact(harvest::Contact(entry.pickup));
             if (entry.age >= kDuration) entry.active = false;
         }
     }
@@ -57,30 +61,18 @@ public:
         for (const auto& entry : entries_) count += Matches(entry, grid) ? 1 : 0;
         return count;
     }
-    [[nodiscard]] FarmCropMeshParts GetParts(const FarmGrid& grid, std::size_t index) const noexcept {
+    [[nodiscard]] harvest::Parts GetParts(const FarmGrid& grid, std::size_t index) const noexcept {
         if (index >= entries_.size() || !Matches(entries_[index], grid)) return {};
         const auto& entry = entries_[index];
-        auto parts = entry.meshes;
-        const float t = std::clamp(entry.age / kPullSeconds, 0.0f, 1.0f);
-        const float lift = entry.lift * (1.0f - (1.0f - t) * (1.0f - t));
-        const float shrink = 1.0f - std::clamp((entry.age - kPullSeconds - kHoldSeconds) / kShrinkSeconds, 0.0f, 1.0f);
-        const auto pivot = entry.meshes.parts[0].position;
-        for (std::size_t i=0; i<parts.count; ++i) {
-            auto& part = parts.parts[i];
-            part.position = {pivot.x + (part.position.x - pivot.x) * shrink,
-                pivot.y + lift + (part.position.y - pivot.y) * shrink,
-                pivot.z + (part.position.z - pivot.z) * shrink};
-            part.scale = {part.scale.x * shrink, part.scale.y * shrink, part.scale.z * shrink};
-            if (!IsValidPart(part)) return {}; // Never pass a singular scale to the renderer.
-        }
-        return parts;
+        return harvest::Sample(entry.pickup,entry.age);
     }
 private:
     struct Entry {
-        FarmCropMeshParts meshes{};
+        harvest::Pickup pickup{};
+        const FarmGrid* board=nullptr; // Identity only; the caller owns the live grid.
         uint64_t generation = 0;
         int tileIndex = -1, height = 0;
-        float age = 0, lift = 0;
+        float age = 0;
         bool active = false;
     };
     static bool IsValidPart(const FarmMeshPart& part) noexcept {
@@ -89,7 +81,7 @@ private:
             part.scale.x >= 0.0001f && part.scale.y >= 0.0001f && part.scale.z >= 0.0001f;
     }
     static bool Matches(const Entry& entry, const FarmGrid& grid) noexcept {
-        if (!entry.active || entry.generation != grid.GetGeneration()) return false;
+        if (!entry.active || entry.board!=&grid || entry.generation != grid.GetGeneration()) return false;
         const auto* tile = grid.GetTile(entry.tileIndex);
         return tile && tile->crop == CropType::None && tile->feature == FarmTileFeature::None &&
             tile->state == FarmTileState::Tilled && tile->heightLevel == entry.height;

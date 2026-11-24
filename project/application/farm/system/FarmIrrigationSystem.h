@@ -18,6 +18,8 @@ struct FarmIrrigationTileFlow {
 	float soilReceived = 0.0f;
 	float soilSent = 0.0f;
 	float rainReceived = 0.0f;
+	std::uint64_t firstInflowRevision = 0; // Survives multiple fixed updates between renders.
+	int soilDonor = -1; // Actual donor, including retained water, only on positive delivery.
 };
 
 struct FarmIrrigationStepSummary {
@@ -40,8 +42,10 @@ public:
 	void Rebuild(const FarmGrid& grid);
 	bool UpdateWater(FarmGrid& grid, float deltaTime, float timeScale, float soilRainPerSecond = 0.0f);
 	[[nodiscard]] FarmIrrigationStepSummary GetLastStep(const FarmGrid& grid) const noexcept;
+	[[nodiscard]] std::uint64_t MeasurementRevision() const noexcept { return measurementRevision_; }
 	// View valid only until the next UpdateWater/Initialize; consumers must copy their view data.
 	[[nodiscard]] std::span<const FarmIrrigationTileFlow> GetLastTileFlows(const FarmGrid& grid) const noexcept;
+	[[nodiscard]] std::span<const int> GetSupplyOrder() const noexcept { return traversalQueue_; }
 	[[nodiscard]] float GetAvailableIrrigationStrength(const FarmGrid& grid, int tileIndex) const noexcept;
 	[[nodiscard]] FarmWaterStatus GetWaterStatus(const FarmGrid& grid, int tileIndex) const noexcept;
 	[[nodiscard]] int GetAvailableCanalIndex(const FarmGrid& grid, int tileIndex) const noexcept {
@@ -71,6 +75,7 @@ private:
 	};
 	[[nodiscard]] bool MeasurementMatches(const FarmGrid& grid) const noexcept;
 	FarmIrrigationStepSummary lastStep_;
+	std::uint64_t measurementRevision_ = 0;
 	std::vector<FarmIrrigationTileFlow> lastTileFlows_;
 	std::vector<MeasuredTileIdentity> measuredTiles_;
 	const FarmGrid* measuredGrid_ = nullptr; // Identity only, never dereferenced or owned.

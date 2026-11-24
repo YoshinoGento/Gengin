@@ -11,6 +11,7 @@ InitializationTask FarmContestRenderer::InitializeIncrementally(Object3dCommon* 
         "farm/crop_carrot.obj","farm/crop_carrot_leaves.obj","farm/crop_tomato.obj","farm/crop_tomato_stems.obj",
         "farm/crop_pumpkin.obj","farm/crop_pumpkin_vines.obj"}};
     for (std::size_t i=0; i<paths.size(); ++i) {
+        if (FarmContestStageLayout::UsesHarvestedMesh(farm::CropTypeFromSlot(static_cast<int>(i/2)))) continue;
         std::error_code error;
         if (!std::filesystem::is_regular_file(std::filesystem::path("Resources")/paths[i],error)) co_return false;
         models->LoadModel(paths[i]); meshes_[i] = models->GetModel(paths[i]);
@@ -129,7 +130,8 @@ void FarmContestRenderer::DrawComparison(const FarmContestPresentationSystem::Fr
         draw(stage_[side+1],{pose.position.x,pose.position.y-.12f,0},{1.35f,.09f,.65f},side==0 ?
             Vector4{.55f,.42f,.19f,1} : Vector4{.19f,.44f,.46f,1});
         auto& body = crops_[side*2]; auto& leaves = crops_[side*2+1];
-        body.SetModel(meshes_[crop*2]); leaves.SetModel(meshes_[crop*2+1]);
+        const auto& meshes=FarmContestStageLayout::UsesHarvestedMesh(comparison.quality.crop) ? ceremonyMeshes_ : meshes_;
+        body.SetModel(meshes[crop*2]); leaves.SetModel(meshes[crop*2+1]);
         body.SetRotation({0,FarmContestStageLayout::kYaw,0}); leaves.SetRotation({0,FarmContestStageLayout::kYaw,0});
         const bool carrot = comparison.quality.crop==farm::CropType::Carrot;
         const bool tomato = comparison.quality.crop==farm::CropType::Tomato;

@@ -196,6 +196,26 @@ void TestHotbar() {
         bar.compactHUD = true;
         assert(bar.Covers({452,650}) && bar.Hit({452,650}).action == Action::None);
     }
+    for (bool enabled : {false,true}) for (int focus = -1; focus <= kHotbarSlots; ++focus) {
+        FarmHUDViewData state;
+        state.currentToolIndex = 0;
+        state.selectedSeedCrop = farm::CropType::Carrot;
+        View bar;
+        bar.Add(Label::Menu, {}, {Action::Menu});
+        BuildHotbarView(bar,state,enabled,focus);
+        const int expected = enabled && focus >= 0 && focus < kHotbarSlots ? focus : -1;
+        assert(HotbarSlot(FocusedHotbarRequest(bar)) == expected);
+        bar.modal = true;
+        assert(FocusedHotbarRequest(bar).action == Action::None);
+        bar.modal = false;
+        assert(!bar.items[0].focused && HotbarSlot(bar.items[0].request) == -1);
+        for (int i = 0; i < kHotbarSlots; ++i) {
+            const auto& item = bar.items[i+1];
+            assert(HotbarSlot(item.request) == i);
+            assert(item.focused == (enabled && i == focus));
+            assert(item.selected == (i == 0 || i == kFirstSeedSlot));
+        }
+    }
     for (int available : {0,1,6,7}) {
         View full;
         while (full.count < View::kCapacity-static_cast<std::size_t>(available)) full.Add(Label::Ready,{});
@@ -1494,6 +1514,16 @@ int main() {
                     assert(r.x+r.width <= b.x || b.x+b.width <= r.x || r.y+r.height <= b.y || b.y+b.height <= r.y);
                 }
             }
+        }
+    }
+    for (auto status : {FarmComparisonStatus::Completed, FarmComparisonStatus::Stopped, FarmComparisonStatus::Invalidated}) {
+        comparison.status = status;
+        for (int redraw = 0; redraw < 5; ++redraw) {
+            const bool paused = redraw == 0;
+            View v{};
+            BuildObservationView(v, comparison, {false, false}, -1, -1, paused, 1, true);
+            assert(v.items[0].label == ComparisonStatusLabel(status));
+            assert(v.items[1].label == (paused ? Label::Paused : Label::Play));
         }
     }
     for (const auto issue : {FarmComparisonIssue::PickTwo, FarmComparisonIssue::SameTile, FarmComparisonIssue::NotGrowing,

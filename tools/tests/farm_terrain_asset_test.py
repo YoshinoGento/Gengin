@@ -29,3 +29,14 @@ with tempfile.TemporaryDirectory() as folder:
         edges = Counter((tuple(f[i]), tuple(f[(i + 1) % 3])) for f in faces for i in range(3))
         assert all(count == 1 and edges[(b, a)] == 1 for (a, b), count in edges.items())
         print(f"PASS {name}: {len(faces)} triangles, closed mesh inside unit box")
+    for name in ("bend_water.obj", "bend_lining.obj", "bend_fillet.obj"):
+        path=SOURCE/name
+        assert path.read_bytes()==(out/name).read_bytes()
+        faces=load_obj(path)
+        assert np.isfinite(faces).all() and np.abs(faces).max()<=1 and len(faces)<=256
+        area=np.cross(faces[:,1]-faces[:,0],faces[:,2]-faces[:,0])
+        assert np.linalg.norm(area,axis=1).min()>1e-9
+        assert (obj_corner_normals(path)*area[:,None,:]).sum(axis=2).min()>0
+        edges=Counter((tuple(f[i]),tuple(f[(i+1)%3])) for f in faces for i in range(3))
+        assert all(edges[b,a]==count for (a,b),count in edges.items())
+        print(f"PASS {name}: {len(faces)} triangles, finite geometry, closed winding")

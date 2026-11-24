@@ -35,6 +35,8 @@ struct FarmLockedInputResult {
 
 class FarmInputSystem final {
 public:
+	// Returns true even when a direct key selects the already equipped tool.
+	[[nodiscard]] static bool SelectToolFromKeys(const Input& input, const FarmInputContext& context, FarmToolSystem& tools);
 	[[nodiscard]] FarmLockedInputResult PollLockedInput(
 		const Input& input,
 		const FarmInputContext& context) const;

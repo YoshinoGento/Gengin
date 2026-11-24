@@ -76,6 +76,7 @@ template<class... Args> std::string Numbers(const char* format, Args... args) {
 }
 
 void FarmRuntimeController::InitializeEdition() {
+    hotbarSlot_ = -1;
     forecastPick_ = {};
     lesson_.reset();
     std::error_code error;
@@ -138,6 +139,15 @@ void FarmRuntimeController::UpdateContestScreen() {
         open_ = true;
         focusedItem_ = -1;
     }
+}
+
+void FarmRuntimeController::BuildObservationOverlay(farmui::View& view, const FarmRuntimeContext& s) const {
+    const auto comparison = s.farmGrowthComparisonSystem.GetView(s.farmGrid);
+    const bool valid = comparison.status != FarmComparisonStatus::Invalidated;
+    const std::array<bool, 2> jumps = {valid && s.farmGrid.GetTile(comparison.rows[0].tileIndex),
+        valid && s.farmGrid.GetTile(comparison.rows[1].tileIndex)};
+    farmui::BuildObservationView(view, comparison, jumps, pickingSlot_, s.farmGrid.GetSelectedIndex(),
+        paused_, s.farmDateSystem.GetTimeScale(), !s.farmProgressionSystem.IsCleared() && !s.farmIrrigationPreviewSystem.IsActive());
 }
 
 void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
@@ -221,13 +231,7 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             return;
         }
         if (observation_) {
-            const auto comparison = s.farmGrowthComparisonSystem.GetView(s.farmGrid);
-            if (lastComparisonStatus_ == FarmComparisonStatus::Running && comparison.status != FarmComparisonStatus::Running) paused_ = true;
-            lastComparisonStatus_ = comparison.status;
-            const bool valid = comparison.status != FarmComparisonStatus::Invalidated;
-            const std::array<bool, 2> jumps = {valid && s.farmGrid.GetTile(comparison.rows[0].tileIndex), valid && s.farmGrid.GetTile(comparison.rows[1].tileIndex)};
-            farmui::BuildObservationView(view_, comparison, jumps, pickingSlot_, s.farmGrid.GetSelectedIndex(),
-                paused_, s.farmDateSystem.GetTimeScale(), !s.farmProgressionSystem.IsCleared() && !s.farmIrrigationPreviewSystem.IsActive());
+            BuildObservationOverlay(view_, s);
             return;
         }
         const auto hud = s.host.BuildFarmHUDViewData();
@@ -241,7 +245,9 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
             view_.Add(Label::Confirm, {1040, 544, 216, 44}, {Action::Confirm}, s.farmIrrigationPreviewSystem.CanConfirm(s.farmGrid));
             view_.Add(Label::Cancel, {1040, 596, 216, 44}, {Action::Cancel});
         } else if (!s.farmCropSelectionSystem.IsOpen()) {
-            farmui::BuildHotbarView(view_, hud, !s.farmProgressionSystem.IsCleared());
+            farmui::BuildHotbarView(view_, hud, !s.farmProgressionSystem.IsCleared(), hotbarSlot_);
+            view_.hotbarAtFieldEdge = !s.farmProgressionSystem.IsCleared() && !s.farmTimeAdvance.Read().status.active &&
+                hud.selectedTileIndex >= 0 && hud.selectedTileIndex < s.farmGrid.GetWidth();
             const auto timeAdvance = s.farmTimeAdvance.Read();
             const bool held = paused_ || timeAdvance.held;
             farmui::BuildTimeAdvanceControl(view_, timeAdvance, !s.farmProgressionSystem.IsCleared() && !s.farmProgressionSystem.IsFreeFarming());
@@ -270,10 +276,13 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                 {Action::OpenSeedShop}, !s.farmProgressionSystem.IsCleared());
             view_.IconButton(Label::HarvestDisplay, farmui::HUDIcon::Inventory, farmui::HUDLayout::UtilitySlot(1),
                 {Action::HarvestDisplay}, !s.farmProgressionSystem.IsCleared());
-            const auto evaluation = s.farmToolActionSystem.EvaluateTool(s.farmGrid,
-                s.farmToolSystem.GetCurrentTool(), s.farmCropSelectionSystem.GetSelectedCrop(), &s.farmEconomySystem);
-            farmui::BuildFieldActionView(view_, evaluation, held, s.farmProgressionSystem.IsCleared(),
-                hud.nextAction, hud.contestSeason);
+            // The field button acts on the equipped tool, not the candidate shown in the picker.
+            if (hotbarSlot_ < 0) {
+                const auto evaluation = s.farmToolActionSystem.EvaluateTool(s.farmGrid,
+                    s.farmToolSystem.GetCurrentTool(), s.farmCropSelectionSystem.GetSelectedCrop(), &s.farmEconomySystem);
+                farmui::BuildFieldActionView(view_, evaluation, held, s.farmProgressionSystem.IsCleared(),
+                    hud.nextAction, hud.contestSeason);
+            }
             FarmNextGoalContext goalContext;
             goalContext.waterAdvice = water.advice;
             goalContext.selectedCrop = hud.selectedSeedCrop;
@@ -1018,8 +1027,14 @@ void FarmRuntimeController::Execute(const FarmRuntimeContext& s, farmui::Request
     default: break;
     }
     if (request.action == Action::Confirm) { success = dispatch(C::ConfirmFarmIrrigationPreview); if (success) brush_ = 0; }
-    else if (request.action == Action::Stop) { success = s.farmGrowthComparisonSystem.Stop(); if (success && observation_) paused_ = true; }
-    else if (request.action == Action::Clear) { s.farmGrowthComparisonSystem.Reset(); pickingSlot_ = -1; success = true; }
+    else if (request.action == Action::Stop) {
+        success = s.farmGrowthComparisonSystem.Stop();
+        PauseOnComparisonEnd(success);
+    }
+    else if (request.action == Action::Clear) {
+        PauseOnComparisonEnd(s.farmGrowthComparisonSystem.Reset());
+        pickingSlot_ = -1; success = true;
+    }
     else if (s.farmProgressionSystem.IsCleared() || s.farmIrrigationPreviewSystem.IsActive()) {
         if (request.action != Action::Cancel) { status_ = Label::Failure; return; }
     } else {
@@ -1186,15 +1201,17 @@ bool FarmRuntimeController::FrameFarm(const FarmRuntimeContext& s, bool followPl
     return true;
 }
 
+bool FarmRuntimeController::AllowsFieldHover(const FarmRuntimeContext& s) const {
+    return ready_ && s.host.IsViewportFocused() && s.host.IsViewportHovered() && !open_ && !observation_ &&
+        !frameCaptured_ && !flow_.BlocksSimulation() && !s.farmProgressionSystem.IsCleared() &&
+        !s.farmIrrigationPreviewSystem.IsActive() && !s.farmCropSelectionSystem.IsOpen() && !view_.Covers(pointer_);
+}
 int FarmRuntimeController::ResolveHoveredTile(const FarmRuntimeContext& s) const {
     if (ShowsIrrigationForecast() && forecastPick_.valid && s.host.IsViewportFocused() &&
         s.host.IsViewportHovered() && !view_.Covers(pointer_) &&
         forecastPick_.revision == s.farmIrrigationPreviewSystem.CandidateRevision())
         return forecastPick_.index;
-    if (!ready_ || !s.host.IsViewportFocused() || !s.host.IsViewportHovered() || open_ || observation_ ||
-        frameCaptured_ || flow_.BlocksSimulation() || s.farmProgressionSystem.IsCleared() ||
-        s.farmIrrigationPreviewSystem.IsActive() || s.farmCropSelectionSystem.IsOpen() ||
-        view_.Covers(pointer_)) return -1;
+    if (!AllowsFieldHover(s)) return -1;
     Vector3 origin{}, direction{};
     int index = -1;
     if (!s.host.TryBuildViewportRay(origin, direction) ||
@@ -1229,9 +1246,8 @@ void FarmRuntimeController::LeaveTerrain(const FarmRuntimeContext& s) {
 }
 
 bool FarmRuntimeController::UpdateTerrain(const FarmRuntimeContext& s, const Input& input, bool click) {
-    const int dx = (input.TriggerKey(InputKey::ArrowRight) ? 1 : 0) - (input.TriggerKey(InputKey::ArrowLeft) ? 1 : 0);
-    const int dy = (input.TriggerKey(InputKey::ArrowDown) ? 1 : 0) - (input.TriggerKey(InputKey::ArrowUp) ? 1 : 0);
-    if (dx || dy) s.farmGrid.MoveSelection(dx, dy);
+    const auto step = farm::ReadFieldStep(input);
+    if (step.x || step.y) s.farmGrid.MoveSelection(step.x, step.y);
     if (click && !view_.Covers(pointer_)) {
         Vector3 origin{}, direction{}; int index = -1;
         if (s.host.TryBuildViewportRay(origin, direction) && s.farmVisualSystem.TryPickTile(s.farmGrid, origin, direction, index))
@@ -1251,9 +1267,8 @@ bool FarmRuntimeController::UpdateObservation(const FarmRuntimeContext& s, const
     // Observation captures gameplay input, but only explicit pause blocks simulation.
     // Panel backgrounds and disabled buttons must not pick a tile behind the UI.
     if (input.TriggerMouseButton(InputMouseButton::Right)) { pickingSlot_ = -1; BuildView(s); return true; }
-    const int dx = (input.TriggerKey(InputKey::ArrowRight) ? 1 : 0) - (input.TriggerKey(InputKey::ArrowLeft) ? 1 : 0);
-    const int dy = (input.TriggerKey(InputKey::ArrowDown) ? 1 : 0) - (input.TriggerKey(InputKey::ArrowUp) ? 1 : 0);
-    if (dx || dy) { s.farmGrid.MoveSelection(dx, dy); BuildView(s); }
+    const auto step = farm::ReadFieldStep(input);
+    if (step.x || step.y) { s.farmGrid.MoveSelection(step.x, step.y); BuildView(s); }
     if (pickingSlot_ >= 0 && input.TriggerKey(InputKey::Enter)) {
         Execute(s, {pickingSlot_ == 0 ? Action::PinA : Action::PinB}); BuildView(s); frameCaptured_ = true; return true;
     }
@@ -1294,7 +1309,7 @@ void FarmRuntimeController::OpenLayoutLibrary(const FarmRuntimeContext& s) {
         }
         s.farmToolActionSystem.ClearHistory();
         s.farmIrrigationPreviewSystem.Cancel();
-        s.farmGrowthComparisonSystem.Reset();
+        PauseOnComparisonEnd(s.farmGrowthComparisonSystem.Reset());
         s.farmFeedbackSystem.Clear();
         s.farmIrrigationSystem.Rebuild(s.farmGrid);
         s.farmDocumentSystem.MarkDirty();
@@ -1306,26 +1321,72 @@ void FarmRuntimeController::OpenLayoutLibrary(const FarmRuntimeContext& s) {
     }
 }
 
+bool FarmRuntimeController::UpdateFieldClick(const FarmRuntimeContext& s, const Input& input, farm::FieldClick press, bool click, farmui::Request candidate) {
+    if ((!click && !press.Active()) || s.host.IsTimelineScrubbing() ||
+        input.PushMouseButton(InputMouseButton::Right) || input.TriggerMouseButton(InputMouseButton::Right) ||
+        input.PushMouseButton(InputMouseButton::Middle) || input.TriggerMouseButton(InputMouseButton::Middle)) return false;
+    const int hit = ResolveHoveredTile(s);
+    if (!press.Active() && hit < 0) return false;
+    if (s.farmProgressionSystem.IsCleared()) return false;
+    // Equipment may change during a press; only a release on the original tile works the soil.
+    const bool keySelected = FarmInputSystem::SelectToolFromKeys(input, {}, s.farmToolSystem);
+    if (!keySelected && click && hit >= 0 && candidate.action != Action::None) Execute(s, candidate);
+    const int commit = press.Sample(hit, s.farmGrid.GetGeneration(), click,
+        input.PushMouseButton(InputMouseButton::Left), input.ReleaseMouseButton(InputMouseButton::Left));
+    fieldPress_ = press;
+    if (commit >= 0 && s.farmGrid.SetSelectedIndex(commit)) {
+        Execute(s, {Action::ApplyTool});
+    }
+    if (commit >= 0 || keySelected || candidate.action != Action::None)
+        BuildView(s);
+    fieldInputConsumed_ = true;
+    return true;
+}
+
+void FarmRuntimeController::UpdateToolWheel(const FarmRuntimeContext& s, const Input& input, farm::FieldToolWheel previous, bool insideViewport) {
+    const int delta = input.GetMouseWheelDelta();
+    if (!delta && !previous.HasRemainder()) return;
+    if (input.PushMouseButton(InputMouseButton::Right) || input.PushMouseButton(InputMouseButton::Middle)) return;
+    // Capture just the wheel, so keyboard navigation still works in the same frame.
+    wheelCaptured_ = delta != 0;
+    if (!insideViewport || !s.host.IsViewportHovered() || s.host.IsTimelineScrubbing() ||
+        s.farmProgressionSystem.IsCleared() || s.farmCropSelectionSystem.IsOpen() ||
+        input.TriggerMouseButton(InputMouseButton::Left) || input.PushMouseButton(InputMouseButton::Left) ||
+        input.ReleaseMouseButton(InputMouseButton::Left)) return;
+    const bool onHotbar = view_.hotbarVisible && farmui::HUDLayout::tools.Contains(pointer_);
+    if (!onHotbar && view_.Covers(pointer_)) return;
+    fieldWheel_ = previous;
+    s.farmToolSystem.CycleTools(fieldWheel_.Sample(delta));
+}
+
 bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& input) {
     frameCaptured_ = false;
+    fieldInputConsumed_ = false;
+    wheelCaptured_ = false;
+    // Only the field route can renew a press; a modal or focus change cancels it.
+    const auto press = std::exchange(fieldPress_, farm::FieldClick{});
+    const auto previousWheel = std::exchange(fieldWheel_, farm::FieldToolWheel{});
     if (!s.host.IsViewportFocused() || s.host.IsTimelineScrubbing() || RequestsTitle() ||
         exhibition_.Active() || open_ || shop_.IsOpen() || flow_.BlocksSimulation()) pestAudio_.Stop();
     if (!ready_) return false;
-    if (exhibition_.Active()) return UpdateExhibition(s, input);
+    if (exhibition_.Active()) { hotbarSlot_ = -1; return UpdateExhibition(s, input); }
     if (!s.host.IsViewportFocused()) {
+        hotbarSlot_ = -1;
         arrivalAudio_.Update(StartFrame(),flow_.GetPhase()==FarmPlayFlow::Phase::Starting,false);
         // A newly submitted celebration stays pending while its presentation clock is paused.
         contestAudio_.Update(FarmContestPresentationSystem::Cue::None,contestPresentation_.Active(),false);
         s.farmIrrigationPreviewSystem.EndTerrainStroke();
         frameCaptured_ = true; return true;
     }
-    s.host.ConvertMouseToVirtualScreen(input.GetMousePosition(), pointer_);
-    if (UpdateMenuAudio(s, input)) return true;
+    const bool insideViewport = s.host.ConvertMouseToVirtualScreen(input.GetMousePosition(), pointer_);
+    if (UpdateMenuAudio(s, input)) { hotbarSlot_ = -1; return true; }
     UpdateContestScreen();
     BuildView(s);
     const bool click = input.TriggerMouseButton(InputMouseButton::Left);
     pointerTriggered_ = click || input.TriggerMouseButton(InputMouseButton::Right);
     const auto hit = view_.Hit(pointer_);
+    const auto candidate = click && hotbarSlot_ >= 0 ? farmui::FocusedHotbarRequest(view_) : farmui::Request{};
+    if (UpdateHotbarFocus(s, input, previousWheel, insideViewport)) { fieldInputConsumed_ = true; return true; }
     if (lesson_) return UpdateCanalLesson(s,input,click,hit.action);
     if (contestPresentation_.Active()) {
         const auto* framework = Framework::GetInstance();
@@ -1494,10 +1555,6 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
                 return true;
             }
         }
-        if (click) {
-            // A HUD click must never select or modify a tile hidden behind it.
-            if (view_.Covers(pointer_)) { frameCaptured_ = true; return true; }
-        }
         Action action = Action::None;
         if (input.TriggerKey(InputKey::N)) action = Action::Canal;
         if (input.TriggerKey(InputKey::M)) action = Action::Source;
@@ -1506,16 +1563,13 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         if (action != Action::None) { Execute(s, {action}); BuildView(s); frameCaptured_ = true; return true; }
     }
     if (s.farmTimeAdvance.Read().status.active) return true;
+    if (UpdateFieldClick(s, input, press, click, candidate)) return true;
+    UpdateToolWheel(s, input, previousWheel, insideViewport);
     if (paused_ || s.farmTimeAdvance.Read().held) {
         // Pause freezes simulation, not explicit farm edits. Consume this frame so
         // Scene cannot repeat the action or move the player after the edit.
+        fieldInputConsumed_ = true;
         if (s.farmProgressionSystem.IsCleared() || s.farmCropSelectionSystem.IsOpen()) return true;
-        if (click && s.host.IsViewportHovered()) {
-            Vector3 origin{}, direction{}; int index = -1;
-            if (s.host.TryBuildViewportRay(origin, direction) &&
-                s.farmVisualSystem.TryPickTile(s.farmGrid, origin, direction, index))
-                s.farmGrid.SetSelectedIndex(index);
-        }
         FarmInputContext context{};
         context.currentDay = s.farmDateSystem.GetDay();
         const auto result = s.farmInputSystem.Update(input, context, s.farmGrid, s.farmToolSystem,

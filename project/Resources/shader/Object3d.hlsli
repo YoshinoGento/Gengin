@@ -16,6 +16,7 @@ struct Material
     float4x4 uvTransform;
     float4 surfaceDetail;
     float4 outdoorAmbient;
+    float4 surfaceFront;
 };
 
 struct DirectionalLight

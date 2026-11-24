@@ -178,6 +178,25 @@ PixelShaderOutput main(VertexShaderOutput input)
     if (gMaterial.enableLighting == 0)
     {
         output.color = gMaterial.color * textureColor;
+        // Opt-in unlit surface variation in world space keeps water patches continuous.
+        if (gMaterial.surfaceDetail.y > 0 && gMaterial.surfaceDetail.z > 0)
+        {
+            float2 p = input.worldPosition.xz * gMaterial.surfaceDetail.z;
+            float band = sin(p.y * 2.6f + 0.8f * sin(p.x + p.y * 0.4f)) + 0.55f * sin(p.x * 1.1f - p.y);
+            float aa = 1.0f - smoothstep(0.35f, 1.0f, fwidth(band));
+            output.color.rgb *= 1.0f + gMaterial.surfaceDetail.y * aa * (smoothstep(0.4f, 1.45f, band) - 0.24f);
+            if (gMaterial.surfaceFront.w > 0.0f)
+            {
+                // Only the wet side is shaded. The meniscus cannot separate from its water mesh.
+                float4 front = gMaterial.surfaceFront;
+                float2 xz = input.worldPosition.xz;
+                float grain = sin(xz.x * 12.0f + xz.y * 9.0f) * sin(xz.y * 7.0f - xz.x * 5.0f);
+                float inside = front.z - dot(xz, front.xy) - (0.14f + 0.12f * grain) * front.w;
+                clip(inside);
+                float edge = 1.0f - smoothstep(0.0f, front.w, inside);
+                output.color.rgb = lerp(output.color.rgb, float3(0.47f, 0.76f, 0.76f), edge * (0.40f + 0.17f * grain));
+            }
+        }
         return output;
     }
 

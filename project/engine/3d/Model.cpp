@@ -10,6 +10,30 @@
 #include <cmath>
 #include <filesystem>
 #include <limits>
+#include <DirectXCollision.h>
+
+bool Model::IntersectStaticTriangles(Vector3 origin,Vector3 direction,float& limit) const noexcept {
+    using namespace DirectX;
+    if (HasSkinCluster() || !(limit>0)) return false;
+    const auto d=XMVectorSet(direction.x,direction.y,direction.z,0);
+    const float length=XMVectorGetX(XMVector3Length(d));
+    if (!(length>1.e-8f) || !std::isfinite(length)) return false;
+    const auto ray=XMVectorScale(d,1.f/length), o=XMVectorSet(origin.x,origin.y,origin.z,1);
+    const auto position=[&](size_t i) {
+        const auto& v=vertices_[i].position; return XMVectorSet(v.x,v.y,v.z,1);
+    };
+    bool hit=false;
+    const size_t count=indices_.empty()?vertices_.size():indices_.size();
+    for(size_t i=0;i+2<count;i+=3) {
+        const size_t a=indices_.empty()?i:indices_[i], b=indices_.empty()?i+1:indices_[i+1], c=indices_.empty()?i+2:indices_[i+2];
+        if(a>=vertices_.size() || b>=vertices_.size() || c>=vertices_.size()) continue;
+        float distance;
+        if(TriangleTests::Intersects(o,ray,position(a),position(b),position(c),distance) && distance/length<limit) {
+            limit=distance/length; hit=true;
+        }
+    }
+    return hit;
+}
 
 /**
  * Assimpの行列(aiMatrix4x4)を独自の行列(Matrix4x4)に変換する

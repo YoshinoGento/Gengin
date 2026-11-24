@@ -3,6 +3,7 @@
 #include "title/TitleCropPresentation.h"
 #include "title/TitleLogoRipplePoints.h"
 #include "title/TitleGrassPresentation.h"
+#include "math/Matrix.h"
 
 #include <cmath>
 #include <iostream>
@@ -34,6 +35,25 @@ void VegetationWindRegression() {
     Check(Near(here.x,there.x) && Near(here.z,there.z));
     Check(!Near(here.z,later.Tilt({},1).z));
     Check(here.x>0 && here.z<0 && clear.Tilt({},0).z==0);
+    for (auto crop : {farm::CropType::Tomato, farm::CropType::Pumpkin}) {
+        farm::FarmTileVisualData tile{};
+        tile.valid=true; tile.crop=crop; tile.cropStage=farm::FarmCropGrowthStage::Ready; tile.center={3,.7f,-4};
+        for (float size : {.1f, 1.f, 3.f, 8.f}) for (float growth : {.90f,1.f}) {
+            tile.cropScale=size;
+            const auto plant=farm::BuildFarmCropMeshParts(tile,growth);
+            Check(plant.count==2);
+            const auto& body=plant.parts[0]; const auto& stalk=plant.parts[1];
+            const float h=(crop==farm::CropType::Tomato ? .20f : -.005f)*size*(.25f+.75f*growth);
+            Check(std::abs(body.position.y-stalk.position.y-h)<1e-5f);
+            for (float phase : {-2.f,0.f,1.5f}) for (float bend : {-.68f, .68f}) {
+                const vegetation::WindFrame gust{{axis.x*bend,axis.y*bend},phase};
+                const auto b=farm::CropWindPose(body,gust), l=farm::CropWindPose(stalk,gust);
+                const auto socket=MatrixMath::Transform({0,h,0},MatrixMath::MakeAffineMatrix({1,1,1},l.rotation,l.position));
+                Check(MatrixMath::Length({socket.x-b.position.x,socket.y-b.position.y,socket.z-b.position.z})<1e-5f);
+                Check(b.rotation.x==l.rotation.x && b.rotation.z==l.rotation.z);
+            }
+        }
+    }
     for(int i=0;i<1000;++i) wind.Update(.1f,1);
     Check(wind.GetFrame().phase>=0 && wind.GetFrame().phase<2*std::numbers::pi_v<float>);
     std::cout<<"PASS vegetation wind: signed lean, rain strength, travelling crest, bounded clock\n";
@@ -221,7 +241,7 @@ int main() {
                     Check(std::isfinite(mesh.position.y) && mesh.scale.x > .0001f && mesh.scale.y > .0001f);
                     if (mesh.shape == farm::FarmMeshShape::Carrot) Check(mesh.position.y < visual.center.y);
                     if (mesh.shape == farm::FarmMeshShape::TomatoStems || mesh.shape == farm::FarmMeshShape::PumpkinVines)
-                        Check(Near(mesh.position.y,visual.center.y+.02f));
+                        Check(Near(mesh.position.y,visual.center.y+.02f*mesh.scale.x/.58f));
                 }
             }
             Check(current.skyFrom < 4 && current.skyTo < 4);

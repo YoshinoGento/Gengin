@@ -141,6 +141,7 @@ InitializationTask TitleFarmRenderer::InitializeIncrementally(Object3dCommon* co
         auto object = std::make_unique<Object3d>(); object->Initialize(common_);
         object->SetModel(models_[shape]); object->SetTexture(white);
         object->SetPosition(part.position);
+        object->SetRotation({0,part.yaw,0});
         if (!object->SetScale(part.scale) || !object->SetShearY(part.slope)) co_return false;
         const auto material = farm::BuildFarmMaterialStyle(part);
         object->SetSpecularType(material.detail.x > 0.0f ?
@@ -218,12 +219,13 @@ void TitleFarmRenderer::Update(const Frame& frame) {
                 const auto& mesh = meshes.parts[current];
                 if (mesh.shape != parts_[index].shape) continue;
                 auto& object = *objects_[index];
-                object.SetPosition(mesh.position);
                 if (!object.SetScale(mesh.scale)) break;
                 object.SetColor(mesh.color);
                 drawColors_[index] = mesh.color;
                 const vegetation::WindFrame wind{frame.grassWindXZ,frame.grassPhase};
-                object.SetRotation(wind.Tilt(mesh.position, farm::CropWindResponse(mesh.shape)));
+                const auto pose = farm::CropWindPose(mesh, wind);
+                object.SetPosition(pose.position);
+                object.SetRotation(pose.rotation);
                 object.Update(&camera_,0);
                 visible_[index] = 1;
                 break;

@@ -15,6 +15,7 @@ struct ObjectMaterial {
     Matrix4x4 uvTransform;
     Vector4 surfaceDetail;
     Vector4 outdoorAmbient;
+    Vector4 surfaceFront;
 };
 struct ObjectTransform {
     Matrix4x4 WVP;
@@ -22,10 +23,11 @@ struct ObjectTransform {
     Matrix4x4 WorldInverseTranspose;
 };
 inline constexpr std::size_t kObjectConstantAlignment = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
-static_assert(sizeof(ObjectMaterial) == 128 && sizeof(ObjectTransform) == 192);
+static_assert(sizeof(ObjectMaterial) == 144 && sizeof(ObjectTransform) == 192);
 static_assert(offsetof(ObjectMaterial, uvTransform) == 32);
 static_assert(offsetof(ObjectMaterial, surfaceDetail) == 96);
 static_assert(offsetof(ObjectMaterial, outdoorAmbient) == 112);
+static_assert(offsetof(ObjectMaterial, surfaceFront) == 128);
 // Keep shadow writes separate: main and shadow draws can be in the same GPU submission.
 struct ObjectBufferData {
     ObjectMaterial material;

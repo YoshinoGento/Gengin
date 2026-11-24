@@ -66,6 +66,7 @@ public:
 	void SetSpecularType(SpecularType type) { if (constantBuffer_ && materialData_) materialData_->specularType = static_cast<int32_t>(type); }
 	// x: specular gain, y: grain contrast, z: cells/world-unit, w: normal variation.
 	bool SetSurfaceDetail(const Vector4& detail);
+	bool SetSurfaceFront(const Vector4& plane);
 	// RGB: sky-fill tint, W: opt-in blend. Zero preserves legacy lighting.
 	bool SetOutdoorAmbient(const Vector4& skyTint);
 

@@ -495,7 +495,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 		(void)farmCropSelectionSystem_.SetSelectedCrop(FarmRecoverySystem::kSeed);
 		// Old snapshots must not erase the daily limit or restore resources alongside the grant.
 		farmToolActionSystem_.ClearHistory();
-		farmGrowthComparisonSystem_.Reset();
+		farmRuntimeController_.PauseOnComparisonEnd(farmGrowthComparisonSystem_.Reset());
 		farmDocumentSystem_.MarkDirty();
 		InitializeTimeline();
 		return true;
@@ -507,7 +507,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 			command.type == GamePlayEditorCommandType::PlaceFarmRepellent)) return false;
 		// Old tool commands must not restore a tile snapshot over this new occupancy.
 		farmToolActionSystem_.ClearHistory();
-		farmGrowthComparisonSystem_.Reset();
+		farmRuntimeController_.PauseOnComparisonEnd(farmGrowthComparisonSystem_.Reset());
 		farmIrrigationSystem_.Rebuild(farmGrid_);
 		farmDocumentSystem_.MarkDirty();
 		InitializeTimeline();
@@ -518,7 +518,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 			{command.farmGeneration, command.inventoryGeneration, command.expectedFarmHeight,
 			command.expectedDevelopmentMoney, command.expectedDevelopmentCost})) return false;
 		farmToolActionSystem_.ClearHistory();
-		farmGrowthComparisonSystem_.Reset();
+		farmRuntimeController_.PauseOnComparisonEnd(farmGrowthComparisonSystem_.Reset());
 		farmHarvestVisualSystem_.Clear();
 		farmPestVisualSystem_.Clear();
 		farmIrrigationSystem_.Rebuild(farmGrid_);
@@ -531,7 +531,7 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 			FarmContestSeasonSystem::Evaluate(farmDateSystem_.GetDay(), farmEconomySystem_.GetContestResults()))) return false;
 		if (!farmProgressionSystem_.PestsEnabled()) FarmPestSystem::DismissActive(farmGrid_);
 		farmToolActionSystem_.ClearHistory();
-		farmGrowthComparisonSystem_.Stop();
+		farmRuntimeController_.PauseOnComparisonEnd(farmGrowthComparisonSystem_.Stop());
 		farmContestDaySystem_.Reset();
 		InitializeTimeline();
 		farmDocumentSystem_.MarkDirty();
@@ -545,11 +545,14 @@ bool GamePlaySessionSystem::Execute(const GamePlayEditorCommand& command) {
 		if (farmGameMode_ || timelineScrubbing_ || farmIrrigationPreviewSystem_.IsActive() ||
 			farmProgressionSystem_.IsCleared()) return false;
 		return farmGrowthComparisonSystem_.Start(farmGrid_);
-	case GamePlayEditorCommandType::StopFarmComparison:
-		farmGrowthComparisonSystem_.ObserveBeforeStep(farmGrid_);
-		return farmGrowthComparisonSystem_.Stop();
+	case GamePlayEditorCommandType::StopFarmComparison: {
+		const bool invalidated = farmGrowthComparisonSystem_.ObserveBeforeStep(farmGrid_);
+		const bool stopped = farmGrowthComparisonSystem_.Stop();
+		farmRuntimeController_.PauseOnComparisonEnd(invalidated || stopped);
+		return stopped;
+	}
 	case GamePlayEditorCommandType::ResetFarmComparison:
-		farmGrowthComparisonSystem_.Reset();
+		farmRuntimeController_.PauseOnComparisonEnd(farmGrowthComparisonSystem_.Reset());
 		return true;
 	case GamePlayEditorCommandType::SelectFarmTile:
 		farmIrrigationPreviewSystem_.Cancel();
@@ -827,7 +830,7 @@ bool GamePlaySessionSystem::Execute(const FarmDocumentCommand& command) {
 			command.type == FarmDocumentCommandType::Load) {
 			farmContestDaySystem_.Reset();
 			farmIrrigationPreviewSystem_.Cancel();
-			farmGrowthComparisonSystem_.Reset();
+			farmRuntimeController_.PauseOnComparisonEnd(farmGrowthComparisonSystem_.Reset());
 			farmHarvestVisualSystem_.Clear();
 			farmPestVisualSystem_.Clear();
 			farmIrrigationSystem_.Rebuild(farmGrid_);

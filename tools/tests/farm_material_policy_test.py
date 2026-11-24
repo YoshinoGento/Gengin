@@ -16,7 +16,8 @@ assert "surfaceDetail = {1.0f, 0.0f, 0.0f, 0.0f}" in object_cpp
 assert "using Material = graphics::ObjectMaterial;" in object_h
 assert "offsetof(ObjectMaterial, surfaceDetail) == 96" in buffer_layout
 assert "offsetof(ObjectMaterial, outdoorAmbient) == 112" in buffer_layout
-assert "sizeof(ObjectMaterial) == 128" in buffer_layout
+assert "sizeof(ObjectMaterial) == 144" in buffer_layout
+assert "offsetof(ObjectMaterial, surfaceFront) == 128" in buffer_layout
 assert "spec_dir * directionalShadow * specularGain" in shader
 assert "gMaterial.shininess) * specularGain" in shader
 assert "EvaluateDirectionalShadow(input.worldPosition, geometricNormal" in shader

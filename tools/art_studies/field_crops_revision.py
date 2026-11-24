@@ -55,6 +55,15 @@ def carrot_sculpt():
     return root,np.concatenate(leaves)
 
 
+def pumpkin_stalk(socket):
+    def ring(dy,dx,dz,r):
+        return [socket+[dx+r*(1+.19*cos(5*a))*cos(a+.11*dy),dy,dz+r*(1+.19*cos(5*a))*sin(a+.11*dy)]
+                for a in np.arange(15)*tau/15]
+    return shell([ring(.031,0,0,.083),ring(.019,-.002,.001,.057),
+                  ring(.052,-.006,-.003,.034),ring(.096,-.027,-.012,.026),
+                  ring(.124,-.048,-.023,.028),ring(.132,-.056,-.029,.023)])
+
+
 def pumpkin_sculpt():
     body_scale=np.array([.46,.65,.46])
     vine_scale=np.array([.58,.80,.58])
@@ -69,22 +78,18 @@ def pumpkin_sculpt():
     body=fruit(40,[(.003,.30),(.064,.63),(.22,.85),(.42,.91),(.59,.87),
                    (.745,.67),(.798,.46),(.78,.27),(.688,.095)],polar)
     socket=center+[0,.015+.65*.688,0]
-    def stem_ring(dy,dx,dz,r):
-        return [socket+[dx+r*(1+.19*cos(5*a))*cos(a+.11*dy),dy,dz+r*(1+.19*cos(5*a))*sin(a+.11*dy)]
-                for a in np.arange(15)*tau/15]
-    stem=shell([stem_ring(.031,0,0,.083),stem_ring(.019,-.002,.001,.057),
-                stem_ring(.052,-.006,-.003,.034),stem_ring(.096,-.027,-.012,.026),
-                stem_ring(.124,-.048,-.023,.028),stem_ring(.132,-.056,-.029,.023)])
-    runner=[(-.50,.036,.003),(-.425,.064,-.057),(-.390,.125,-.11),
-            (-.367,.222,-.109),(-.323,.350,-.104),(-.235,.462,-.106),
-            (-.084,.545,-.071),socket+[-.042,.112,-.019]]
+    stem=pumpkin_stalk(socket)
+    # Clear the stepped ceremony silhouette as well as the rounded field shoulder.
+    runner=[(-.505,.036,.003),(-.461,.083,-.075),(-.425,.162,-.125),
+            (-.408,.274,-.141),(-.372,.401,-.151),(-.283,.528,-.136),
+            (-.142,.580,-.093),socket+[-.042,.112,-.019]]
     foliage=[stem,tube(runner,[.011,.017,.018,.013,.012,.012,.012,.014],6)]
     # Palmate leaves: three pronounced points with shallow side notches and a folded centre.
     outline=[(0,0),(-.13,.23),(.05,.43),(.23,.27),(.41,.53),(.49,.29),
              (.59,.17),(1,0),(.59,-.21),(.44,-.34),(.31,-.51),(.18,-.25),(-.09,-.30)]
-    for base,petiole,tip in [(runner[2],(-.300,.196,.070),(-.488,.123,.248)),
-                             (runner[1],(-.437,.112,-.131),(-.362,.088,-.324)),
-                             (runner[4],(-.295,.380,-.168),(-.143,.338,-.313))]:
+    for base,petiole,tip in [(runner[2],(-.440,.175,.020),(-.458,.105,.212)),
+                             (runner[1],(-.443,.125,-.149),(-.364,.093,-.336)),
+                             (runner[4],(-.336,.445,-.250),(-.179,.393,-.431))]:
         p=np.array(petiole)
         foliage.append(tube([base,(np.array(base)+p)/2+UP*.015,p],[.009,.007,.004],5))
         foliage.append(folded_outline(p,np.array(tip)-p,outline,.030))

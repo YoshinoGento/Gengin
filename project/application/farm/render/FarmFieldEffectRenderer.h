@@ -1,5 +1,8 @@
 #pragma once
 #include "farm/render/FarmMoldGeometry.h"
+#include "farm/render/FarmActionParticleGeometry.h"
+#include "farm/system/FarmWaterPlaySystem.h"
+#include "farm/system/FarmBrushPlaySystem.h"
 #include "math/Matrix.h"
 #include <d3d12.h>
 #include <wrl.h>
@@ -14,9 +17,12 @@ public:
     FarmFieldEffectRenderer& operator=(const FarmFieldEffectRenderer&) = delete;
     bool Initialize(DirectXCommon* dx);
     void Draw(const farm::FarmRainFrame& rain, const farm::FarmMoldFrame& mold, const Camera& camera,
-        Vector3 center, float extentX, float extentZ);
+        Vector3 center, float extentX, float extentZ, std::span<const farm::FieldParticle> particles,
+        std::span<const farm::rain::Vertex> surfaceEffects,std::span<const farm::FieldParticle> brush);
 private:
-    static constexpr std::size_t kCapacity = farm::rain::kVertexCount + farm::mold::kVertexCount;
+    static constexpr std::size_t kCapacity = farm::rain::kVertexCount + farm::mold::kVertexCount +
+        farm::actionfx::kVertexCount + farm::FarmWaterPlaySystem::kMaxVertices +
+        farm::FarmBrushPlaySystem::kCapacity*farm::actionfx::kPerGrain;
     struct Constants { Matrix4x4 viewProjection; Matrix4x4 world; };
     static_assert(sizeof(Constants)==128); // Shared LineVS b0 layout.
     DirectXCommon* dx_ = nullptr;

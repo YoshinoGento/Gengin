@@ -36,7 +36,7 @@ def leaflet(points,widths,fold):
 
 def make():
     bodies=[]
-    leaves=[tube([(0,.025,0),(.015,.34,-.03),(-.028,.60,-.075),
+    leaves=[tube([(0,.029,-.106),(.015,.34,-.179),(-.028,.60,-.157),
                   (.005,.78,-.085),(.052,.89,-.093),(.106,.985,-.08)],
                  [.023,.021,.017,.015,.011,.005],6)]
     for x,y,z,r,h,angle in [(-.171,.409,.045,.210,.172,.32),(.202,.540,-.034,.159,.131,-.75)]:
@@ -57,11 +57,11 @@ def make():
             tangent=np.array([-sin(a),0,cos(a)])
             top=np.array([x,y,z])
             # Curve up out of the stem scar, over the shoulder, then taper down the skin.
-            leaves.append(leaflet([socket,top+.26*r*axis+[0,h*1.02,0],
-                                   top+.49*r*axis+[0,h*1.015,0],
-                                   top+.71*r*axis+.05*r*tangent+[0,.85*h,0]],
+            leaves.append(leaflet([socket,top+.26*r*axis+[0,h*1.10,0],
+                                   top+.49*r*axis+[0,h*1.105,0],
+                                   top+.71*r*axis+.05*r*tangent+[0,.98*h,0]],
                                   [.115*r,.080*r],.28))
-    for base,a,length,arch in [((-.028,.60,-.075),2.75,.39,.06),
+    for base,a,length,arch in [((-.028,.60,-.157),2.75,.39,.06),
                                ((.005,.78,-.085),.40,.36,.095),
                                ((.052,.89,-.093),2.02,.28,.08)]:
         along=np.array([cos(a),0,sin(a)])

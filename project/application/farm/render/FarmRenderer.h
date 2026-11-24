@@ -3,6 +3,7 @@
 #include "2d/TextureManager.h"
 #include "environment/VegetationWind.h"
 #include "farm/render/FarmMeshLayout.h"
+#include "farm/system/FarmBrushPlaySystem.h"
 #include <memory>
 #include <vector>
 
@@ -29,7 +30,10 @@ public:
 	bool IsVisible() const { return visible_; }
 	void Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
         int hoveredTileIndex = -1, const FarmHarvestVisualSystem* harvest = nullptr, bool showSelection = true,
-        const FarmPestVisualSystem* pests = nullptr, const vegetation::WindFrame& wind = {});
+        const FarmPestVisualSystem* pests = nullptr, const vegetation::WindFrame& wind = {},
+        const FarmBrushPlaySystem* brush = nullptr,const FarmActionParticles* actions = nullptr);
+    std::optional<FarmBrushContact> PickBrushContact(const FarmGrid& grid,const FarmVisualSystem& visual,
+        int groundTile,Vector3 origin,Vector3 unitRay) const;
 	void Draw();
 	void DrawShadow();
 	int GetLastDrawTileCount() const { return lastDrawTileCount_; }
@@ -45,13 +49,17 @@ private:
 	static constexpr std::size_t kMaximumParts = 30 * 32;
 	static constexpr std::size_t kMaximumTargetParts = 16;
 	static constexpr std::size_t kMaximumCropParts = kMaximumParts * 2;
-	static constexpr std::size_t kMaximumHarvestParts = 16;
+	static constexpr std::size_t kMaximumHarvestParts = 40;
 	Object3dCommon* common_ = nullptr; // Framework-owned, outlives scene.
 	std::array<Model*,kFarmMeshPaths.size()> meshModels_{}; // ModelManager-owned; shared by all tiles.
 	bool cropsReady_ = false;
 	Texture2DHandle whiteTexture_{};
 	std::vector<std::unique_ptr<Object3d>> objects_;
 	std::vector<FarmMeshPart> parts_;
+    struct LiveCrop { size_t part; int tile; CropType crop; };
+    std::vector<LiveCrop> liveCrops_;
+    const FarmGrid* preparedBoard_{};
+    uint64_t preparedGeneration_{};
 	bool limitExceeded_ = false;
 };
 

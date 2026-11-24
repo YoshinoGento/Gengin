@@ -199,6 +199,7 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     opacity_ = view.starting ? std::clamp(view.cinematicBars, 0.0f, 1.0f) : 1.0f;
     const Item* tooltip = nullptr;
     const Item* selectedTool = nullptr;
+    const Item* focusedSlot = nullptr;
     if (view.compactHUD && view.hotbarVisible) Panel(HUDLayout::tools, {0.025f, 0.035f, 0.032f, 0.93f});
     if (view.audioSettings) {
         Panel({0,0,1280,720},{.01f,.015f,.02f,.75f});
@@ -346,7 +347,9 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         const bool button = item.request.action != Action::None;
         if (IsValidIcon(item.icon) && !item.leadingIcon) {
             const bool hover = item.rect.Contains(pointer) || item.focused;
-            const Vector4 border = item.selected ? Vector4{0.96f, 0.78f, 0.35f, 1} :
+            const bool barFocus = view.hotbarVisible && item.focused &&
+                (item.request.action == Action::Tool || item.request.action == Action::Crop);
+            const Vector4 border = barFocus ? Vector4{0.88f, 1.f, 1.f, 1} : item.selected ? Vector4{0.96f, 0.78f, 0.35f, 1} :
                 hover ? Vector4{0.68f, 0.89f, 0.85f, 1} : Vector4{0.23f, 0.30f, 0.28f, 1};
             Panel(item.rect, border);
             Panel({item.rect.x + 3, item.rect.y + 3, item.rect.width - 6, item.rect.height - 6},
@@ -363,6 +366,7 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
                 ValueText(item.value,{x,y},item.rect.x+item.rect.width-3,{1,1,0.94f,1},scale);
             }
             if (item.request.action == Action::Tool && item.selected) selectedTool = &item;
+            if (barFocus) focusedSlot = &item;
             if (hover) tooltip = &item;
             continue;
         }
@@ -400,7 +404,17 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             item.darkInk ? darkInk : Vector4{1.0f, 0.87f, 0.50f, 1});
     }
     opacity_ = viewOpacity;
-    const Item* caption = tooltip ? tooltip : selectedTool;
+    // The notch points in the direction that transfers focus between the field and its bar.
+    const Item* notch = focusedSlot ? focusedSlot : view.hotbarAtFieldEdge ? selectedTool : nullptr;
+    if (notch) {
+        const float cx = notch->rect.x + notch->rect.width * 0.5f;
+        constexpr Vector4 ink{.88f, 1.f, 1.f, 1};
+        for (int i = 0; i < 3; ++i) {
+            const float half = 2.f + 3.f * static_cast<float>(focusedSlot ? i : 2-i);
+            Panel({cx-half, notch->rect.y-8.f+2.f*i, half*2.f, 2.f}, ink);
+        }
+    }
+    const Item* caption = focusedSlot ? focusedSlot : tooltip ? tooltip : selectedTool;
     if (caption) {
         const auto index = static_cast<std::size_t>(caption->label);
         if (index < kLabels.size()) {

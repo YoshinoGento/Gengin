@@ -54,9 +54,54 @@ void CheckBlocked(Fixture& f, Reason reason, int index = -1) {
     Require(f.advance.AdvanceBatch(f.Context(), false) == 0, "stopped session advanced");
     SameClock(before, f.date.CaptureSnapshot());
 }
+void CheckComparisonEndEvents() {
+    Fixture f;
+    FarmGrowthComparisonSystem comparison;
+    comparison.Initialize();
+    auto context = f.Context();
+    context.comparison = &comparison;
+    const auto start = [&](float growth) {
+        f.Crop(farm::CropType::Carrot, .55f, growth, 18);
+        f.Crop(farm::CropType::Carrot, .55f, growth, 19);
+        Require(comparison.Pin(f.grid, 0, 18) && comparison.Pin(f.grid, 1, 19) && comparison.Start(f.grid),
+            "comparison restart");
+    };
+    start(.99999f);
+    Require(!FarmSimulationStepSystem::Step(context, 0).comparisonEnded, "blocked step ended comparison");
+    const auto end = FarmSimulationStepSystem::Step(context, Advance::kStepSeconds);
+    Require(end.advanced && end.comparisonEnded, "completion required a view read");
+    const auto completed = comparison.GetView(f.grid);
+    Require(completed.status == FarmComparisonStatus::Completed && completed.elapsedSeconds > 0 &&
+        completed.rows[0].readySeconds == completed.elapsedSeconds && completed.rows[1].readySeconds == completed.elapsedSeconds,
+        "completed measurement lost");
+    for (int i = 0; i < 100; ++i) {
+        const auto redraw = comparison.GetView(f.grid);
+        Require(redraw.status == completed.status && redraw.elapsedSeconds == completed.elapsedSeconds,
+            "redraw or resumed simulation changed measurement");
+        const auto resumed = FarmSimulationStepSystem::Step(context, Advance::kStepSeconds);
+        Require(resumed.advanced && !resumed.comparisonEnded, "resumed simulation repeated completion");
+    }
+    start(.2f);
+    Require(comparison.Stop() && !comparison.Stop() && !FarmSimulationStepSystem::Step(context, Advance::kStepSeconds).comparisonEnded &&
+        comparison.GetView(f.grid).status == FarmComparisonStatus::Stopped, "manual stop not one-shot");
+    start(.2f);
+    f.Crop(farm::CropType::Carrot, .4f, .2f, 18);
+    Require(FarmSimulationStepSystem::Step(context, Advance::kStepSeconds).comparisonEnded &&
+        comparison.GetView(f.grid).status == FarmComparisonStatus::Invalidated &&
+        !FarmSimulationStepSystem::Step(context, Advance::kStepSeconds).comparisonEnded, "edit invalidation not one-shot");
+    start(.2f);
+    Require(f.grid.Initialize(5, 4), "replace grid");
+    Require(comparison.GetView(f.grid).status == FarmComparisonStatus::Invalidated &&
+        comparison.ObserveBeforeStep(f.grid) && !comparison.ObserveBeforeStep(f.grid),
+        "read consumed grid replacement notification");
+    start(.2f);
+    Require(comparison.Reset() && !comparison.Reset() && comparison.GetView(f.grid).status == FarmComparisonStatus::Idle,
+        "clear not one-shot");
+}
 }
 
 int main() try {
+    CheckComparisonEndEvents();
     {
         Fixture f;
         FarmTimeAdvanceControlSystem control;

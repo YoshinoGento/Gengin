@@ -26,7 +26,7 @@ int main() {
 				if (part.surface == FarmMeshSurface::Crop) assert(style.detail.z == 0.0f);
 				part.water = true;
 				const auto water = BuildFarmMaterialStyle(part);
-				assert(water.detail.x == 0.0f && water.detail.y == 0.0f && water.detail.w == 0.0f);
+				assert(water.detail.x == 0.0f && water.detail.y > 0.0f && water.detail.z > 0.0f && water.detail.w == 0.0f);
 				++cases;
 			}
 		}

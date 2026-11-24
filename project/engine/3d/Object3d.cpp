@@ -82,6 +82,13 @@ bool Object3d::SetSurfaceDetail(const Vector4& detail) {
 	return true;
 }
 
+bool Object3d::SetSurfaceFront(const Vector4& plane) {
+	if (!materialData_ || !std::isfinite(plane.x) || !std::isfinite(plane.y) ||
+		!std::isfinite(plane.z) || !std::isfinite(plane.w) || plane.w<0.f) return false;
+	materialData_->surfaceFront=plane;
+	return true;
+}
+
 void Object3d::Update(Camera* camera) {
 	Update(camera, 0.0f);
 }

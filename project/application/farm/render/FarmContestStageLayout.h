@@ -15,6 +15,9 @@ struct FarmContestStageLayout {
     }
     static constexpr float kSpecimenHeight = 1.35f, kSummarySpecimenHeight = 1.55f, kSpecimenBaseline = 480;
     using Page = FarmContestPresentationSystem::Page;
+    [[nodiscard]] static constexpr bool UsesHarvestedMesh(farm::CropType crop) noexcept {
+        return crop==farm::CropType::Tomato || crop==farm::CropType::Pumpkin;
+    }
     struct Pose {
         Vector3 position{}, bodyScale{}, leafScale{};
         float leafY = 0;
@@ -64,13 +67,16 @@ struct FarmContestStageLayout {
         const float height = page==Page::Result ? kSummarySpecimenHeight : kSpecimenHeight;
         const float scale = std::cbrt(multiplier)*height/std::cbrt((std::max)(1.f,largest));
         const bool carrot = crop==farm::CropType::Carrot;
-        const bool tomato = crop==farm::CropType::Tomato;
         const bool pumpkin = crop==farm::CropType::Pumpkin;
         Pose pose;
         const float x = side==0 ? 320.f : 960.f;
         const float baseline = kSpecimenBaseline;
         pose.position = {(x-kWidth*.5f)*UnitsPerPixel(), (kHeight*.5f-baseline)*UnitsPerPixel(), 0};
-        if (carrot || pumpkin || tomato) {
+        if (crop==farm::CropType::Tomato) {
+            // Harvested skin and calyx are authored together relative to the tabletop.
+            pose.bodyScale=pose.leafScale={scale,scale,scale};
+            pose.leafY=pose.position.y;
+        } else if (carrot || pumpkin) {
             farm::FarmTileVisualData plant{};
             plant.valid=true; plant.crop=crop; plant.cropStage=farm::FarmCropGrowthStage::Ready;
             plant.cropScale=scale/(carrot ? .70f : pumpkin ? .75f : 1.f);

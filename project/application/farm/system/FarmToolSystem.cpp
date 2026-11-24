@@ -4,28 +4,8 @@ namespace {
 	// BugNet remains reserved until its gameplay action is implemented.
 	constexpr int kSelectableToolCount = 4;
 
-	int ToToolIndex(FarmTool tool)
-	{
-		return static_cast<int>(tool);
-	}
-
-	FarmTool ToFarmTool(int index)
-	{
-		switch (index) {
-		case 0:
-			return FarmTool::Hoe;
-		case 1:
-			return FarmTool::Water;
-		case 2:
-			return FarmTool::Seed;
-		case 3:
-			return FarmTool::Harvest;
-		case 4:
-			return FarmTool::BugNet;
-		default:
-			return FarmTool::Hoe;
-		}
-	}
+	static_assert(static_cast<int>(FarmTool::Hoe) == 0 &&
+		static_cast<int>(FarmTool::Harvest) + 1 == kSelectableToolCount);
 }
 
 void FarmToolSystem::Initialize()
@@ -38,20 +18,24 @@ void FarmToolSystem::SetTool(FarmTool tool)
 	currentTool_ = tool;
 }
 
+void FarmToolSystem::CycleTools(int steps)
+{
+	if (!steps) return;
+	int index = static_cast<int>(currentTool_);
+	if (index < 0 || index >= kSelectableToolCount)
+		index = steps > 0 ? kSelectableToolCount - 1 : 0;
+	const int offset = steps % kSelectableToolCount;
+	currentTool_ = static_cast<FarmTool>((index + offset + kSelectableToolCount) % kSelectableToolCount);
+}
+
 void FarmToolSystem::SelectNextTool()
 {
-	const int currentIndex = ToToolIndex(currentTool_);
-	const int nextIndex = currentIndex >= kSelectableToolCount - 1
-		? 0 : currentIndex + 1;
-	currentTool_ = ToFarmTool(nextIndex);
+	CycleTools(1);
 }
 
 void FarmToolSystem::SelectPreviousTool()
 {
-	const int currentIndex = ToToolIndex(currentTool_);
-	const int previousIndex = currentIndex <= 0 || currentIndex >= kSelectableToolCount
-		? kSelectableToolCount - 1 : currentIndex - 1;
-	currentTool_ = ToFarmTool(previousIndex);
+	CycleTools(-1);
 }
 
 const char* FarmToolSystem::GetCurrentToolName() const

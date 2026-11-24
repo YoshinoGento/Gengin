@@ -13,6 +13,7 @@
 #include "farm/system/FarmExhibitionSystem.h"
 #include "farm/system/FarmDevelopmentSystem.h"
 #include "farm/system/FarmCanalLessonSystem.h"
+#include "farm/system/FarmFieldInput.h"
 #include <optional>
 
 struct FarmRuntimeContext;
@@ -42,10 +43,12 @@ public:
     void Draw() { ui_.Draw(view_, pointer_); }
     void PauseForPestWarning() noexcept { paused_ = true; }
     void PauseForWeatherChange() noexcept { paused_ = true; }
+    void PauseOnComparisonEnd(bool ended) noexcept { if (ended && observation_) paused_ = true; }
     bool BlocksTimeAdvance() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || terrain_ || observation_ || (ready_ && flow_.BlocksSimulation()); }
     bool BlocksSimulation() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
-    bool ConsumesInput() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
+    bool ConsumesInput() const noexcept { return fieldInputConsumed_ || exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool IsOpen() const noexcept { return open_; }
+    bool CapturesWheel() const noexcept { return wheelCaptured_; }
     const farm::FarmCanalLessonSystem* CanalLesson() const noexcept { return lesson_ ? &*lesson_ : nullptr; }
     bool RequestsTitle() const noexcept { return flow_.RequestsTitle(); }
     bool PresentsFarmResult() const noexcept { return ready_ &&
@@ -61,6 +64,7 @@ public:
     bool ShowsContestDetail() const noexcept { return view_.contestDetail; }
     FarmContestPresentationSystem::Frame ContestFrame() const noexcept { return exhibition_.Active() ? exhibition_.ContestFrame() : contestPresentation_.GetFrame(); }
     [[nodiscard]] int ResolveHoveredTile(const FarmRuntimeContext& context) const;
+    [[nodiscard]] bool AllowsFieldHover(const FarmRuntimeContext& context) const;
     void ObserveProgress(const FarmRuntimeContext& context);
     void Refresh(const FarmRuntimeContext& context) { BuildView(context); }
     void RequestSeasonRetry(const FarmRuntimeContext& context) {
@@ -96,6 +100,7 @@ private:
     bool UpdateMenuAudio(const FarmRuntimeContext& context, const Input& input);
     void ExecuteExhibition(const FarmRuntimeContext& context, farmui::Request request);
     void BuildView(const FarmRuntimeContext& context);
+    void BuildObservationOverlay(farmui::View& view, const FarmRuntimeContext& context) const;
     [[nodiscard]] FarmContestOutcomeSystem::Notice CurrentContestNotice() const noexcept;
     [[nodiscard]] bool HasBlockingContestNotice() const noexcept;
     void UpdateContestScreen();
@@ -107,6 +112,9 @@ private:
     void EnterTerrain(const FarmRuntimeContext& context);
     void LeaveTerrain(const FarmRuntimeContext& context);
     bool UpdateTerrain(const FarmRuntimeContext& context, const Input& input, bool click);
+    bool UpdateFieldClick(const FarmRuntimeContext& context, const Input& input, farm::FieldClick press, bool click, farmui::Request candidate);
+    bool UpdateHotbarFocus(const FarmRuntimeContext& context, const Input& input, farm::FieldToolWheel previousWheel, bool insideViewport);
+    void UpdateToolWheel(const FarmRuntimeContext& context, const Input& input, farm::FieldToolWheel previous, bool insideViewport);
     bool FrameFarm(const FarmRuntimeContext& context, bool followPlayer = false, bool briefing = false);
     void BeginFarmStart(const FarmRuntimeContext& context);
     void ApplyStartCamera(const FarmRuntimeContext& context);
@@ -146,13 +154,17 @@ private:
     int harvestPage_ = 0;
     int brush_ = 0;
     int focusedItem_ = -1;
+    int hotbarSlot_ = -1; // A candidate only; tool/crop selection changes on acceptance.
     bool open_ = false;
     bool paused_ = false;
     bool ready_ = false;
     bool frameCaptured_ = false;
+    bool fieldInputConsumed_ = false; // Field input is exclusive but does not pause the clock.
+    farm::FieldClick fieldPress_;
+    farm::FieldToolWheel fieldWheel_;
+    bool wheelCaptured_ = false;
     bool observation_ = false;
     bool terrain_ = false;
     bool pauseBeforeObservation_ = false;
     int pickingSlot_ = -1;
-    FarmComparisonStatus lastComparisonStatus_ = FarmComparisonStatus::Idle;
 };

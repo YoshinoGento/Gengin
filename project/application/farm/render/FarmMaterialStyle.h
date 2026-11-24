@@ -15,7 +15,8 @@ inline FarmMaterialStyle BuildFarmMaterialStyle(const FarmMeshPart& part) noexce
 	constexpr float kWetSoilSpecular = 0.075f;
 	constexpr float kFruitSpecular = 0.085f;
 	constexpr float kFoliageSpecular = 0.018f;
-	if (part.water || part.surface == FarmMeshSurface::Selection ||
+	if (part.water) return {{0.f,.18f,5.f,0.f},32.f};
+	if (part.surface == FarmMeshSurface::Selection ||
 		part.surface == FarmMeshSurface::Hover || part.surface == FarmMeshSurface::PestCue) { return {}; }
 	const float wetness = std::isfinite(part.wetness) ? std::clamp(part.wetness, 0.0f, 1.0f) : 0.0f;
 	switch (part.surface) {
@@ -23,8 +24,9 @@ inline FarmMaterialStyle BuildFarmMaterialStyle(const FarmMeshPart& part) noexce
 		return {{kWetSoilSpecular * wetness * wetness, 0.26f - 0.10f * wetness,
 			9.0f, 0.12f - 0.08f * wetness}, 32.0f + 40.0f * wetness};
 	case FarmMeshSurface::Earth:
-	case FarmMeshSurface::CanalBed:
 		return {{0.0f, 0.20f, 6.0f, 0.08f}, 32.0f};
+	case FarmMeshSurface::CanalBed:
+		return {{0.0f, 0.09f, 8.0f, 0.04f}, 32.0f};
 	case FarmMeshSurface::CanalBank:
 		return {{0.0f, 0.16f, 7.0f, 0.10f}, 32.0f};
 	case FarmMeshSurface::Grass:

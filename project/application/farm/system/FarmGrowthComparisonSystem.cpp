@@ -26,10 +26,12 @@ void FarmGrowthComparisonSystem::Initialize(const farm::FarmRules& rules) noexce
 		? rules.maxUpdateDeltaTime : farm::FarmRules{}.maxUpdateDeltaTime;
 }
 
-void FarmGrowthComparisonSystem::Reset() noexcept {
+bool FarmGrowthComparisonSystem::Reset() noexcept {
+	const bool ended = view_.status == FarmComparisonStatus::Running;
 	view_ = {};
 	gridIdentity_ = nullptr;
 	generation_ = 0;
+	return ended;
 }
 
 bool FarmGrowthComparisonSystem::MatchesGrid(const farm::FarmGrid& grid) const noexcept {
@@ -76,32 +78,37 @@ bool FarmGrowthComparisonSystem::Start(const farm::FarmGrid& grid) noexcept {
 }
 
 bool FarmGrowthComparisonSystem::Stop() noexcept {
+	return FinishRun(FarmComparisonStatus::Stopped);
+}
+
+bool FarmGrowthComparisonSystem::FinishRun(FarmComparisonStatus reason) noexcept {
 	if (view_.status != FarmComparisonStatus::Running) return false;
-	view_.status = FarmComparisonStatus::Stopped;
+	view_.status = reason;
 	return true;
 }
 
-void FarmGrowthComparisonSystem::ObserveBeforeStep(const farm::FarmGrid& grid) noexcept {
-	if (view_.status != FarmComparisonStatus::Running) return;
-	if (!MatchesGrid(grid)) { view_.status = FarmComparisonStatus::Invalidated; return; }
+bool FarmGrowthComparisonSystem::ObserveBeforeStep(const farm::FarmGrid& grid) noexcept {
+	if (view_.status != FarmComparisonStatus::Running) return false;
+	if (!MatchesGrid(grid)) return FinishRun(FarmComparisonStatus::Invalidated);
 	for (const auto& row : view_.rows) {
 		const auto* tile = grid.GetTile(row.tileIndex);
-		if (!tile || !Same(*tile, row.current)) { view_.status = FarmComparisonStatus::Invalidated; return; }
+		if (!tile || !Same(*tile, row.current)) return FinishRun(FarmComparisonStatus::Invalidated);
 	}
+	return false;
 }
 
-void FarmGrowthComparisonSystem::ObserveAfterStep(const farm::FarmGrid& grid, float deltaTime, float timeScale) noexcept {
-	if (view_.status != FarmComparisonStatus::Running) return;
-	if (!MatchesGrid(grid)) { view_.status = FarmComparisonStatus::Invalidated; return; }
-	if (!std::isfinite(deltaTime) || !std::isfinite(timeScale) || deltaTime <= 0.0f || timeScale <= 0.0f) return;
+bool FarmGrowthComparisonSystem::ObserveAfterStep(const farm::FarmGrid& grid, float deltaTime, float timeScale) noexcept {
+	if (view_.status != FarmComparisonStatus::Running) return false;
+	if (!MatchesGrid(grid)) return FinishRun(FarmComparisonStatus::Invalidated);
+	if (!std::isfinite(deltaTime) || !std::isfinite(timeScale) || deltaTime <= 0.0f || timeScale <= 0.0f) return false;
 	const float scaledDelta = (std::min)(deltaTime, maxDeltaTime_) * timeScale;
-	if (!std::isfinite(scaledDelta)) return;
+	if (!std::isfinite(scaledDelta)) return false;
 	for (const auto& row : view_.rows) {
 		const auto* tile = grid.GetTile(row.tileIndex);
 		if (!tile || !Valid(*tile) || tile->crop != row.initial.crop || tile->state != row.initial.state ||
 			tile->heightLevel != row.initial.heightLevel || tile->feature != row.initial.feature ||
 			tile->irrigationEnabled != row.initial.irrigationEnabled ||
-			tile->growth < row.current.growth) { view_.status = FarmComparisonStatus::Invalidated; return; }
+			tile->growth < row.current.growth) return FinishRun(FarmComparisonStatus::Invalidated);
 	}
 	view_.elapsedSeconds += static_cast<double>(scaledDelta);
 	bool allReady = true;
@@ -111,7 +118,7 @@ void FarmGrowthComparisonSystem::ObserveAfterStep(const farm::FarmGrid& grid, fl
 			if (row.readySeconds < 0.0) row.readySeconds = view_.elapsedSeconds;
 		} else { allReady = false; }
 	}
-	if (allReady) view_.status = FarmComparisonStatus::Completed;
+	return allReady && FinishRun(FarmComparisonStatus::Completed);
 }
 
 FarmComparisonView FarmGrowthComparisonSystem::GetView(const farm::FarmGrid& grid) const noexcept {

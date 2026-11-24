@@ -24,9 +24,8 @@ bool FarmRuntimeController::UpdateCanalLesson(const FarmRuntimeContext& s, const
     const auto pressed = [&](InputKey key, InputGamepadButton pad) {
         return input.TriggerKey(key) || input.TriggerGamepadButton(pad);
     };
-    const int dx = pressed(InputKey::ArrowRight,InputGamepadButton::DPadRight) - pressed(InputKey::ArrowLeft,InputGamepadButton::DPadLeft);
-    const int dy = pressed(InputKey::ArrowDown,InputGamepadButton::DPadDown) - pressed(InputKey::ArrowUp,InputGamepadButton::DPadUp);
-    if (dx || dy) lesson_->Move(dx,dy);
+    const auto step = farm::ReadFieldStep(input, true);
+    if (step.x || step.y) lesson_->Move(step.x, step.y);
     A action = click ? hit : A::None;
     if (pressed(InputKey::Escape,InputGamepadButton::B))
         action = lesson_->Back() == Response::Exit ? A::LessonExit : A::None;

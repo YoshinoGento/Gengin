@@ -30,13 +30,15 @@ public:
 	void Initialize(const farm::FarmRules& rules = {}) noexcept;
 	bool Pin(const farm::FarmGrid& grid, int slot, int tileIndex) noexcept;
 	bool Start(const farm::FarmGrid& grid) noexcept;
+	// True only on the call that ends a running comparison; reading the view never emits an event.
 	bool Stop() noexcept;
-	void Reset() noexcept;
-	void ObserveBeforeStep(const farm::FarmGrid& grid) noexcept;
-	void ObserveAfterStep(const farm::FarmGrid& grid, float deltaTime, float timeScale) noexcept;
+	bool Reset() noexcept;
+	bool ObserveBeforeStep(const farm::FarmGrid& grid) noexcept;
+	bool ObserveAfterStep(const farm::FarmGrid& grid, float deltaTime, float timeScale) noexcept;
 	[[nodiscard]] FarmComparisonView GetView(const farm::FarmGrid& grid) const noexcept;
 
 private:
+	bool FinishRun(FarmComparisonStatus reason) noexcept;
 	[[nodiscard]] bool MatchesGrid(const farm::FarmGrid& grid) const noexcept;
 	[[nodiscard]] FarmComparisonIssue CheckStart(const farm::FarmGrid& grid) const noexcept;
 	const farm::FarmGrid* gridIdentity_ = nullptr;
