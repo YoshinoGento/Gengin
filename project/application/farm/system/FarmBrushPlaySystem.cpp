@@ -56,23 +56,24 @@ Vector2 FarmBrushPlaySystem::Lean(int tile,CropType crop) const {
     }
     return {};
 }
-void FarmBrushPlaySystem::Stroke(const FarmGrid& grid,FarmBrushContact hit,Vector2 dir) {
+bool FarmBrushPlaySystem::Stroke(const FarmGrid& grid,FarmBrushContact hit,Vector2 dir) {
     const auto* tile=grid.GetTile(hit.tile);
     const float n=std::hypot(dir.x,dir.y);
     if (!active_ || &grid!=board_ || !tile || tile->feature!=FarmTileFeature::None ||
         tile->state==FarmTileState::Empty || !(n>.0001f) || !std::isfinite(n) ||
-        !std::isfinite(hit.position.x) || !std::isfinite(hit.position.y) || !std::isfinite(hit.position.z)) return;
+        !std::isfinite(hit.position.x) || !std::isfinite(hit.position.y) || !std::isfinite(hit.position.z)) return false;
+    const auto before=count_;
     dir={dir.x/n,dir.y/n};
     auto p=hit.position;
     if (hit.onCrop) {
-        if (!IsPlantableCrop(tile->crop)) return;
+        if (!IsPlantableCrop(tile->crop)) return false;
         auto* next=&touches_[0];
         for(auto& s:touches_) {
-            if(s.tile==hit.tile) { if(s.age<kLeafInterval) return; next=&s; break; }
+            if(s.tile==hit.tile) { if(s.age<kLeafInterval) return false; next=&s; break; }
             if(s.tile<0 || (next->tile>=0 && s.age>next->age)) next=&s;
         }
         *next={hit.tile,tile->crop,dir,0};
-        if (leafDelay_>0 || count_==kCapacity) return;
+        if (leafDelay_>0 || count_==kCapacity) return false;
         leafDelay_=kLeafInterval;
         auto& leaf=particles_[count_++]; leaf={};
         leaf.kind=FieldGrain::Leaf; leaf.position={p.x,p.y+.045f,p.z};
@@ -93,5 +94,6 @@ void FarmBrushPlaySystem::Stroke(const FarmGrid& grid,FarmBrushContact hit,Vecto
             dust.life=.38f+.15f*Random(); dust.angle=6.28f*Random(); dust.spin=1.f; dust.floor=p.y;
         }
     }
+    return count_!=before;
 }
 }

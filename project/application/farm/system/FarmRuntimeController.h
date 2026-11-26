@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/ui/FarmRuntimeUI.h"
+#include "farm/ui/FarmControlGuideView.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
 #include "farm/system/FarmPlayFlow.h"
 #include "farm/system/FarmStartPresentationSystem.h"
@@ -14,6 +15,7 @@
 #include "farm/system/FarmDevelopmentSystem.h"
 #include "farm/system/FarmCanalLessonSystem.h"
 #include "farm/system/FarmFieldInput.h"
+#include "farm/system/FarmWalkSystem.h"
 #include <optional>
 
 struct FarmRuntimeContext;
@@ -37,6 +39,8 @@ public:
     }
     void FinalizePresentationAudio() { arrivalAudio_.Finalize(); contestAudio_.Finalize(); pestAudio_.Finalize(); }
     [[nodiscard]] int EnvironmentVolume() const noexcept { return menuAudio_.GetFrame().volume[0]; }
+    [[nodiscard]] int WaterVolume() const noexcept { return menuAudio_.GetFrame().volume[1]; }
+    [[nodiscard]] int EffectVolume() const noexcept { return menuAudio_.GetContestVolume(); }
     FarmStartPresentationSystem::Frame StartFrame() const noexcept {
         return flow_.GetPhase()==FarmPlayFlow::Phase::Starting ? startPresentation_.GetFrame() : FarmStartPresentationSystem::Frame{};
     }
@@ -48,6 +52,8 @@ public:
     bool BlocksSimulation() const noexcept { return exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool ConsumesInput() const noexcept { return fieldInputConsumed_ || exhibition_.Active() || shop_.IsOpen() || HasBlockingContestNotice() || open_ || paused_ || terrain_ || observation_ || frameCaptured_ || (ready_ && flow_.BlocksSimulation()); }
     bool IsOpen() const noexcept { return open_; }
+    const farm::FarmerPose* Farmer() const noexcept { return walk_.Active() ? &walk_.Pose() : nullptr; }
+    bool TakeWalkHit() noexcept { const bool hit=walkHit_; walkHit_=false; return hit; }
     bool CapturesWheel() const noexcept { return wheelCaptured_; }
     const farm::FarmCanalLessonSystem* CanalLesson() const noexcept { return lesson_ ? &*lesson_ : nullptr; }
     bool RequestsTitle() const noexcept { return flow_.RequestsTitle(); }
@@ -57,6 +63,8 @@ public:
     bool PresentsIntroduction() const noexcept { return ready_ &&
         (flow_.GetPhase() == FarmPlayFlow::Phase::Briefing || flow_.GetPhase() == FarmPlayFlow::Phase::Starting); }
     bool ShowsSeedShop() const noexcept { return view_.seedShop; }
+    bool SimpleField() const noexcept { return view_.simpleField; }
+    bool ShowsLiveGap() const noexcept { return entryGap_.value_or(-1)>=0 && view_.briefing && !open_; }
     bool ShowsIrrigationForecast() const noexcept { return view_.irrigationForecast; }
     int SeedShopSelection() const noexcept { return shop_.Selection(); }
     bool ShowsHarvestDisplay() const noexcept { return view_.harvestDisplay; }
@@ -64,6 +72,7 @@ public:
     bool ShowsContestDetail() const noexcept { return view_.contestDetail; }
     FarmContestPresentationSystem::Frame ContestFrame() const noexcept { return exhibition_.Active() ? exhibition_.ContestFrame() : contestPresentation_.GetFrame(); }
     [[nodiscard]] int ResolveHoveredTile(const FarmRuntimeContext& context) const;
+    void UpdateFieldWheelHint(const FarmRuntimeContext& context, const Input& input, int hoveredTile);
     [[nodiscard]] bool AllowsFieldHover(const FarmRuntimeContext& context) const;
     void ObserveProgress(const FarmRuntimeContext& context);
     void Refresh(const FarmRuntimeContext& context) { BuildView(context); }
@@ -75,6 +84,8 @@ public:
     void OpenLayoutLibrary(const FarmRuntimeContext& context);
     void UpdateFollowCamera(const FarmRuntimeContext& context) { FrameFarm(context, true); }
 private:
+    [[nodiscard]] farm::FieldWheelRoute WheelRoute(const FarmRuntimeContext& context) const;
+    [[nodiscard]] int CurrentWheelSlot(const FarmRuntimeContext& context, farm::FieldWheelRoute route) const;
     void InspectForecast(const FarmRuntimeContext& context, farmui::TerrainViewState& state);
     struct ForecastPick {
         std::uint64_t revision{};
@@ -83,14 +94,19 @@ private:
         bool valid = false;
     } forecastPick_;
     bool OffersCanalLesson(const FarmRuntimeContext& context) const;
+    bool UpdateLiveGap(const FarmRuntimeContext&, const Input&, bool click);
+    std::optional<int> entryGap_;
+    bool gapMissed_ = false, fieldDetails_ = false;
+    std::optional<farmui::GuideDevice> controlGuide_;
+    bool guideFromMenu_ = false;
+    bool UpdateControlGuide(const FarmRuntimeContext&, const Input&, bool insideViewport);
+    farm::FieldWheelNotice::Clock::time_point gapNoticeEnd_{};
     bool UpdateCanalLesson(const FarmRuntimeContext& context, const Input& input, bool click, farmui::Action action);
     std::optional<farm::FarmCanalLessonSystem> lesson_;
     static constexpr int kExperiencePage = 19;
     bool HandleExperienceRequest(const FarmRuntimeContext& context, farmui::Request request);
     void BuildExperienceMenu();
-    void BuildExperienceHUD(const FarmRuntimeContext& context);
     int experienceSelection_ = 0;
-    int activeExperience_ = -1;
     bool experienceConfirm_ = false;
     static constexpr int kHarvestInventoryPage = 8;
     void BuildSaleOverview(const FarmRuntimeContext& context);
@@ -100,6 +116,11 @@ private:
     bool UpdateMenuAudio(const FarmRuntimeContext& context, const Input& input);
     void ExecuteExhibition(const FarmRuntimeContext& context, farmui::Request request);
     void BuildView(const FarmRuntimeContext& context);
+    bool UpdateWalk(const FarmRuntimeContext&,const Input&,bool inside,bool click);
+    farm::FarmWalkSystem walk_;
+    Vector2 walkPointer_{};
+    int walkDestination_=-1;
+    bool walkHit_{},walkWaitRelease_{};
     void BuildObservationOverlay(farmui::View& view, const FarmRuntimeContext& context) const;
     [[nodiscard]] FarmContestOutcomeSystem::Notice CurrentContestNotice() const noexcept;
     [[nodiscard]] bool HasBlockingContestNotice() const noexcept;
@@ -114,6 +135,7 @@ private:
     bool UpdateTerrain(const FarmRuntimeContext& context, const Input& input, bool click);
     bool UpdateFieldClick(const FarmRuntimeContext& context, const Input& input, farm::FieldClick press, bool click, farmui::Request candidate);
     bool UpdateHotbarFocus(const FarmRuntimeContext& context, const Input& input, farm::FieldToolWheel previousWheel, bool insideViewport);
+    bool UpdateRightTap(const FarmRuntimeContext& context, const Input& input, farm::FieldRightTap gesture, bool insideViewport);
     void UpdateToolWheel(const FarmRuntimeContext& context, const Input& input, farm::FieldToolWheel previous, bool insideViewport);
     bool FrameFarm(const FarmRuntimeContext& context, bool followPlayer = false, bool briefing = false);
     void BeginFarmStart(const FarmRuntimeContext& context);
@@ -161,6 +183,8 @@ private:
     bool frameCaptured_ = false;
     bool fieldInputConsumed_ = false; // Field input is exclusive but does not pause the clock.
     farm::FieldClick fieldPress_;
+    farm::FieldWheelNotice wheelNotice_;
+    farm::FieldRightTap rightTap_;
     farm::FieldToolWheel fieldWheel_;
     bool wheelCaptured_ = false;
     bool observation_ = false;

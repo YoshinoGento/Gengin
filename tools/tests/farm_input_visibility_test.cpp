@@ -1,6 +1,7 @@
 #include "farm_test_edit.h"
 #include "io/MouseButtonEdges.h"
 #include "farm/render/FarmMeshLayout.h"
+#include "farm/render/FarmFarmerModel.h"
 #include "farm/system/FarmTerrainQuerySystem.h"
 #include "3d/LineDrawer.h"
 #include <cassert>
@@ -51,12 +52,88 @@ int main() {
     assert(grid.Initialize(5,4));
     farm::FarmVisualSystem visual;
     visual.Initialize({});
+    {
+        farm::FarmerPose pose{};
+        pose.furrow={0,0,0,0,.22f};
+        assert(!farm::BuildFurrowMark(grid,visual,pose));
+        const auto carried=farm::BuildFarmerModel(pose);
+        pose.bladeDepth=1.f;
+        const auto planted=farm::BuildFarmerModel(pose);
+        const auto furrow=farm::BuildFurrowMark(grid,visual,pose);
+        assert(furrow && (*furrow)[0].scale.z>0.1f);
+        assert(planted.back().pitch!=carried.back().pitch && (*furrow)[1].position.y>(*furrow)[0].position.y);
+        pose.furrow={};
+        assert(!farm::BuildFurrowMark(grid,visual,pose));
+        std::cout<<"PASS: planted hoe, incision and displaced lip only for active soil stroke\n";
+    }
     std::size_t total = 0;
     for (int i=0; i<grid.GetTileCount(); ++i) {
         const auto parts = farm::BuildFarmTileMeshParts(grid,i,visual);
         assert(parts.count == 6); total += parts.count;
     }
     assert(total == 120); // 40 existing soil parts + 80 no-shadow markers for the default field.
+    {
+        farm::FarmGrid pool;
+        assert(pool.Initialize(5,4));
+        for (int i=0;i<20;++i) assert(EditFarmTile(pool,i,[i](auto& t){
+            t.feature=i==0 ? farm::FarmTileFeature::WaterSource : farm::FarmTileFeature::Canal;
+            t.waterAmount=1.f;
+        }));
+        const float pitch=visual.GetLayout().tileSize+visual.GetLayout().tileGap;
+        for (int z=0;z<3;++z) for (int x=0;x<4;++x) {
+            const int start=z*5+x;
+            for (int dz=0;dz<2;++dz) for (int dx=0;dx<2;++dx) {
+                const int i=start+dx+5*dz;
+                const auto tile=visual.GetTileVisualData(pool,i);
+                const float nearCorner=(tile.waterHalfExtent+pitch*.5f)*.5f;
+                const float px=tile.center.x+(dx?-1:1)*nearCorner;
+                const float pz=tile.center.z+(dz?-1:1)*nearCorner;
+                const auto mesh=farm::BuildFarmTileMeshParts(pool,i,visual);
+                int owners=0;
+                for (size_t j=0;j<mesh.count;++j) {
+                    const auto& p=mesh.parts[j];
+                    if (p.water && p.shape==farm::FarmMeshShape::Box &&
+                        std::abs(p.position.x-px)<p.scale.x && std::abs(p.position.z-pz)<p.scale.z) ++owners;
+                }
+                assert(owners==1 && mesh.count<mesh.parts.size());
+            }
+        }
+        std::cout<<"PASS: 12 flooded junctions, one water surface on all 48 quarters\n";
+        const int four[]{6,7,11,12};
+        assert(EditFarmTile(pool,12,[](auto& t){t.heightLevel=1;t.waterAmount=.4f;}));
+        float waterTop=0,bedTop=0;
+        for (int i:four) {
+            const auto data=visual.GetTileVisualData(pool,i);
+            waterTop+=.25f*data.waterSurfaceCenter.y;
+            bedTop+=.25f*(data.center.y+visual.GetLayout().waterBottomOffset);
+        }
+        auto vertex=visual.GetTileCenter(pool,6);
+        vertex.x+=pitch*.5f; vertex.z+=pitch*.5f;
+        for (int i:four) {
+            const auto mesh=farm::BuildFarmTileMeshParts(pool,i,visual);
+            int water=0,bed=0;
+            for (size_t j=0;j<mesh.count;++j) {
+                const auto& p=mesh.parts[j];
+                const float dx=vertex.x-p.position.x,dz=vertex.z-p.position.z;
+                if (std::abs(dx)>p.scale.x+.00001f || std::abs(dz)>p.scale.z+.00001f) continue;
+                const float side=dx/p.scale.x+dz/p.scale.z;
+                if ((p.shape==farm::FarmMeshShape::TriangleLower && side>.00001f) ||
+                    (p.shape==farm::FarmMeshShape::TriangleUpper && side<-.00001f)) continue;
+                const float top=p.position.y+p.scale.y+p.slope.x*dx+p.slope.y*dz;
+                if (p.water) {assert(std::abs(top-waterTop)<.00001f);++water;}
+                if (p.surface==farm::FarmMeshSurface::CanalBed) {assert(std::abs(top-bedTop)<.00001f);++bed;}
+            }
+            assert(water && bed);
+        }
+        assert(EditFarmTile(pool,12,[](auto& t){t.waterAmount=0.f;}));
+        const auto drying=farm::BuildFarmTileMeshParts(pool,6,visual);
+        for (size_t j=0;j<drying.count;++j) {
+            const auto& p=drying.parts[j];
+            assert(!p.water || std::abs(vertex.x-p.position.x)>p.scale.x+.00001f ||
+                   std::abs(vertex.z-p.position.z)>p.scale.z+.00001f);
+        }
+        std::cout<<"PASS: graded bed and water junction agree on four sides; dry diagonal not flooded\n";
+    }
     {
         farm::FarmGrid strip;
         assert(strip.Initialize(3,1));

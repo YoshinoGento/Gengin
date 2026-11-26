@@ -3,6 +3,14 @@
 #include "farm/ui/FarmRuntimeUI.h"
 
 namespace farmui {
+inline void BuildLiveGapView(View& view, bool missed) {
+    view.briefing = true;
+    view.Add(Label::GapTitle,{40,25,720,48});
+    view.Add(Label::GapSource,{40,516,1160,40});
+    view.Add(missed ? Label::GapMiss : Label::GapHint,{40,563,1160,40});
+    view.Add(Label::GapDig,{40,628,460,56},{Action::GapDig},true,true);
+    view.Add(Label::GapSkip,{888,636,352,44},{Action::GapSkip});
+}
 inline void BuildCanalLessonView(View& view, const farm::FarmCanalLessonSystem::Frame& frame) {
     using P = farm::FarmCanalLessonSystem::Phase;
     const P p = frame.phase;

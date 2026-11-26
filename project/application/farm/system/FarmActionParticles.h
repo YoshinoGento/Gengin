@@ -1,5 +1,6 @@
 #pragma once
 #include "farm/system/FarmVisualSystem.h"
+#include "farm/system/FarmFieldCue.h"
 #include "farm/system/FarmWateringPose.h"
 #include "farm/system/FarmHoeStroke.h"
 #include "farm/system/FarmCanalArrival.h"
@@ -27,6 +28,7 @@ class FarmActionParticles final {
 public:
     static constexpr std::size_t kCapacity = 144;
     void Clear() noexcept;
+    FieldCues TakeSounds() noexcept { const auto result=sounds_; sounds_.reset(); return result; }
     void OnTool(const FarmToolActionResult& committed, const FarmGrid& grid, const FarmVisualSystem& visual);
     void OnBasketLanding(const FarmGrid& grid,const harvest::BasketLanding& contact) noexcept;
     void Update(const FarmGrid& grid, const FarmIrrigationSystem& water, const FarmVisualSystem& visual,
@@ -51,6 +53,7 @@ private:
         std::span<const FarmIrrigationTileFlow> flows);
     void EmitArrival(arrival::Beat beat,int tile,int parent,const FarmGrid& grid,const FarmIrrigationSystem& water,const FarmVisualSystem& visual);
     arrival::Timeline arrivals_;
+    FieldCues sounds_;
     float Random() noexcept;
     FieldParticle* Emit(FieldGrain kind, Vector3 p, Vector3 v, float floor, float radius, float life);
     void Scatter(FieldGrain kind, Vector3 origin, float floor, unsigned count, float spread, float lift,

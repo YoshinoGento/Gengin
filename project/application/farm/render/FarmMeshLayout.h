@@ -3,6 +3,7 @@
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmVisualSystem.h"
 #include "farm/render/FarmSoilSurface.h"
+#include "farm/render/FarmCanalCorner.h"
 #include "environment/VegetationWind.h"
 #include <array>
 #include <cmath>
@@ -10,13 +11,14 @@
 namespace farm {
 enum class FarmMeshShape { Box, TriangleLower, TriangleUpper, Turnip, Carrot, Leaves, CarrotLeaves,
     Tomato, TomatoStems, Pumpkin, PumpkinVines, SoilRidge, BankStone, BendWater, BendLining, BendFillet, WateringCan, HoeHandle, HoeBlade,
-    HarvestBasket, HarvestBasketRim, PickedTomatoLarge, PickedTomatoSmall, Count };
+    HarvestBasket, HarvestBasketRim, PickedTomatoLarge, PickedTomatoSmall, FarmerBody, FarmerLeg, FarmerArm, FarmerHoe, Count };
 inline constexpr std::array kFarmMeshPaths{"farm/unit_box.obj","farm/triangle_lower.obj","farm/triangle_upper.obj",
     "farm/crop_turnip.obj","farm/crop_carrot.obj","farm/crop_turnip_leaves.obj","farm/crop_carrot_leaves.obj",
     "farm/crop_tomato.obj","farm/crop_tomato_stems.obj","farm/crop_pumpkin.obj","farm/crop_pumpkin_vines.obj",
     "farm/soil_ridge.obj","farm/bank_stone.obj","farm/bend_water.obj","farm/bend_lining.obj","farm/bend_fillet.obj","farm/arrival/hand_can.obj",
     "farm/arrival/hoe_handle.obj","farm/arrival/hoe_blade.obj","farm/arrival/harvest_basket.obj","farm/arrival/harvest_basket_rim.obj",
-    "farm/arrival/picked_tomato_0.obj","farm/arrival/picked_tomato_1.obj"};
+    "farm/arrival/picked_tomato_0.obj","farm/arrival/picked_tomato_1.obj",
+    "farm/farmer/body.obj","farm/farmer/leg.obj","farm/farmer/arm.obj","farm/farmer/hoe.obj"};
 static_assert(kFarmMeshPaths.size()==static_cast<std::size_t>(FarmMeshShape::Count));
 enum class FarmMeshSurface { None, CanalBed, CanalBank, SoilBoundary, Selection, Hover, Crop,
 	Earth, Soil, Grass, PestCue };
@@ -44,11 +46,21 @@ struct FarmMeshPart {
 	float yaw = 0.0f;
     float roll = 0.0f;
     Vector4 wetFront{}; // World XZ half-plane; w=0 disables the transient material mask.
+    float pitch{};
 };
 
 struct FarmWindPose { Vector3 position, rotation; };
+inline Vector3 CropBrushTilt(FarmMeshShape shape, Vector2 lean) noexcept {
+    if (CropWindResponse(shape) == 0) return {};
+    const bool pumpkin = shape == FarmMeshShape::Pumpkin || shape == FarmMeshShape::PumpkinVines;
+    const bool tomato = shape == FarmMeshShape::Tomato || shape == FarmMeshShape::TomatoStems;
+    const float response = pumpkin ? .14f : tomato ? .48f : 1.f;
+    return {lean.y*response, 0, -lean.x*response};
+}
 inline FarmWindPose CropWindPose(const FarmMeshPart& part, const vegetation::WindFrame& wind,Vector3 touch={}) noexcept {
-	FarmWindPose pose{part.position, wind.Tilt(part.position, CropWindResponse(part.shape))};
+    Vector3 pivot = part.position;
+    pivot.y -= part.heightAboveWindPivot;
+	FarmWindPose pose{part.position, wind.Tilt(pivot, CropWindResponse(part.shape))};
     pose.rotation=pose.rotation+touch;
 	const float h = part.heightAboveWindPivot;
 	if (h != 0.0f) {
@@ -251,7 +263,7 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 	constexpr float kTopThickness = 0.04f;
 	constexpr float kWaterHalfThickness = 0.005f;
 	constexpr float kRimFreeboard = 0.045f;
-	const Vector4 waterColor{0.095f, 0.39f, 0.43f, 1.0f};
+	const Vector4 waterColor{0.073f, 0.245f, 0.228f, 1.0f};
 	FarmTileMeshParts result;
 	auto visual = visualSystem.GetTileVisualData(grid, index);
     visual.soilWetness=std::clamp(visual.soilWetness-pendingWater,0.f,1.f);
@@ -365,10 +377,35 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 	// Remove the old full-height bed: it would occlude a descending water ramp.
 	// Deep overlapping undersides stay below the field; each top section has one owner.
 	const float bodyHalfDepth = (bottom - groundBottom + 2.0f * layout.heightStep) * 0.5f;
+	bool filledBendCorner = false;
+	const Vector4 bedColor{0.29f, 0.25f, 0.15f, 1.0f};
 	for (int z = 0; z < 3; ++z) {
 		for (int x = 0; x < 3; ++x) {
+			if (x!=1 && z!=1 && connected(x/2) && connected(2+z/2)) {
+				// Both orthogonal neighbors exist, so their diagonal is in bounds too.
+				const auto d=visualSystem.GetTileVisualData(grid,neighbors[x/2]+(z==2?width:-width));
+				if (d.valid && d.feature!=FarmTileFeature::None) {
+					const auto& ex=neighborData[x/2];
+					const auto& ez=neighborData[2+z/2];
+					const auto corner=[&](float h,float hx,float hz,float hd,bool wet) {
+						VisitFarmCanalCorner(h,hx,hz,hd,x==2,z==2,run,[&](float mid,float gx,float gz,bool split,bool upper){
+							const auto shape=split?(upper?FarmMeshShape::TriangleUpper:FarmMeshShape::TriangleLower):FarmMeshShape::Box;
+							const float depth=wet?kWaterHalfThickness:bodyHalfDepth;
+							add({visual.center.x+offsets[x],mid-depth,visual.center.z+offsets[z]}, {extents[x],depth,extents[z]},
+								wet?waterColor:bedColor,wet,{gx,gz},shape,wet?FarmMeshSurface::None:FarmMeshSurface::CanalBed);
+						});
+					};
+					const float off=layout.waterBottomOffset;
+					corner(bottom,ex.center.y+off,ez.center.y+off,d.center.y+off,false);
+					if (visual.showWaterSurface && ex.showWaterSurface && ez.showWaterSurface && d.showWaterSurface) {
+						corner(visual.waterSurfaceCenter.y,ex.waterSurfaceCenter.y,ez.waterSurfaceCenter.y,d.waterSurfaceCenter.y,true);
+						filledBendCorner=true;
+					}
+					continue;
+				}
+			}
 			add({visual.center.x + offsets[x], bottom + xRise[x] + zRise[z] - bodyHalfDepth, visual.center.z + offsets[z]},
-				{extents[x], bodyHalfDepth, extents[z]}, {0.29f, 0.25f, 0.15f, 1.0f}, false, {xSlopes[x], zSlopes[z]}, FarmMeshShape::Box, FarmMeshSurface::CanalBed);
+				{extents[x], bodyHalfDepth, extents[z]}, bedColor, false, {xSlopes[x], zSlopes[z]}, FarmMeshShape::Box, FarmMeshSurface::CanalBed);
 		}
 	}
 	if (visual.showWaterSurface) {
@@ -384,7 +421,7 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 			{inner*apronScale,height*.5f,inner*apronScale},{.37f,.35f,.27f,1},false,{},FarmMeshShape::BendLining,
 			FarmMeshSurface::None,yaw);
 		const int xEdge=connected(0)?0:1, zEdge=connected(2)?2:3;
-		if (visual.showWaterSurface && neighborData[xEdge].showWaterSurface && neighborData[zEdge].showWaterSurface) {
+		if (!filledBendCorner && visual.showWaterSurface && neighborData[xEdge].showWaterSurface && neighborData[zEdge].showWaterSurface) {
 			const float sx=xEdge==0?-1.f:1.f, sz=zEdge==2?-1.f:1.f;
 			const float level=visual.waterSurfaceCenter.y;
 			const float gx=sx*(neighborData[xEdge].waterSurfaceCenter.y-level)*.5f/run;

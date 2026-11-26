@@ -1,4 +1,5 @@
 #include "title/TitleAudioSettingsView.h"
+#include "ui/FieldSurfaceTexture.h"
 #include "title/TitlePresentationLayout.h"
 #include "io/Input.h"
 #include "base/WinApp.h"
@@ -6,7 +7,9 @@ namespace title {
 bool TitleAudioSettingsView::Initialize(SpriteCommon* common) {
     common_ = nullptr;
     if (!common) return false;
-    for (auto& sprite : shapes_) if (!sprite.Initialize(common,"Resources/farm/white.png")) return false;
+    const auto skin=fieldsign::LoadForScene();
+    if (!skin.IsValid()) return false;
+    for (auto& sprite : shapes_) if (!sprite.Initialize(common,skin.Index())) return false;
     for (auto& sprite : labels_) if (!sprite.Initialize(common,"Resources/title/audio_settings.png")) return false;
     for (auto& sprite : digits_) if (!sprite.Initialize(common,"Resources/title/audio_settings.png")) return false;
     common_ = common;
@@ -35,8 +38,9 @@ AudioSettingsInput TitleAudioSettingsView::ReadInput(const Input& input, const W
 #endif
     return result;
 }
-void TitleAudioSettingsView::Box(std::size_t index, Vector2 position, Vector2 size, Vector4 color) {
+void TitleAudioSettingsView::Box(std::size_t index, Vector2 position, Vector2 size, Vector4 color, fieldsign::Region uv) {
     auto& sprite = shapes_[index];
+    sprite.SetTextureRect({uv.x,uv.y},{uv.w,uv.h});
     sprite.SetPosition(position); sprite.SetSize(size); sprite.SetColor(color); sprite.Update(); sprite.Draw();
 }
 void TitleAudioSettingsView::Label(std::size_t index, int row, Vector2 position, float width) {
@@ -56,11 +60,11 @@ void TitleAudioSettingsView::Percent(std::size_t index, int value, Vector2 posit
 void TitleAudioSettingsView::Draw(const AudioSettingsFrame& frame) {
     if (!common_) return;
     common_->PreDraw();
-    constexpr Vector4 panel{.075f,.12f,.105f,.98f}, control{.2f,.31f,.29f,1}, accent{.64f,.85f,.8f,1};
-    Box(0,kAudioSettingsButton.position,kAudioSettingsButton.size,control); Label(0,4,{1088,48},140);
+    constexpr Vector4 control{.15f,.23f,.19f,1}, accent=fieldsign::kWater;
+    Box(0,kAudioSettingsButton.position,kAudioSettingsButton.size,fieldsign::kWhite,fieldsign::kSignNormal); Label(0,4,{1088,48},140);
     if (!frame.open) return;
     Box(1,{0,0},{kWidth,kHeight},{0,0,0,.55f});
-    Box(2,kAudioSettingsPanel.position,kAudioSettingsPanel.size,panel); Label(1,0,{356,230},280);
+    Box(2,kAudioSettingsPanel.position,kAudioSettingsPanel.size,fieldsign::kWhite,fieldsign::kBoard); Label(1,0,{356,230},280);
     constexpr std::array<int,kAudioChannelCount> labelRows{1,2,8};
     for (std::size_t i=0; i<kAudioChannelCount; ++i) {
         const float y = kAudioSliderY[i], width = kAudioSliderWidth*frame.volume[i]*.01f;
@@ -71,8 +75,10 @@ void TitleAudioSettingsView::Draw(const AudioSettingsFrame& frame) {
         Percent(i*4,frame.volume[i],{800,y+26});
     }
     constexpr auto buttons = 3+kAudioChannelCount*3, labels = 2+kAudioChannelCount;
-    Box(buttons,kAudioSettingsReset.position,kAudioSettingsReset.size,control); Label(labels,6,{376,576},140);
-    Box(buttons+1,kAudioSettingsBack.position,kAudioSettingsBack.size,control); Label(labels+1,3,{816,576},92);
+    Box(buttons,kAudioSettingsReset.position,kAudioSettingsReset.size,fieldsign::kWhite,
+        fieldsign::Button(kAudioSettingsReset.size.x,kAudioSettingsReset.size.y,false,frame.selected==static_cast<int>(kAudioChannelCount))); Label(labels,6,{376,576},140);
+    Box(buttons+1,kAudioSettingsBack.position,kAudioSettingsBack.size,fieldsign::kWhite,
+        fieldsign::Button(kAudioSettingsBack.size.x,kAudioSettingsBack.size.y,false,frame.selected==static_cast<int>(kAudioChannelCount)+1)); Label(labels+1,3,{816,576},92);
     if (frame.saveFailed) Label(labels+2,5,{660,230},280);
 }
 }

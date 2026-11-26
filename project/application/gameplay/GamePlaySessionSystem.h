@@ -25,6 +25,7 @@
 #include "farm/system/FarmPestVisualSystem.h"
 #include "farm/system/FarmRainPresentationSystem.h"
 #include "farm/system/FarmRainAudioSystem.h"
+#include "farm/system/FarmFieldAudioSystem.h"
 #include "farm/render/FarmFieldEffectRenderer.h"
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
@@ -114,7 +115,7 @@ private:
 	void UpdateSceneDeltaTime();
 	void PrepareRenderFrame(float presentationDeltaTime);
     void UpdateOutdoorPresentation(float realSeconds, bool audible);
-    void UpdateFieldPointerFeedback(bool active);
+    farm::FieldCues UpdateFieldPointerFeedback(bool active);
 	void HandleKeyboardMovement();
 	void HandleCameraInput(float deltaTime, bool suppressArrowKeys);
 	void ClampCameraPitch();
@@ -317,6 +318,7 @@ private:
     farm::FarmRainPresentationSystem farmRainPresentation_;
     vegetation::FarmWindSystem farmWind_;
     FarmRainAudioSystem farmRainAudio_;
+    farm::FarmFieldAudioSystem farmFieldAudio_;
     FarmFieldEffectRenderer farmFieldEffectRenderer_;
     farm::FarmMoldVisualSystem farmMoldVisual_;
     bool farmRainAudioSuspended_ = false;

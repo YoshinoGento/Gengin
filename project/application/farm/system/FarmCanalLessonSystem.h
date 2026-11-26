@@ -14,6 +14,7 @@ public:
 
     FarmCanalLessonSystem();
     bool Begin();
+    static int FindLiveGap(const FarmGrid& grid) noexcept;
     bool Preview(int index);
     bool WillReach() const;
     void Cancel();

@@ -38,6 +38,10 @@ farm::FarmGroundSample farm::FarmTerrainQuerySystem::SampleGround(
 			const float minZ = (std::max)(footCenter.z - extentZ, part.position.z - part.scale.z);
 			const float maxZ = (std::min)(footCenter.z + extentZ, part.position.z + part.scale.z);
 			if (minX > maxX || minZ > maxZ) { continue; }
+			if (!bank && (part.shape==FarmMeshShape::TriangleLower || part.shape==FarmMeshShape::TriangleUpper)) {
+				const float side=(footCenter.x-part.position.x)/part.scale.x+(footCenter.z-part.position.z)/part.scale.z;
+				if (part.shape==FarmMeshShape::TriangleLower ? side>0.f : side<0.f) continue;
+			}
 			const float sampleX = part.slope.x >= 0.0f ? maxX : minX;
 			const float sampleZ = part.slope.y >= 0.0f ? maxZ : minZ;
 			const float height = part.position.y + part.scale.y + part.slope.x * (sampleX - part.position.x) + part.slope.y * (sampleZ - part.position.z);

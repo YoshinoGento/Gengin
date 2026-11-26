@@ -29,6 +29,10 @@ inline Vector3 PumpkinBasket(const Pickup& p) noexcept {
     return {1.16f+.52f*load,.76f+.24f*load,1.16f+.88f*load};
 }
 inline BasketLanding Contact(const Pickup& p) noexcept {
+    if(p.crop.parts[0].shape!=FarmMeshShape::Pumpkin) {
+        BasketLanding hit{}; hit.unit=p.unit; hit.size=p.size; hit.spillsSoil=false;
+        return hit;
+    }
     const float side=LandingSide(p);
     const auto size=PumpkinBasket(p)*p.unit;
     return {p.basket+Vector3{side*.515f*size.x,kGripHeight*size.y,-.249f*size.z},

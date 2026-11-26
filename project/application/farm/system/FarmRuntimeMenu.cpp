@@ -12,6 +12,45 @@
 #include <algorithm>
 #include <cmath>
 
+bool FarmRuntimeController::UpdateControlGuide(const FarmRuntimeContext& s, const Input& input, bool insideViewport) {
+    using namespace farmui;
+    const bool click = insideViewport && input.TriggerMouseButton(InputMouseButton::Left);
+    const Request hit = click ? view_.Hit(pointer_) : Request{};
+    const bool helpKey = input.TriggerKey(InputKey::H);
+    const bool helpPad = input.TriggerGamepadButton(InputGamepadButton::Back);
+    if (controlGuide_) {
+        if (helpKey || helpPad || hit.action == Action::GuideClose || input.TriggerKey(InputKey::Escape) ||
+            input.TriggerGamepadButton(InputGamepadButton::B)) {
+            controlGuide_.reset();
+            open_ = guideFromMenu_;
+        } else if (hit.action == Action::GuideTab && ValidGuideTab(hit.argument)) {
+            controlGuide_ = static_cast<GuideDevice>(hit.argument);
+        } else {
+            const bool next = input.TriggerKey(InputKey::ArrowDown) || input.TriggerKey(InputKey::ArrowRight) ||
+                input.TriggerGamepadButton(InputGamepadButton::DPadDown) || input.TriggerGamepadButton(InputGamepadButton::DPadRight);
+            const bool prev = input.TriggerKey(InputKey::ArrowUp) || input.TriggerKey(InputKey::ArrowLeft) ||
+                input.TriggerGamepadButton(InputGamepadButton::DPadUp) || input.TriggerGamepadButton(InputGamepadButton::DPadLeft);
+            controlGuide_ = StepGuideTab(*controlGuide_, static_cast<int>(next)-prev);
+        }
+    } else {
+        const bool menu = view_.menuShell && page_ == 0 && !menuDetails_ && pending_ == Action::None;
+        if ((!view_.hotbarVisible && !menu) || s.host.IsTimelineScrubbing()) return false;
+        const bool focused = menu && focusedItem_ >= 0 && focusedItem_ < static_cast<int>(view_.count) &&
+            view_.items[focusedItem_].request.action == Action::OpenControlGuide;
+        const bool pad = helpPad || (focused && input.TriggerGamepadButton(InputGamepadButton::A));
+        const bool key = helpKey || (focused && input.TriggerKey(InputKey::Enter));
+        if (!pad && !key && hit.action != Action::OpenControlGuide) return false;
+        guideFromMenu_ = open_;
+        open_ = true;
+        hotbarSlot_ = -1;
+        controlGuide_ = pad ? GuideDevice::Pad : key ? GuideDevice::Keys : GuideDevice::Mouse;
+    }
+    // The closing frame still belongs to the guide, including the wheel and held field gestures.
+    frameCaptured_ = fieldInputConsumed_ = wheelCaptured_ = true;
+    BuildView(s);
+    return true;
+}
+
 void FarmRuntimeController::BuildSaleOverview(const FarmRuntimeContext& s) {
     farmui::SaleViewState state;
     const auto& economy=s.farmEconomySystem;

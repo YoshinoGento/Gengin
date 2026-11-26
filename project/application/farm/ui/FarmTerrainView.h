@@ -2,6 +2,7 @@
 #include "farm/ui/FarmRuntimeUI.h"
 #include "farm/system/FarmIrrigationPreviewSystem.h"
 #include "farm/system/FarmGrowthSystem.h"
+#include "farm/system/FarmToolActionTypes.h"
 
 namespace farmui {
 struct TerrainViewState {
@@ -90,7 +91,7 @@ inline void BuildPlayQuickView(View& view, bool paused, bool canEdit, bool canCo
 }
 
 inline void BuildWaterGuidanceView(View& view, const FarmWaterGuidance& state, bool canEdit,
-    bool canSetIrrigation = false) {
+    bool canSetIrrigation = false, FarmToolActionStatus seedStatus = FarmToolActionStatus::Applied) {
     if (!state.visible) return;
     view.waterGuidance = true;
     Label supply = Label::SupplyNoneShort;
@@ -105,7 +106,11 @@ inline void BuildWaterGuidanceView(View& view, const FarmWaterGuidance& state, b
     Label advice = Label::WaterAdviceUnknownShort;
     switch (state.advice) {
     case FarmWaterAdvice::Till: advice = Label::WaterAdviceTillShort; break;
-    case FarmWaterAdvice::Plant: advice = Label::WaterAdvicePlantShort; break;
+    case FarmWaterAdvice::Plant:
+        if (seedStatus == FarmToolActionStatus::NoSeed) advice = Label::ActionNoSeed;
+        else if (seedStatus == FarmToolActionStatus::Locked) advice = Label::StageLocked;
+        else advice = seedStatus == FarmToolActionStatus::Applied ? Label::WaterAdvicePlantShort : Label::ActionOtherTool;
+        break;
     case FarmWaterAdvice::Harvest: advice = Label::WaterAdviceHarvestShort; break;
     case FarmWaterAdvice::Water: advice = Label::WaterAdviceWaterShort; break;
     case FarmWaterAdvice::CheckSupply: advice = Label::WaterAdviceSupplyShort; break;

@@ -52,7 +52,9 @@ void CheckCeremonyLifecycle() {
     };
     auto rebuild = [&](Notice notice) {
         farmui::View view{};
-        const bool built = farmui::BuildContestScreenView(view, notice, outcome, presentation, results, 10, false, false);
+        const bool built = farmui::BuildContestScreenView(view, notice, outcome, presentation, results, 10, false);
+        for (std::size_t i=0;i<view.count;++i)
+            Check(view.items[i].label!=farmui::Label::Experience, "showcase entry leaked into contest results");
         Check(built == (presentation.Active() || notice != Notice::None), "wrong contest screen");
         return view;
     };

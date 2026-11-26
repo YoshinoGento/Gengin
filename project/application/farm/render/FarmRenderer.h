@@ -18,6 +18,7 @@ namespace farm {
 class FarmGrid;
 class FarmHarvestVisualSystem;
 class FarmPestVisualSystem;
+struct FarmerPose;
 
 class FarmRenderer {
 public:
@@ -31,7 +32,7 @@ public:
 	void Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
         int hoveredTileIndex = -1, const FarmHarvestVisualSystem* harvest = nullptr, bool showSelection = true,
         const FarmPestVisualSystem* pests = nullptr, const vegetation::WindFrame& wind = {},
-        const FarmBrushPlaySystem* brush = nullptr,const FarmActionParticles* actions = nullptr);
+        const FarmBrushPlaySystem* brush = nullptr,const FarmActionParticles* actions = nullptr,const FarmerPose* farmer = nullptr);
     std::optional<FarmBrushContact> PickBrushContact(const FarmGrid& grid,const FarmVisualSystem& visual,
         int groundTile,Vector3 origin,Vector3 unitRay) const;
 	void Draw();
@@ -54,6 +55,7 @@ private:
 	std::array<Model*,kFarmMeshPaths.size()> meshModels_{}; // ModelManager-owned; shared by all tiles.
 	bool cropsReady_ = false;
 	Texture2DHandle whiteTexture_{};
+    Texture2DHandle farmerPalette_{};
 	std::vector<std::unique_ptr<Object3d>> objects_;
 	std::vector<FarmMeshPart> parts_;
     struct LiveCrop { size_t part; int tile; CropType crop; };

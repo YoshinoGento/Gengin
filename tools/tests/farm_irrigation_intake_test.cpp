@@ -19,6 +19,23 @@ void Check(bool ok, const char* what) { if (!ok) throw std::runtime_error(what);
 int main() try {
     using namespace farm;
     {
+        FarmGrid g; assert(g.Initialize(5,4));
+        FarmTile source{}, dry{}, crop{};
+        source.feature=FarmTileFeature::WaterSource; source.waterAmount=1;
+        dry.feature=FarmTileFeature::Canal;
+        crop.state=FarmTileState::Tilled; crop.irrigationEnabled=true;
+        assert(g.SetTile(5,source) && g.SetTile(7,dry) && g.SetTile(12,crop));
+        assert(FarmCanalLessonSystem::FindLiveGap(g)==6 && g.GetTile(6)->feature==FarmTileFeature::None);
+        assert(g.SetTile(6,crop) && FarmCanalLessonSystem::FindLiveGap(g)==-1);
+        assert(g.SetTile(6,{}) && g.SetSelectedIndex(6));
+        FarmToolActionSystem tools; tools.Initialize(); assert(tools.ToggleSelectedCanal(g));
+        FarmIrrigationSystem water; water.Initialize(); water.Rebuild(g);
+        assert(FarmCanalLessonSystem::FindLiveGap(g)==-1 && water.IsInIrrigationRange(12));
+        const auto before=g.GetTile(12)->moisture;
+        for (int i=0;i<240;++i) water.UpdateWater(g,1.f/60.f,1.f);
+        assert(g.GetTile(12)->moisture>before);
+    }
+    {
         namespace F = forecast_fixture;
         using Op = FarmIrrigationPreviewOperation;
         FarmGrid g; Check(F::Build(g), "branch fixture");

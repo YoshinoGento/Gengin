@@ -17,13 +17,6 @@ inline constexpr std::array<Label, FarmExperienceSystem::kCount> kExperienceGoal
     Label::ExperienceBookGoal, Label::ExperienceCompareGoal, Label::ExperienceRecoveryGoal, Label::ExperienceRecordsGoal,
     Label::CampaignGoal, Label::FinalSubmissionGoal, Label::FinalFailureGoal, Label::FinalMissedGoal
 }};
-inline constexpr std::array<Label, FarmExperienceSystem::kCount> kExperienceOperations{{
-    Label::ExperienceSeedTool, Label::ExperienceHarvestTool, Label::SoilCare, Label::TradeOpen,
-    Label::MenuTerrain, Label::IntakeOff, Label::ExperiencePestFocus, Label::Repellent,
-    Label::TimeAdvance, Label::ContestPreview, Label::ContestDetails, Label::Development,
-    Label::CropBook, Label::MenuObserve, Label::Recovery, Label::Records,
-    Label::StageGuide, Label::ContestPreview, Label::ContestPreview, Label::OutcomeFinal
-}};
 inline constexpr std::array<Label, FarmExperienceSystem::kCount> kExperienceFirstSteps{{
     Label::ExperiencePlantStep, Label::ExperienceHarvestStep, Label::ExperienceSoilStep, Label::ExperienceTradeStep,
     Label::ExperienceWaterStep, Label::ExperienceRainStep, Label::ExperiencePestsStep, Label::ExperienceRepellentStep,
@@ -74,10 +67,5 @@ inline void BuildExperienceView(View& view, int selection, bool confirming, bool
     view.Add(Label::Settings, {166, 636, 300, 48}, {Action::Tab, 4});
     view.Add(Label::Records, {492, 636, 300, 48}, {Action::Tab, 2});
     view.Add(Label::Resume, {818, 636, 300, 48}, {Action::Close});
-}
-inline void BuildExperienceHUD(View& view, int active, bool enabled) {
-    view.Add(Label::Experience, {24, 138, 240, 44}, {Action::ExperienceOpen}, enabled);
-    if (FarmExperienceSystem::Valid(active))
-        view.Add(kExperienceOperations[active], {24, 190, 240, 44}, {Action::ExperienceAction}, enabled);
 }
 }

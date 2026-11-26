@@ -1,4 +1,5 @@
 #include "farm/system/FarmToolActionSystem.h"
+#include "farm/core/FarmCanalSite.h"
 #include "farm/system/FarmToolBehavior.h"
 #include "farm/system/FarmContestSubmissionSystem.h"
 #include "farm/system/FarmSoilSystem.h"
@@ -399,6 +400,14 @@ bool FarmToolActionSystem::ToggleSelectedCanal(farm::FarmGrid& grid)
 	return CommitTileChange(grid, tileIndex, before, after, commandName);
 }
 
+bool FarmToolActionSystem::DigCanalAt(farm::FarmGrid& grid,int index) {
+    const auto* tile=grid.GetTile(index);
+    if (!tile || tile->feature!=farm::FarmTileFeature::None || !CanToggleCanal(grid,index)) return false;
+    auto after=*tile;
+    after.feature=farm::FarmTileFeature::Canal;
+    return CommitTileChange(grid,index,*tile,after,"Place Canal");
+}
+
 bool FarmToolActionSystem::PlaceCanalPath(
 	farm::FarmGrid& grid,
 	const std::vector<int>& tileIndices)
@@ -494,12 +503,7 @@ bool FarmToolActionSystem::CanToggleCanal(
 	if (tile->feature == farm::FarmTileFeature::Canal) {
 		return true;
 	}
-	if (tile->repellentPlant || tile->feature != farm::FarmTileFeature::None) {
-		return false;
-	}
-	return tile->state == farm::FarmTileState::Empty &&
-		tile->crop == farm::CropType::None &&
-		tile->moisture == 0.0f && tile->growth == 0.0f;
+	return farm::CanStartCanal(*tile);
 }
 
 bool FarmToolActionSystem::ToggleSelectedWaterSource(farm::FarmGrid& grid)

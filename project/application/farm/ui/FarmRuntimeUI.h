@@ -3,6 +3,7 @@
 #include "farm/ui/FarmRuntimeLabels.h"
 #include "farm/ui/FarmHUDLayout.h"
 #include "farm/ui/FarmHUDIcons.h"
+#include "ui/FieldSurface.h"
 #include "farm/system/FarmContestPresentationSystem.h"
 #include "title/TitleAudioSettingsSystem.h"
 #include "2d/Sprite.h"
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace farmui {
@@ -31,9 +33,9 @@ enum class Action {
     HarvestDetails, SaleSelect, SaleReview, SaleConfirm, SaleCancel,
     PestFocus, PestCure, TimeAdvance, TimeCancel, TimeFocus, Development, ExpandFarm, CropBook,
     Repellent, RepellentSelect, RepellentPlace, RepellentRemove, Recovery, RecoveryClaim,
-    ExperienceOpen, ExperiencePage, ExperienceSelect, ExperienceBegin, ExperienceConfirm, ExperienceCancel, ExperienceAction,
-    CampaignStart, CampaignExhibit, ApplyFungicide,
-    LessonPreview, LessonConnect, LessonUndo, LessonAgain, LessonExit
+    ExperiencePage, ExperienceSelect, ExperienceBegin, ExperienceConfirm, ExperienceCancel, ApplyFungicide,
+    LessonPreview, LessonConnect, LessonUndo, LessonAgain, LessonExit, GapDig, GapSkip, FieldDetails,
+    OpenControlGuide, GuideTab, GuideClose, WalkToggle
 };
 struct Request {
     Action action = Action::None;
@@ -56,13 +58,14 @@ struct Item {
     float opacity = 1;
     bool leadingIcon = false;
 };
-[[nodiscard]] inline Rect IconCaptionRect(const Item& item) noexcept {
-    const auto index = static_cast<std::size_t>(item.label);
+[[nodiscard]] inline Rect IconCaptionRect(Label label) noexcept {
+    const auto index = static_cast<std::size_t>(label);
     if (index >= kLabels.size()) return {};
     const float width = (std::min)(360.0f, kLabels[index].width * 0.78f + 24);
     // One reserved caption line keeps hover names off the field and other controls.
     return {640.0f-width*0.5f, 576, width, 38};
 }
+[[nodiscard]] inline Rect IconCaptionRect(const Item& item) noexcept { return IconCaptionRect(item.label); }
 struct QualityRadar {
     bool visible = false;
     bool numberedAxes = true;
@@ -94,11 +97,14 @@ struct SpeechBubble {
     bool tailLeft = true;
     float opacity = 0;
 };
+enum class WheelHint { Hidden, Tools, Seeds };
+struct WheelItem { Label label; HUDIcon icon; };
 struct View {
     static constexpr std::size_t kCapacity = 40;
     std::array<Item, kCapacity> items{};
     std::size_t count = 0;
     bool modal = false;
+    bool controlGuide = false;
     bool menuShell = false;
     bool audioSettings = false;
     title::AudioSettingsFrame audioFrame{};
@@ -117,7 +123,10 @@ struct View {
     bool feedback = false;
     bool waterGuidance = false;
     bool compactHUD = false;
+    bool simpleField = false;
     bool hotbarVisible = false;
+    WheelHint fieldWheelHint = WheelHint::Hidden;
+    std::optional<WheelItem> wheelItem;
     bool hotbarAtFieldEdge = false;
     bool selectedTile = false;
     bool goalVisible = false;
@@ -163,22 +172,25 @@ struct View {
         if (count >= items.size()) return;
         items[count++] = {label, rect, {}, true, false, std::move(value), false, offset};
     }
-    [[nodiscard]] bool Covers(Vector2 point) const noexcept {
-        if (compactHUD && (HUDLayout::status.Contains(point) || HUDLayout::economy.Contains(point) ||
-            (hotbarVisible && HUDLayout::tools.Contains(point)) || (selectedTile && HUDLayout::selected.Contains(point)) ||
-            (goalVisible && HUDLayout::goal.Contains(point)))) return true;
-        if (modal || (observation && (kObservationTop.Contains(point) || kObservationBottom.Contains(point))) ||
-            (terrain && (kTerrainTop.Contains(point) || kTerrainBottom.Contains(point))) ||
-            (fieldActions && kFieldActionsPanel.Contains(point)) ||
-            (waterGuidance && kWaterGuidancePanel.Contains(point)) ||
-            (feedback && kFeedbackPanel.Contains(point))) return true;
+    template<class Predicate>
+    [[nodiscard]] bool AnyHUDRegion(Predicate hit) const noexcept {
+        if (compactHUD && (hit(HUDLayout::status) || (!simpleField && hit(HUDLayout::economy)) ||
+            (hotbarVisible && hit(HUDLayout::tools)) || (selectedTile && hit(HUDLayout::selected)) ||
+            (goalVisible && hit(HUDLayout::goal)))) return true;
+        if (modal || (observation && (hit(kObservationTop) || hit(kObservationBottom))) ||
+            (terrain && (hit(kTerrainTop) || hit(kTerrainBottom))) ||
+            (fieldActions && hit(kFieldActionsPanel)) || (waterGuidance && hit(kWaterGuidancePanel)) ||
+            (feedback && hit(kFeedbackPanel))) return true;
         // Disabled controls and labels still own their screen area.
         for (std::size_t i = 0; i < count && i < items.size(); ++i)
-            if (items[i].rect.Contains(point) ||
+            if (hit(items[i].rect) ||
                 (compactHUD && ((items[i].selected && items[i].request.action == Action::Tool) ||
                     (items[i].focused && (items[i].request.action == Action::Tool || items[i].request.action == Action::Crop))) &&
-                    IsValidIcon(items[i].icon) && IconCaptionRect(items[i]).Contains(point))) return true;
+                    IsValidIcon(items[i].icon) && hit(IconCaptionRect(items[i])))) return true;
         return false;
+    }
+    [[nodiscard]] bool Covers(Vector2 point) const noexcept {
+        return AnyHUDRegion([point](Rect r) { return r.Contains(point); });
     }
     [[nodiscard]] Request Hit(Vector2 point) const noexcept {
         for (std::size_t i = count < items.size() ? count : items.size(); i > 0; --i) {
@@ -211,14 +223,19 @@ public:
     void PrepareNames(const View& view);
     void Draw(const View& view, Vector2 pointer);
 private:
-    void Panel(Rect rect, Vector4 color);
+    void Panel(Rect rect, Vector4 color, fieldsign::Region surface = fieldsign::kFill);
+    void InfoPanel(Rect rect, float alpha=1.f);
     void LabelQuad(Label label, Rect rect, Vector4 color);
+    void AtlasQuad(const AtlasRect& uv, Rect rect, Vector4 color);
+    void DrawGuideBoard();
+    void DrawGuideSign(const Item& item, bool field, bool hover);
     void ValueText(const std::string& value, Vector2 position, float right,
         Vector4 color = {1.0f, 0.87f, 0.50f, 1}, float scale = 1.0f);
     void IconQuad(HUDIcon icon, Rect rect, Vector4 color);
     void DrawRadar(const QualityRadar& radar);
+    void DrawFieldWheelHint(const View& view, Vector2 pointer);
     std::array<Sprite, 84> panels_{};
-    std::array<Sprite, 40> labels_{};
+    std::array<Sprite, View::kCapacity> labels_{};
     std::array<Sprite, 160> digits_{};
     std::array<Sprite, 56> radarLines_{};
     std::array<Sprite, View::kCapacity> icons_{};

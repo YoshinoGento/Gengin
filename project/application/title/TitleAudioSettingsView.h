@@ -1,6 +1,7 @@
 #pragma once
 #include "title/TitleAudioSettingsSystem.h"
 #include "2d/Sprite.h"
+#include "ui/FieldSurface.h"
 #include <array>
 class Input;
 class WinApp;
@@ -11,7 +12,7 @@ public:
     [[nodiscard]] AudioSettingsInput ReadInput(const Input& input, const WinApp& window) const;
     void Draw(const AudioSettingsFrame& frame);
 private:
-    void Box(std::size_t index, Vector2 position, Vector2 size, Vector4 color);
+    void Box(std::size_t index, Vector2 position, Vector2 size, Vector4 color, fieldsign::Region uv=fieldsign::kFill);
     void Label(std::size_t index, int row, Vector2 position, float width);
     void Percent(std::size_t index, int value, Vector2 position);
     SpriteCommon* common_ = nullptr;

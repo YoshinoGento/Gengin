@@ -19,5 +19,6 @@ struct BasketLanding {
     SizeCue size=SizeCue::Regular;
     Vector3 crateCenter{};
     Vector2 footprintHalf{};
+    bool spillsSoil=true;
 };
 }

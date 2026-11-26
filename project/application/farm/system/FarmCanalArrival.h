@@ -3,7 +3,7 @@
 #include "farm/system/FarmIrrigationSystem.h"
 
 namespace farm::arrival {
-inline constexpr float kTravel=.37f, kWick=.64f;
+inline constexpr float kTravel=.37f, kWick=1.25f;
 enum class Beat { Bank, Soil };
 struct Reveal { int parent=-1; float fraction=1; int outlet=-1; };
 

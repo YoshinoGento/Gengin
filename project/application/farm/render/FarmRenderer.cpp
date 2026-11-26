@@ -4,6 +4,7 @@
 #include "farm/system/FarmHarvestVisualSystem.h"
 #include "farm/system/FarmPestVisualSystem.h"
 #include "farm/render/FarmMaterialStyle.h"
+#include "farm/render/FarmFarmerModel.h"
 #include "3d/Object3d.h"
 #include "3d/ModelManager.h"
 #include <filesystem>
@@ -38,16 +39,18 @@ bool FarmRenderer::Initialize(Object3dCommon* common, ModelManager* models, Text
 	common_=common;
     liveCrops_.reserve(kMaximumCropParts);
 	whiteTexture_=whiteTexture;
+    farmerPalette_=TextureManager::GetInstance()->LoadTexture2D("Resources/farm/farmer/palette.png");
     constexpr size_t kToolParts=4+2; // Four simultaneous cans and the handle/blade of one hoe.
     constexpr size_t kReserve=kMaximumParts+kMaximumTargetParts+kMaximumCropParts+kMaximumHarvestParts+FarmPestMeshParts::kCapacity+kToolParts;
-	parts_.reserve(kReserve);
-	objects_.reserve(kReserve);
+    constexpr size_t kFarmerParts=6+2; // Six body/tool pieces and the two transient furrow pieces.
+	parts_.reserve(kReserve+kFarmerParts);
+	objects_.reserve(kReserve+kFarmerParts);
 	return true;
 }
 
 void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
 	int hoveredTileIndex, const FarmHarvestVisualSystem* harvest, bool showSelection, const FarmPestVisualSystem* pests,
-	const vegetation::WindFrame& wind,const FarmBrushPlaySystem* brush,const FarmActionParticles* actions) {
+	const vegetation::WindFrame& wind,const FarmBrushPlaySystem* brush,const FarmActionParticles* actions,const FarmerPose* farmer) {
     liveCrops_.clear(); preparedBoard_=nullptr;
 	parts_.clear();
 	lastDrawTileCount_ = 0;
@@ -91,6 +94,12 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 		lastDrawTileCount_ += tileParts.count > 0 ? 1 : 0;
 	}
 	const auto livePartEnd = parts_.size();
+    if (farmer) {
+        const auto body=BuildFarmerModel(*farmer);
+        parts_.insert(parts_.end(),body.begin(),body.end());
+        if (const auto mark=BuildFurrowMark(grid,visual,*farmer))
+            parts_.insert(parts_.end(),mark->begin(),mark->end());
+    }
     if(const auto* stroke=strokes?strokes->Active():nullptr) {
         const auto pose=hoeing::Pose(*stroke);
         if(pose.scale>=.005f) {
@@ -146,21 +155,16 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 		if (shape>=meshModels_.size() || !meshModels_[shape]) { parts_.clear(); lastDrawTileCount_=0; return; }
 		Model* desired=meshModels_[shape];
 		if (object.GetModel() != desired) { object.SetModel(desired); }
+        object.SetTexture(part.shape>=FarmMeshShape::FarmerBody ? farmerPalette_ : whiteTexture_);
         Vector3 touch{};
         if (cropCursor<liveCrops_.size() && liveCrops_[cropCursor].part==index) {
             const auto& crop=liveCrops_[cropCursor++];
             const auto lean=brush?brush->Lean(crop.tile,crop.crop):Vector2{};
-            if (part.shape==FarmMeshShape::PumpkinVines) {
-                // The fruit rests on the ground. Twist the runner around its stalk instead of tipping the fruit.
-                touch.y=.60f*(lean.x+.55f*lean.y);
-            } else if (CropWindResponse(part.shape)>0) {
-                const float amount=crop.crop==CropType::Tomato?.48f:1.f;
-                touch={lean.y*amount,0,-lean.x*amount};
-            }
+            touch=CropBrushTilt(part.shape,lean);
         }
 		const auto pose = index < livePartEnd ? CropWindPose(part, wind,touch) : FarmWindPose{part.position, {}};
 		object.SetPosition(pose.position);
-		object.SetRotation({pose.rotation.x,pose.rotation.y+part.yaw,pose.rotation.z+part.roll});
+		object.SetRotation({pose.rotation.x+part.pitch,pose.rotation.y+part.yaw,pose.rotation.z+part.roll});
 		if (!object.SetShearY(part.slope)) { parts_.clear(); lastDrawTileCount_ = 0; return; }
 		if (!object.SetScale(part.scale)) { parts_.clear(); lastDrawTileCount_ = 0; return; }
 		object.SetColor(part.color);

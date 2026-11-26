@@ -115,7 +115,7 @@ public:
 	InitializationTask InitializeIncrementally(SpriteCommon* spriteCommon);
 	void SetViewData(const FarmHUDViewData& viewData);
 	void Update(float deltaTime);
-	void Draw();
+	void Draw(bool simpleField = false);
 
 private:
 	// Fixed after initialization; each live glyph owns distinct GPU constants.

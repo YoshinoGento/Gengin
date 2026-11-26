@@ -10,12 +10,20 @@ namespace {
 
 void FarmToolSystem::Initialize()
 {
-	currentTool_ = FarmTool::Hoe;
+	SetTool(FarmTool::Hoe);
 }
 
 void FarmToolSystem::SetTool(FarmTool tool)
 {
 	currentTool_ = tool;
+	if (tool != FarmTool::Seed) seedKit_ = false;
+	if (tool == FarmTool::Hoe || tool == FarmTool::Water || tool == FarmTool::Harvest) lastWorkTool_ = tool;
+}
+
+void FarmToolSystem::ToggleSeedKit() noexcept
+{
+	if (currentTool_ == FarmTool::Seed) SetTool(lastWorkTool_);
+	else { SetTool(FarmTool::Seed); seedKit_ = true; }
 }
 
 void FarmToolSystem::CycleTools(int steps)
@@ -25,7 +33,7 @@ void FarmToolSystem::CycleTools(int steps)
 	if (index < 0 || index >= kSelectableToolCount)
 		index = steps > 0 ? kSelectableToolCount - 1 : 0;
 	const int offset = steps % kSelectableToolCount;
-	currentTool_ = static_cast<FarmTool>((index + offset + kSelectableToolCount) % kSelectableToolCount);
+	SetTool(static_cast<FarmTool>((index + offset + kSelectableToolCount) % kSelectableToolCount));
 }
 
 void FarmToolSystem::SelectNextTool()

@@ -78,6 +78,25 @@ struct FarmCanalLessonSystem::LessonState::Reached final : LessonState {
 };
 
 FarmCanalLessonSystem::FarmCanalLessonSystem() : state_(&LessonState::Get<LessonState::Choose>()) {}
+int FarmCanalLessonSystem::FindLiveGap(const FarmGrid& grid) noexcept {
+    // Teach only an unambiguous one-tile break on level ground; never remove a crop.
+    constexpr int directions[][2] = {{1,0},{-1,0},{0,1},{0,-1}};
+    for (int i=0; i<grid.GetTileCount(); ++i) {
+        const auto* source=grid.GetTile(i);
+        if (!source || source->feature!=FarmTileFeature::WaterSource) continue;
+        for (const auto& d : directions) {
+            const int x=i%grid.GetWidth()+2*d[0], y=i/grid.GetWidth()+2*d[1];
+            if (x<0 || x>=grid.GetWidth() || y<0 || y>=grid.GetHeight()) continue;
+            const int end=y*grid.GetWidth()+x, middle=(i+end)/2;
+            const auto* gap=grid.GetTile(middle);
+            const auto* canal=grid.GetTile(end);
+            if (gap && canal && gap->feature==FarmTileFeature::None && gap->state==FarmTileState::Empty &&
+                !gap->repellentPlant && canal->feature==FarmTileFeature::Canal && canal->waterAmount==0 &&
+                source->heightLevel==gap->heightLevel && gap->heightLevel==canal->heightLevel) return middle;
+        }
+    }
+    return -1;
+}
 bool FarmCanalLessonSystem::Begin() {
     preview_.Initialize(); water_.Initialize(); tools_.Initialize();
     state_ = &LessonState::Get<LessonState::Choose>();

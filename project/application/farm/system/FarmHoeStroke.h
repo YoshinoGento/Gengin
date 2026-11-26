@@ -1,12 +1,11 @@
 #pragma once
 #include "farm/core/FarmGrid.h"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <optional>
 
 namespace farm::hoeing {
-inline constexpr float kLift=.22f, kHang=.07f, kDown=.24f;
+inline constexpr float kLift=.13f, kHang=.035f, kDown=.135f;
 inline constexpr float kHit=kLift+kHang+kDown, kPlant=.105f, kPull=.38f, kEnd=kHit+kPlant+kPull;
 struct Stroke {
     int tile=-1;
@@ -34,35 +33,35 @@ inline ToolPose Pose(const Stroke& s) noexcept {
     return {s.contact-offset+Vector3{0,s.scale*(.08f*(1.f-down)+.12f*pull),0},scale,roll};
 }
 
-// One visible tool and one waiting stroke. Overflow skips presentation, never the tile edit.
+// A single physical hoe follows the latest edit; an interrupted swing settles its own soil.
 class Strokes {
 public:
-    void Enqueue(Stroke stroke) noexcept {
-        for(size_t i=0;i<count_;++i) if(queue_[i].tile==stroke.tile) return;
-        if(count_<queue_.size()) queue_[count_++]=stroke;
-    }
-    const Stroke* Active() const noexcept { return count_?&queue_[0]:nullptr; }
+    void Start(Stroke stroke) noexcept { active_=stroke; }
+    const Stroke* Active() const noexcept { return active_?&*active_:nullptr; }
     bool WaitingForHit(int tile) const noexcept {
-        for(size_t i=0;i<count_;++i) if(queue_[i].tile==tile) return queue_[i].age<kHit;
-        return false;
+        return active_ && active_->tile==tile && active_->age<kHit;
+    }
+    std::optional<Stroke> Finish(const FarmGrid& grid) noexcept {
+        auto previous=active_;
+        active_.reset();
+        if(!previous || previous->age>=kHit) return {};
+        const auto* tile=grid.GetTile(previous->tile);
+        if(!tile || tile->state==FarmTileState::Empty || tile->feature!=FarmTileFeature::None) return {};
+        return previous;
     }
     std::optional<Stroke> Advance(const FarmGrid& grid,float dt) noexcept {
-        while(count_) {
-            auto& s=queue_[0];
-            const auto* tile=grid.GetTile(s.tile);
-            if(tile && tile->state==FarmTileState::Tilled && tile->feature==FarmTileFeature::None) {
-                const float before=s.age;
-                s.age+=dt;
-                if(before<kHit && s.age>=kHit) return s;
-                if(s.age<kEnd) break;
-                dt=s.age-kEnd;
-            }
-            queue_[0]=queue_[1]; --count_;
+        if(!active_) return {};
+        const auto* tile=grid.GetTile(active_->tile);
+        if(tile && tile->state==FarmTileState::Tilled && tile->feature==FarmTileFeature::None) {
+            const float before=active_->age;
+            active_->age+=dt;
+            if(before<kHit && active_->age>=kHit) return active_;
+            if(active_->age<kEnd) return {};
         }
+        active_.reset();
         return {};
     }
 private:
-    std::array<Stroke,2> queue_{};
-    size_t count_=0;
+    std::optional<Stroke> active_;
 };
 }

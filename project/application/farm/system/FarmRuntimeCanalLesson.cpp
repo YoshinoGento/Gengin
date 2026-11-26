@@ -7,6 +7,35 @@
 #include "base/FrameClock.h"
 #include "io/Input.h"
 
+bool FarmRuntimeController::UpdateLiveGap(const FarmRuntimeContext& s, const Input& input, bool click) {
+    if (flow_.GetPhase()!=FarmPlayFlow::Phase::Briefing) { entryGap_.reset(); return false; }
+    if (open_ || lesson_ || !s.farmProgressionSystem.IsFreeFarming() || s.farmDateSystem.GetDay()!=1 ||
+        s.host.IsTimelineScrubbing() || s.farmIrrigationPreviewSystem.IsActive() || s.farmDocumentSystem.HasError()) return false;
+    if (!entryGap_) {
+        entryGap_=farm::FarmCanalLessonSystem::FindLiveGap(s.farmGrid);
+        if (*entryGap_>=0 && FrameFarm(s,false,true)) s.farmGrid.SetSelectedIndex(*entryGap_);
+        else entryGap_=-1;
+        gapMissed_=false;
+    }
+    if (*entryGap_<0) return false;
+    BuildView(s);
+    using A=farmui::Action;
+    A action=click ? view_.Hit(pointer_).action : A::None;
+    if (input.TriggerKey(InputKey::Escape) || input.TriggerGamepadButton(InputGamepadButton::B)) action=A::GapSkip;
+    else if (input.TriggerKey(InputKey::Enter) || input.TriggerKey(InputKey::Space) ||
+        input.TriggerGamepadButton(InputGamepadButton::A)) action=A::GapDig;
+    else if (click && !view_.Covers(pointer_) && s.host.IsViewportHovered()) {
+        Vector3 origin{},direction{}; int hit=-1;
+        if (s.host.TryBuildViewportRay(origin,direction) && s.farmVisualSystem.TryPickTile(s.farmGrid,origin,direction,hit)) {
+            if (hit==*entryGap_) action=A::GapDig;
+            else gapMissed_=true;
+        }
+    }
+    if (action==A::GapDig || action==A::GapSkip) Execute(s,{action});
+    BuildView(s); frameCaptured_=true;
+    return true;
+}
+
 bool FarmRuntimeController::OffersCanalLesson(const FarmRuntimeContext& s) const {
     return flow_.GetPhase() == FarmPlayFlow::Phase::Briefing && s.farmDateSystem.GetDay() == 1 &&
         s.farmProgressionSystem.IsContestSeason() && !s.farmDocumentSystem.IsPrepared() &&

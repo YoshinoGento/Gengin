@@ -22,6 +22,7 @@ public:
     void Update(const FarmGrid& grid, const FarmVisualSystem& visual, const FarmIrrigationSystem& irrigation,
         const std::optional<WaterPointer>& pointer, float dt, bool active);
     std::span<const rain::Vertex> Vertices() const noexcept { return {vertices_.data(),count_}; }
+    bool PointerRippleThisUpdate() const noexcept { return pointerRipple_; }
     std::optional<Vector3> LeafPosition() const noexcept { return leaf_.tile<0 ? std::nullopt : std::optional{leaf_.position}; }
 private:
     struct Ring { Vector3 center{}; float angle{}, life{}; bool wake{}; };
@@ -36,6 +37,7 @@ private:
     std::optional<Vector3> anchor_;
     Vector2 screen_{};
     float cooldown_{}, travel_{}, leafWait_{}, stale_{};
+    bool pointerRipple_{};
     int slot_{};
     std::size_t count_{};
     const FarmGrid* binding_{};

@@ -36,6 +36,24 @@ struct Field {
         Check(grid.GetTile(6)->crop==CropType::None,"harvest did not commit");
     }
 };
+void ContactSounds() {
+    Field f;
+    f.Use(FarmTool::Harvest); f.Use(FarmTool::Hoe);
+    Check(f.fx.TakeSounds().none(),"failed harvest or airborne hoe made a sound");
+    int impacts=0;
+    for(int i=0;i<60;++i) {
+        f.Tick(1.f/60); impacts+=f.fx.TakeSounds().test(static_cast<size_t>(FieldCue::Hoe));
+    }
+    Check(impacts==1 && f.fx.TakeSounds().none(),"hoe contact did not sound exactly once");
+    for(auto [crop,cue]:{std::pair{CropType::Carrot,FieldCue::Pull},std::pair{CropType::Pumpkin,FieldCue::Cut},
+            std::pair{CropType::Tomato,FieldCue::Pick}}) {
+        f.Harvest(crop,.2f);
+        const auto heard=f.fx.TakeSounds();
+        Check(heard.count()==1 && heard.test(static_cast<size_t>(cue)),"wrong harvest sound");
+    }
+    f.Harvest(CropType::Tomato,.2f); f.Tick(.05f,0,false);
+    Check(f.fx.TakeSounds().none(),"hidden feedback survived");
+}
 void Tools() {
     for (float moisture : {.1f,.75f}) {
         Field f; FarmTile tile{}; tile.moisture=moisture;
@@ -44,7 +62,7 @@ void Tools() {
         f.Use(FarmTool::Hoe);
         Check(f.fx.Read().empty() && f.grid.GetTile(6)->state==FarmTileState::Tilled,"early dirt or delayed commit");
         f.Use(FarmTool::Hoe);
-        for(int i=0;i<12;++i) f.Tick();
+        for (float elapsed=0; elapsed<=hoeing::kHit; elapsed+=.05f) f.Tick(.05f);
         Check(f.Count(FieldGrain::Clod)==(moisture<.42f?6:4) && f.Count(FieldGrain::Dust)==(moisture<.42f?3:0),"dry/wet hoe");
         f.Use(FarmTool::Water);
         Check(f.Count(FieldGrain::PourDrop)>0 && f.Count(FieldGrain::Soak)>0,"watering");
@@ -109,15 +127,24 @@ void HoeContact() {
     f.Use(FarmTool::Hoe); f.Use(FarmTool::Hoe);
     Check(f.grid.SetSelectedIndex(7),"select next"); f.Use(FarmTool::Hoe);
     const auto* strokes=f.fx.HoeStrokes(f.grid);
-    Check(strokes->Active()->tile==6 && strokes->WaitingForHit(7),"second stroke overwrote first");
-    for(int i=0;i<21;++i) f.Tick();
-    Check(strokes->Active() && strokes->Active()->tile==7,"second stroke never began");
-    Check(f.grid.SetTile(7,{}),"undo before impact"); f.Tick();
+    Check(strokes->Active()->tile==7 && !strokes->WaitingForHit(6) && strokes->WaitingForHit(7),"second stroke waited");
+    Check(f.Count(FieldGrain::Clod)==6 && f.tools.GetHistory().GetUndoCount()==2,"interrupted contact not committed exactly once");
+    Check(f.grid.SetSelectedIndex(8),"third plot"); f.Use(FarmTool::Hoe);
+    Check(strokes->Active()->tile==8 && !strokes->WaitingForHit(7) && f.Count(FieldGrain::Clod)==12 &&
+        f.tools.GetHistory().GetUndoCount()==3,"rapid third stroke lost or repeated");
+    Check(f.grid.SetTile(8,{}),"undo before impact"); f.Tick();
     Check(!strokes->Active(),"reverted plot kept tool");
     f.Use(FarmTool::Hoe); f.Tick(.05f,0,false);
     Check(!strokes->Active() && f.fx.Read().empty(),"hidden stroke survived");
     f.grid.SetSelectedIndex(8); f.Use(FarmTool::Hoe);
     Check(f.grid.Initialize(2,2) && !f.fx.HoeStrokes(f.grid),"stale board");
+    Field afterHit;
+    afterHit.Use(FarmTool::Hoe);
+    for (int i=0;i<7;++i) afterHit.Tick();
+    const int clods=afterHit.Count(FieldGrain::Clod);
+    afterHit.Use(FarmTool::Water);
+    Check(clods==6 && afterHit.Count(FieldGrain::Clod)==clods && !afterHit.fx.HoeStrokes(afterHit.grid)->Active(),
+        "changing tools replayed an existing impact");
 }
 void Sowing() {
     for(auto crop:{CropType::TestCrop,CropType::Carrot,CropType::Tomato,CropType::Pumpkin}) {
@@ -286,6 +313,45 @@ void HarvestSizes() {
         for(int i=0;i<30;++i) f.Tick(); Check(f.fx.Read().empty(),"impact did not expire");
     }
 }
+void DirectionalSoilArrival() {
+    for(int donor : {1,5,7,11}) {
+        Field f;
+        FarmTile source{}, pipe{}, soil{};
+        source.feature=FarmTileFeature::WaterSource; source.waterAmount=1;
+        pipe.feature=FarmTileFeature::Canal; soil.state=FarmTileState::Tilled;
+        const int sourceIndex=donor==1?0:donor==5?10:donor==7?8:16;
+        Check(f.grid.SetTile(sourceIndex,source) && f.grid.SetTile(donor,pipe) && f.grid.SetTile(6,soil),"soil fixture");
+        const auto bed=f.visual.GetTileVisualData(f.grid,6);
+        const auto inlet=f.visual.GetTileCenter(f.grid,donor);
+        const auto axis=bed.center-inlet;
+        const float length=std::hypot(axis.x,axis.z), dx=axis.x/length, dz=axis.z/length;
+        float lastReach=0; int activeFrames=0;
+        for(int frame=0;frame<55;++frame) {
+            f.water.UpdateWater(f.grid,.05f,1); f.Tick();
+            Check(f.Count(FieldGrain::Seep)<=1,"extra soil cue in unwatered bed");
+            for(const auto& p:f.fx.Read()) if(p.kind==FieldGrain::Seep) {
+                Check(p.flowTile==6,"wet wrong plot");
+                std::array<rain::Vertex,actionfx::kPerGrain> v{};
+                auto particles=std::span(&p,1);
+                const auto n=actionfx::Build(v,particles,{1,0,0},{0,1,0});
+                Check(n>0 && n<=v.size() && n%3==0,"soil vertex budget");
+                Check(!actionfx::Build(std::span(v).first(n-1),particles,{1,0,0},{0,1,0}),"soil short buffer");
+                float reach=0;
+                for(size_t j=0;j<n;++j) {
+                    const auto pos=v[j].position;
+                    Check(rain::Finite(pos) && std::abs(pos.x-bed.center.x)<=.86f*bed.halfExtent &&
+                        std::abs(pos.z-bed.center.z)<=.86f*bed.halfExtent,"soil stain crossed plateau edge");
+                    const float along=(pos.x-p.position.x)*dx+(pos.z-p.position.z)*dz;
+                    Check(along>=-.001f,"stain moved back onto canal");
+                    reach=(std::max)(reach,along);
+                }
+                Check(reach+.001f>=lastReach,"stain retreats before fading");
+                lastReach=reach; ++activeFrames;
+            }
+        }
+        Check(activeFrames>5 && lastReach>bed.halfExtent && !f.Count(FieldGrain::Seep),"missing penetration or expiry");
+    }
+}
 void FirstArrival() {
     Field f; FarmTile pipe{},source{},bed{};
     pipe.feature=FarmTileFeature::Canal; source.feature=FarmTileFeature::WaterSource; source.waterAmount=1;
@@ -393,7 +459,7 @@ void Trace(const char* path) {
 }
 }
 int main(int argc,char** argv) try {
-    Tools(); Water(); FirstArrival(); Sowing(); HandWater(); HoeContact(); BasketSpill(); HarvestSizes();
+    ContactSounds(); Tools(); Water(); FirstArrival(); DirectionalSoilArrival(); Sowing(); HandWater(); HoeContact(); BasketSpill(); HarvestSizes();
     if (argc==3 && std::string_view(argv[1])=="--trace") Trace(argv[2]);
     std::cout<<"PASS: committed tools, sowing, can pose, drops, rebound, soaking, every crop, water paths, preview, capacity and geometry\n";
     return 0;

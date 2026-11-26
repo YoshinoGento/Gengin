@@ -11,6 +11,8 @@
 #include "farm/ui/FarmQualityView.h"
 #include "farm/ui/FarmTerrainView.h"
 #include "farm/ui/FarmHotbarView.h"
+#include "farm/ui/FarmControlGuideView.h"
+#include "farm/system/FarmFieldInput.h"
 #include "farm/ui/FarmNextGoalView.h"
 #include "farm/ui/FarmTimeAdvanceView.h"
 #include "farm/ui/FarmMenuView.h"
@@ -137,6 +139,57 @@ void TestIconAtlasIndices() {
         assert(!IsValidIcon(icon));
         assert(IconUV(icon).x == 0 && IconUV(icon).y == 0);
     }
+}
+
+void TestFieldWheelHint() {
+    using Route = farm::FieldWheelRoute;
+    static_assert(farm::ResolveFieldWheelRoute(false,false) == Route::Tools);
+    static_assert(farm::ResolveFieldWheelRoute(false,true) == Route::SeedKit);
+    static_assert(farm::ResolveFieldWheelRoute(true,false) == Route::SeedPicker);
+    static_assert(farm::ResolveFieldWheelRoute(true,true) == Route::SeedPicker);
+    static_assert(WheelItemForSlot(1,false)->label == Label::WheelWater);
+    static_assert(WheelItemForSlot(kFirstSeedSlot+1,false)->label == Label::Tomato);
+    static_assert(WheelItemForSlot(kFirstSeedSlot+1,true)->label == Label::WheelCandidateTomato);
+    static_assert(!WheelItemForSlot(-1,false) && !WheelItemForSlot(kHotbarSlots,false) && !WheelItemForSlot(0,true));
+    using namespace std::chrono_literals;
+    const farm::FieldWheelNotice::Clock::time_point t{};
+    farm::FieldWheelNotice notice;
+    notice.Record(Route::Tools, 0, 0, t);
+    assert(!notice.Visible(Route::Tools, 0, t));
+    notice.Record(Route::Tools, 0, 1, t);
+    assert(notice.Visible(Route::Tools, 1, t+999ms));
+    notice.Record(Route::Tools, 1, 1, t+999ms);
+    assert(!notice.Visible(Route::Tools, 1, t+1s));
+    notice.Record(Route::SeedKit, 4, 5, t+1s);
+    notice.Record(Route::SeedKit, 5, 6, t+1500ms);
+    assert(notice.Visible(Route::SeedKit, 6, t+2499ms));
+    assert(!notice.Visible(Route::SeedPicker, 6, t+2499ms));
+    assert(!notice.Visible(Route::SeedKit, 6, t+2499ms));
+    notice.Record(Route::SeedPicker, 6, 4, t+3s);
+    assert(!notice.Visible(Route::SeedPicker, 5, t+3s));
+    View view;
+    constexpr float width = 160.f;
+    const auto place = [&](float x, float y) { return PlaceFieldWheelHint(view, {x,y}, width); };
+    assert(place(600,340).width == 0);
+    for (const auto hint : {WheelHint::Tools, WheelHint::Seeds}) {
+        view.fieldWheelHint = hint;
+        for (auto p : {Vector2{600,340}, Vector2{1,1}, Vector2{1279,1}, Vector2{1,719}, Vector2{1279,719}}) {
+            const auto box = place(p.x,p.y);
+            assert(box.width == width && !box.Contains(p));
+            assert(box.x >= 0 && box.y >= 0 && box.x+box.width <= 1280 && box.y+box.height <= 720);
+            const Vector2 center{box.x+width/2,box.y+box.height/2};
+            assert(!view.Covers(center) && view.Hit(center).action == Action::None);
+            const auto expanded = PlaceFieldWheelHint(view, p, width, 2*kWheelHintRowHeight);
+            assert(expanded.width == width && expanded.height == 2*kWheelHintRowHeight && !expanded.Contains(p));
+            assert(expanded.y >= 0 && expanded.y+expanded.height <= 720);
+        }
+    }
+    view.Add(Label::Menu, {650,360,2,2});
+    assert(place(600,340).x < 600);  // Even a HUD item entirely inside the proposed badge wins.
+    assert(place(650,360).width == 0);
+    assert(place(-1,100).width == 0);
+    view.modal = true;
+    assert(place(600,340).width == 0);
 }
 
 void TestHotbar() {
@@ -329,7 +382,6 @@ void TestComposedHUD() {
         FarmToolActionResult evaluation; evaluation.status = FarmToolActionStatus::Applied;
         BuildFieldActionView(view,evaluation,false,!enabled);
         view.IconButton(Label::Menu,HUDIcon::Menu,HUDLayout::UtilitySlot(5),{Action::Menu});
-        BuildExperienceHUD(view, 0, enabled);
         view.IconButton(Label::ShopTitle,HUDIcon::Shop,HUDLayout::UtilitySlot(0),{Action::OpenSeedShop},enabled);
         view.IconButton(Label::HarvestDisplay,HUDIcon::Inventory,HUDLayout::UtilitySlot(1),{Action::HarvestDisplay},enabled);
         if (enabled) {
@@ -337,6 +389,7 @@ void TestComposedHUD() {
             else BuildFarmNextGoalView(view,{FarmNextGoalKind::ProtectAndReserve,-1,30},true);
         }
         AssertItemsDoNotOverlap(view);
+        assert(!view.Covers({140,160}) && !view.Covers({140,212}));
         std::size_t panelsUsed = 3+(selected ? 1 : 0); // Hotbar, field actions, one caption, optional water guidance.
         panelsUsed += (view.shortGoal ? 1 : 0) + (view.shortGoalDetail ? 1 : 0);
         std::size_t iconsUsed = 0, digitsUsed = 0;
@@ -417,6 +470,66 @@ void TestCaptionLayout() {
 
 int main() {
     {
+        using namespace fieldsign;
+        static_assert(Button(60,60,true,true).y==kSlotSelected.y);
+        static_assert(Button(60,60,false,true).y==kSlotFocus.y);
+        static_assert(Button(450,48,false,false).x==kWideNormal.x);
+        static_assert(Info(1280,72).x==kStrip.x && Info(216,56).x==kInfo.x);
+        for (Region uv : {kBoard,kInfo,kStrip,kFill,kSlotNormal,kSlotFocus,kSlotSelected,
+                kSignNormal,kSignFocus,kSignSelected,kWideNormal,kWideFocus,kWideSelected})
+            assert(uv.w>0 && uv.h>0 && uv.x>=0 && uv.y>=0 && uv.x+uv.w<1024 && uv.y+uv.h<512);
+    }
+    {
+        static_assert(!ValidGuideTab(-1) && !ValidGuideTab(4));
+        static_assert(StepGuideTab(GuideDevice::Mouse,-1)==GuideDevice::Pad);
+        static_assert(StepGuideTab(GuideDevice::Pad,1)==GuideDevice::Mouse);
+        for (int mode=0; ValidGuideTab(mode); ++mode) {
+            View guide; BuildControlGuide(guide,static_cast<GuideDevice>(mode));
+            AssertItemsDoNotOverlap(guide);
+            assert(guide.modal && guide.controlGuide && !guide.hotbarVisible && guide.Covers({0,0}) && guide.count<View::kCapacity);
+            int tabs=0, selected=0, close=0;
+            for (std::size_t i=0; i<guide.count; ++i) {
+                const auto& item=guide.items[i];
+                const auto board=GuideLayout::board;
+                assert(item.rect.x>=board.x && item.rect.y>=board.y && item.rect.x+item.rect.width<=board.x+board.width &&
+                    item.rect.y+item.rect.height<=board.y+board.height);
+                AssertReadable(item); AssertHalfOpenControl(item);
+                const auto hit=guide.Hit(Center(item.rect));
+                if (hit.action==Action::GuideTab) {
+                    ++tabs; selected+=item.selected;
+                    assert(ValidGuideTab(hit.argument) && item.selected==(hit.argument==mode));
+                    assert(item.rect.x==GuideLayout::tab(0).x && item.rect.y==GuideLayout::tab(hit.argument).y);
+                    if (hit.argument>0) assert(item.rect.y>GuideLayout::tab(hit.argument-1).y);
+                    AssertReadable({item.label,GuideLayout::signText(item.rect,false)});
+                } else if (hit.action==Action::GuideClose) ++close;
+                else assert(hit.action==Action::None);
+            }
+            assert(tabs==4 && selected==1 && close==1);
+        }
+        View field; BuildFieldGuideEntry(field,false);
+        AssertItemsDoNotOverlap(field);
+        assert(field.count==2 && field.Hit({40,328}).action==Action::OpenControlGuide);
+        assert(field.Hit({40,272}).action==Action::FieldDetails && !field.Covers({250,272}) && !field.Covers({40,302}));
+        for (std::size_t i=0;i<field.count;++i) {
+            const auto& item=field.items[i];
+            AssertHalfOpenControl(item);
+            const Rect text=GuideLayout::signText(item.rect,true);
+            assert(Separated(text,GuideLayout::keycap(item.rect)));
+            AssertReadable({item.label,text});
+        }
+        View detail; BuildFieldGuideEntry(detail,true);
+        assert(detail.count==1 && !detail.Covers({40,328}));
+        AssertReadable({detail.items[0].label,GuideLayout::signText(detail.items[0].rect,true)});
+        View bar; BuildHotbarView(bar,{},true);
+        for (std::size_t i=0; i<bar.count; ++i) {
+            auto& slot=bar.items[i];
+            assert(HoverCaption(slot)!=slot.label);
+            AssertReadable({HoverCaption(slot),IconCaptionRect(HoverCaption(slot))});
+            slot.enabled=false;
+            assert(HoverCaption(slot)==slot.label);
+        }
+    }
+    {
         for (bool valid : {true,false}) for (int field : {0,1,2,3}) {
             TerrainViewState state;
             state.preview = state.forecastAvailable = true;
@@ -455,15 +568,14 @@ int main() {
         FarmHUDViewData day{}; day.day = 1; day.contestSeason = true;
         for (bool offer : {true,false}) {
             View v{}; BuildPlayFlowView(v,FarmPlayFlow::Phase::Briefing,day,true,true,offer);
-            assert(v.items[4].label == (offer ? Label::LessonBegin : Label::MainEnter));
+            assert(v.items[3].label == (offer ? Label::LessonBegin : Label::TrialBegin));
         }
     }
     {
         auto check = [](const View& view) {
             for (std::size_t i=0; i<view.count; ++i) {
                 const auto action = view.items[i].request.action;
-                assert(action != Action::ExperienceOpen && action != Action::CampaignStart &&
-                    action != Action::CampaignExhibit && action != Action::ChangePlayMode);
+                assert(view.items[i].label != Label::Experience && action != Action::ChangePlayMode);
             }
         };
         FarmHUDViewData data{};
@@ -472,11 +584,22 @@ int main() {
         BuildPlayFlowView(entry,FarmPlayFlow::Phase::Briefing,data,true,true);
         check(entry); AssertItemsDoNotOverlap(entry);
         assert(entry.Hit({90,650}).action==Action::FlowContinue);
-        assert(entry.Hit({750,650}).action==Action::FlowRecords);
+        assert(entry.Hit({750,650}).action==Action::None);
+        for (bool missed : {false,true}) {
+            View guide{}; BuildLiveGapView(guide,missed);
+            AssertItemsDoNotOverlap(guide);
+            for (std::size_t i=0;i<guide.count;++i) AssertReadable(guide.items[i]);
+            assert(!guide.Covers({640,320}) && guide.Hit({120,652}).action==Action::GapDig);
+            assert(guide.Hit({1000,652}).action==Action::GapSkip);
+        }
         for (int page=0;page<kMenuPageCount;++page) {
             View menu{}; MenuOverviewState state{};
             state.page=page; state.mainGameOnly=true;
             BuildMenuOverview(menu,state); check(menu);
+            View normal{};
+            state.mainGameOnly=false; BuildMenuOverview(normal,state);
+            for (std::size_t i=0;i<normal.count;++i) assert(normal.items[i].label!=Label::Experience);
+            if (page==0) assert(normal.Hit({820,580}).action==Action::None);
         }
         View prompt{};
         BuildFarmNextGoalView(prompt,{FarmNextGoalKind::BuySeed},false,true);
@@ -737,6 +860,7 @@ int main() {
         return a.x+a.width<=b.x || b.x+b.width<=a.x || a.y+a.height<=b.y || b.y+b.height<=a.y;
     };
     TestIconAtlasIndices();
+    TestFieldWheelHint();
     TestHotbar();
     TestCompactPanelCoverage();
     TestHotbarVisibilityAcrossCropPopup();
@@ -779,8 +903,7 @@ int main() {
         for(int mode : {0,1,2}) {
             View entry; FarmHUDViewData data; data.contestSeason=mode==1; data.freeFarming=mode==2;
             BuildPlayFlowView(entry,FarmPlayFlow::Phase::Briefing,data);
-            const auto change=entry.Hit({300,660});
-            assert(change.action==Action::ChangePlayMode && change.argument==(mode==2 ? 1 : 2));
+            assert(entry.Hit({300,660}).action==Action::FlowContinue);
             if (mode==2) assert(entry.items[0].label==Label::FreeMode);
             for(std::size_t i=0;i<entry.count;++i) {
                 const auto& a=entry.items[i];
@@ -1137,6 +1260,13 @@ int main() {
         (farm::kFarmOverviewFrame.bottom-farm::kFarmOverviewFrame.top)*720};
     assert(separated(farmSafeArea, View::kWaterGuidancePanel));
     assert(farmSafeArea.x >= View::kWaterGuidancePanel.x+View::kWaterGuidancePanel.width+8);
+    for (const auto [seedStatus, label] : {std::pair{FarmToolActionStatus::Applied,Label::WaterAdvicePlantShort},
+        {FarmToolActionStatus::NoSeed,Label::ActionNoSeed}, {FarmToolActionStatus::Locked,Label::StageLocked},
+        {FarmToolActionStatus::InvalidState,Label::ActionOtherTool}}) {
+        View view;
+        BuildWaterGuidanceView(view,{true,false,farm::FarmWaterStatus::None,FarmWaterAdvice::Plant},true,true,seedStatus);
+        assert(view.items[1].label == label);
+    }
     for (bool visible : {false,true}) for (bool closed : {false,true}) for (bool editable : {false,true})
     for (bool canSetIntake : {false,true})
     for (auto supply : {farm::FarmWaterStatus::None, farm::FarmWaterStatus::Available,
@@ -1433,11 +1563,9 @@ int main() {
         assert(entry.modal && entry.Covers({640, 300}));
         if (phase == FarmPlayFlow::Phase::Briefing) {
             assert(entry.briefing);
-            assert(entry.Hit({200, 400}).action == Action::CampaignStart);
-            assert(entry.Hit({700, 400}).action == Action::CampaignExhibit);
-            assert(entry.Hit({200, 590}).action == Action::FlowContinue);
-            assert(entry.Hit({700, 660}).action == Action::Restart);
-            assert(entry.Hit({700, 590}).action == Action::FlowRecords);
+            int choices=0;
+            for (size_t i=0; i<entry.count; ++i) choices+=entry.items[i].request.action!=Action::None;
+            assert(choices==1 && entry.Hit({200,650}).action==Action::FlowContinue);
             assert(entry.Hit({600, 300}).action == Action::None);
         } else {
             assert(entry.Hit({200, 510}).action == Action::FlowContinue);

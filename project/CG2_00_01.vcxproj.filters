@@ -443,6 +443,8 @@
     <ClInclude Include="application\farm\ui\FarmExperienceView.h" />
     <ClInclude Include="application\farm\system\FarmPestVisualSystem.h" />
     <ClInclude Include="application\farm\system\FarmPestAudioSystem.h" />
+    <ClInclude Include="application\farm\system\FarmFieldAudioSystem.h" />
+    <ClInclude Include="application\farm\system\FarmFieldCue.h" />
     <ClInclude Include="application\farm\render\FarmPestMeshLayout.h" />
     <ClInclude Include="application\farm\system\FarmRainPresentationSystem.h" />
     <ClInclude Include="application\farm\system\FarmRainAudioSystem.h" />
@@ -763,6 +765,7 @@
     <ClCompile Include="application\farm\system\FarmArrivalAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmContestAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmPestAudioSystem.cpp" />
+    <ClCompile Include="application\farm\system\FarmFieldAudioSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmRainAudioSystem.cpp" />
     <ClCompile Include="application\farm\render\FarmFieldEffectRenderer.cpp" />
     <ClCompile Include="application\farm\system\FarmActionParticles.cpp" />
@@ -800,6 +803,11 @@
     <ClCompile Include="application\farm\system\FarmRuntimeMenu.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeExperience.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeCanalLesson.cpp" />
+    <ClCompile Include="application\farm\system\FarmRuntimeWalk.cpp" />
+    <ClInclude Include="application\farm\system\FarmWalkSystem.h" />
+    <ClInclude Include="application\farm\system\FarmHoePull.h" />
+    <ClInclude Include="application\farm\core\FarmCanalSite.h" />
+    <ClInclude Include="application\farm\render\FarmFarmerModel.h" />
     <ClCompile Include="application\farm\system\FarmCanalLessonSystem.cpp" />
     <ClCompile Include="application\farm\system\FarmPlayFlow.cpp" />
     <ClCompile Include="application\farm\system\FarmRuntimeForecast.cpp" />
@@ -810,6 +818,10 @@
     <ClInclude Include="application\farm\ui\FarmHUDLayout.h" />
     <ClInclude Include="application\farm\ui\FarmHUDIcons.h" />
     <ClInclude Include="application\farm\ui\FarmHotbarView.h" />
+    <ClInclude Include="application\farm\ui\FarmControlGuideView.h" />
+    <ClInclude Include="application\ui\FieldSurface.h" />
+    <ClInclude Include="application\ui\FieldSurfaceTexture.h" />
+    <ClInclude Include="application\ui\FieldSurfaceAtlas.h" />
     <ClInclude Include="application\farm\ui\FarmMenuView.h" />
     <ClInclude Include="application\farm\ui\FarmSaleView.h" />
     <ClInclude Include="application\farm\system\FarmSaleReviewSystem.h" />

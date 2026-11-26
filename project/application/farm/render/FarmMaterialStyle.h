@@ -15,7 +15,8 @@ inline FarmMaterialStyle BuildFarmMaterialStyle(const FarmMeshPart& part) noexce
 	constexpr float kWetSoilSpecular = 0.075f;
 	constexpr float kFruitSpecular = 0.085f;
 	constexpr float kFoliageSpecular = 0.018f;
-	if (part.water) return {{0.f,.18f,5.f,0.f},32.f};
+	// On unlit water w sets the strength of the broken sky highlights.
+	if (part.water) return {{0.f,.16f,3.1f,.085f},32.f};
 	if (part.surface == FarmMeshSurface::Selection ||
 		part.surface == FarmMeshSurface::Hover || part.surface == FarmMeshSurface::PestCue) { return {}; }
 	const float wetness = std::isfinite(part.wetness) ? std::clamp(part.wetness, 0.0f, 1.0f) : 0.0f;

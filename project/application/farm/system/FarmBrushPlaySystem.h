@@ -15,7 +15,7 @@ public:
     static constexpr size_t kCapacity=24;
     void Update(const FarmGrid& grid,float seconds,bool active);
     std::optional<Vector2> MovePointer(std::optional<Vector2> screen);
-    void Stroke(const FarmGrid& grid,FarmBrushContact contact,Vector2 groundDirection);
+    bool Stroke(const FarmGrid& grid,FarmBrushContact contact,Vector2 groundDirection);
     Vector2 Lean(int tile,CropType crop) const;
     std::span<const FieldParticle> Read() const { return {particles_.data(),count_}; }
 private:

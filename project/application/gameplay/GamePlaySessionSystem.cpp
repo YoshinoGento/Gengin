@@ -607,6 +607,7 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
     farmWind_ = {};
     if (!farmFieldEffectRenderer_.Initialize(framework_->GetDxCommon())) AddLog("Farm field effects unavailable.");
     if (!farmRainAudio_.Initialize(framework_->GetAudio())) AddLog("Rain ambience unavailable.");
+    if (!farmFieldAudio_.Initialize(framework_->GetAudio())) AddLog("Field sound set incomplete.");
     co_await std::suspend_always{};
 	PrepareRenderFrame(0.0f);
 	framework_->GetParticleManager()->Update(camera_.get(), 0.0f);
@@ -671,6 +672,7 @@ void GamePlaySessionSystem::Update() {
 	UpdateSceneDeltaTime();
     if (layoutLibraryFrame_) {
         farmRainAudio_.Stop();
+        farmFieldAudio_.Stop();
         return;
     }
 
@@ -747,10 +749,20 @@ void GamePlaySessionSystem::Update() {
         if(showActions && !practice && viewportFocused_) farmActionParticles_.OnBasketLanding(farmGrid_,contact);
     });
     farmHoveredTile_=practice ? practice->Target() : farmRuntimeController_.ResolveHoveredTile(RuntimeContext());
+#ifndef USE_IMGUI
+    if (!practice && frameInput) farmRuntimeController_.UpdateFieldWheelHint(RuntimeContext(), *frameInput, farmHoveredTile_);
+#endif
     const bool waterPlay=farmGameMode_ && farmRenderer_.IsVisible() && viewportFocused_ && !practice &&
         !timelineScrubbing_ && !farmIrrigationPreviewSystem_.IsActive() && !farmRuntimeController_.ConsumesInput() &&
         !farmRuntimeController_.HidesFarmHUD() && !farmProgressionSystem_.IsCleared();
-    UpdateFieldPointerFeedback(waterPlay);
+    auto fieldSounds=UpdateFieldPointerFeedback(waterPlay) | farmActionParticles_.TakeSounds();
+    if (farmRuntimeController_.TakeWalkHit()) farm::Mark(fieldSounds,farm::FieldCue::Hoe);
+    // A consumed click can be the very action that produced a sound.
+    const bool audibleField=showActions && viewportFocused_ && farmGameMode_ && farmRenderer_.IsVisible() &&
+        (practice || (!farmRuntimeController_.HidesFarmHUD() && !farmProgressionSystem_.IsCleared()));
+    farmFieldAudio_.Update(fieldSounds,audibleField,realDeltaTime_,
+        farmRuntimeController_.EffectVolume(),farmRuntimeController_.WaterVolume(),
+        farmToolSystem_.GetCurrentTool(),static_cast<int>(farmCropSelectionSystem_.GetSelectedCrop()));
 	PrepareRenderFrame(sceneDeltaTime_);
 
 	// スペースキー入力時の分岐（activeParticleType_ は Game.cpp の ImGui から書き換わる）
@@ -1699,11 +1711,11 @@ void GamePlaySessionSystem::Draw() {
 	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : lesson ? lesson->Water() : farmIrrigationSystem_;
 	farmRenderer_.Prepare(displayedFarmGrid, farmVisualSystem_, camera_.get(),
 		farmHoveredTile_, irrigationPreviewActive || lesson ? nullptr : &farmHarvestVisualSystem_,
-        lesson || !farmRuntimeController_.PresentsIntroduction(),
+        !farmRuntimeController_.Farmer() && (lesson || farmRuntimeController_.ShowsLiveGap() || !farmRuntimeController_.PresentsIntroduction()),
         !irrigationPreviewActive && !timelineScrubbing_ && farmProgressionSystem_.PestsEnabled() &&
         !farmRuntimeController_.PresentsIntroduction() ? &farmPestVisualSystem_ : nullptr, farmWind_.GetFrame(),
         !lesson && !irrigationPreviewActive ? &farmBrushPlay_ : nullptr,
-        !lesson && !irrigationPreviewActive && !timelineScrubbing_ ? &farmActionParticles_ : nullptr);
+        !lesson && !irrigationPreviewActive && !timelineScrubbing_ ? &farmActionParticles_ : nullptr,farmRuntimeController_.Farmer());
 
 	auto DrawLevelObjects = [&]() {
 		if (!showLevelObjects_) {
@@ -1880,10 +1892,10 @@ void GamePlaySessionSystem::Draw() {
 	if (farmHudInitialized_ || stageClearHudInitialized_) {
 		spriteCommon->PreDraw();
 #ifndef USE_IMGUI
-        if (!farmRuntimeController_.HidesFarmHUD()) {
+        if (!farmRuntimeController_.HidesFarmHUD() && !farmRuntimeController_.Farmer()) {
 #endif
 		if (farmHudInitialized_) {
-			farmHud_.Draw();
+			farmHud_.Draw(farmRuntimeController_.SimpleField());
 		}
 		if (stageClearHudInitialized_) {
 #ifndef USE_IMGUI
@@ -2218,7 +2230,8 @@ bool GamePlaySessionSystem::ResetFarmSessionState()
 	return true;
 }
 
-void GamePlaySessionSystem::UpdateFieldPointerFeedback(bool active) {
+farm::FieldCues GamePlaySessionSystem::UpdateFieldPointerFeedback(bool active) {
+    farm::FieldCues cues;
     farmBrushPlay_.Update(farmGrid_,realDeltaTime_,active);
     const bool allowed=active && farmRuntimeController_.AllowsFieldHover(RuntimeContext());
     const auto motion=farmBrushPlay_.MovePointer(allowed?std::optional{viewportMousePosition_}:std::nullopt);
@@ -2230,11 +2243,14 @@ void GamePlaySessionSystem::UpdateFieldPointerFeedback(bool active) {
         auto hit=motion ? farmRenderer_.PickBrushContact(farmGrid_,farmVisualSystem_,farmHoveredTile_,ray.origin,ray.direction) : std::nullopt;
         if (hit) {
             const auto& cam=camera_->GetWorldMatrix();
-            farmBrushPlay_.Stroke(farmGrid_,*hit,{motion->x*cam.m[0][0]-motion->y*cam.m[1][0],
-                motion->x*cam.m[0][2]-motion->y*cam.m[1][2]});
+            if(farmBrushPlay_.Stroke(farmGrid_,*hit,{motion->x*cam.m[0][0]-motion->y*cam.m[1][0],
+                motion->x*cam.m[0][2]-motion->y*cam.m[1][2]}))
+                farm::Mark(cues,hit->onCrop ? farm::FieldCue::BrushLeaf : farm::FieldCue::BrushSoil);
         } else if (wet) water=ray;
     }
     farmWaterPlay_.Update(farmGrid_,farmVisualSystem_,farmIrrigationSystem_,water,realDeltaTime_,active);
+    if(farmWaterPlay_.PointerRippleThisUpdate()) farm::Mark(cues,farm::FieldCue::Ripple);
+    return cues;
 }
 
 bool GamePlaySessionSystem::TryBuildViewportRay(
@@ -2971,6 +2987,7 @@ void GamePlaySessionSystem::AddLog(const std::string& message) {
 void GamePlaySessionSystem::Finalize()
 {
     farmRainAudio_.Finalize();
+    farmFieldAudio_.Finalize();
     farmRuntimeController_.FinalizePresentationAudio();
 	gamePlayEditorBridge_.Unbind();
 	if (framework_ && framework_->GetParticleManager()) {

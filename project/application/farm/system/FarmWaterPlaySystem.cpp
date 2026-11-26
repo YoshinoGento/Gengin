@@ -92,7 +92,7 @@ private:
 
 void FarmWaterPlaySystem::Update(const FarmGrid& grid,const FarmVisualSystem& visual,const FarmIrrigationSystem& water,
     const std::optional<WaterPointer>& pointer,float dt,bool active) {
-    count_=0;
+    count_=0; pointerRipple_=false;
     if (!active || binding_!=&grid || generation_!=grid.GetGeneration()) {
         binding_=&grid; generation_=grid.GetGeneration(); anchor_.reset(); rings_={}; leaf_={};
         leafWait_=cooldown_=stale_=0; measurement_=water.MeasurementRevision();
@@ -119,6 +119,7 @@ void FarmWaterPlaySystem::Update(const FarmGrid& grid,const FarmVisualSystem& vi
                 if (cooldown_<=0 && travel_>pitch*.048f && d>.0001f) {
                     emit(*hit,std::atan2(hit->z-anchor_->z,hit->x-anchor_->x),d>pitch*dt*1.15f);
                     cooldown_=.14f; travel_=0;
+                    pointerRipple_=true;
                 }
             }
         }

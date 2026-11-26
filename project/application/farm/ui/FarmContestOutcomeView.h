@@ -81,15 +81,13 @@ inline void BuildContestOutcomeView(View& view, const FarmContestOutcomeSystem::
 
 [[nodiscard]] inline bool BuildContestScreenView(View& view, FarmContestOutcomeSystem::Notice notice,
     const FarmContestOutcomeSystem& outcome, const FarmContestPresentationSystem& presentation,
-    const FarmEconomySystem::ContestResults& results, int dueDay, bool offerExperience, bool retryFailed) {
+    const FarmEconomySystem::ContestResults& results, int dueDay, bool retryFailed) {
     using Notice = FarmContestOutcomeSystem::Notice;
     if (presentation.Active()) BuildContestDetailView(view, presentation.GetFrame());
     else if (notice == Notice::Missed) BuildContestMissedView(view, outcome.GetFrame());
     else if (notice == Notice::DueToday) BuildContestDayNoticeView(view, dueDay);
     else if (notice == Notice::Season || notice == Notice::RetryConfirmation) {
         BuildContestOutcomeView(view, outcome.GetFrame(), results, notice == Notice::RetryConfirmation, retryFailed);
-        if (offerExperience && notice == Notice::Season)
-            view.Add(Label::Experience, {80, 660, 350, 44}, {Action::ExperienceOpen});
     } else return false;
     return true;
 }

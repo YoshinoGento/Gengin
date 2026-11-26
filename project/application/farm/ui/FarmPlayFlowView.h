@@ -27,30 +27,14 @@ inline void BuildPlayFlowView(View& view, FarmPlayFlow::Phase phase, const FarmH
     const bool result = phase == FarmPlayFlow::Phase::Result;
     if (phase == FarmPlayFlow::Phase::Briefing) {
         view.briefing = true;
-        if (mainGameOnly) {
-            view.Add(Label::SeasonMode, {40,28,760,44});
-            view.Metric(Label::TrialDay, {900,28,332,44}, 170, std::to_string(data.day));
-            view.Add(Label::MainPurpose, {40,506,1184,42});
-            view.Add(canalLesson ? Label::LessonIntro : data.day == 1 ? Label::MainFirstPlot : Label::CampaignGoal, {40,553,1184,42});
-            view.Add(canalLesson ? Label::LessonBegin : Label::MainEnter, {40,630,570,50}, {Action::FlowContinue});
-            view.Add(Label::Records, {630,630,602,50}, {Action::FlowRecords});
-            return;
-        }
         view.Add(data.freeFarming ? Label::FreeMode : data.contestSeason ? Label::SeasonMode : Label::TrialStart,
-            {40, 28, staged ? 530.0f : 810.0f, 44});
-        if (staged) view.Add(Label::StageGuide, {600,28,272,44}, {Action::StageGuide});
+            {40, 28, 810, 44});
         view.Metric(Label::TrialDay, {900, 28, 332, 44}, 170, std::to_string(data.day));
-        view.Add(Label::CampaignStart, {40, 380, 570, 48}, {Action::CampaignStart});
-        view.Add(Label::CampaignExhibit, {630, 380, 602, 48}, {Action::CampaignExhibit});
-        view.Add(Label::Experience, {40, 444, 440, 48}, {Action::ExperienceOpen});
-        if (data.freeFarming || data.contestSeason)
-            view.Add(data.freeFarming ? Label::FreeGoal : staged ? Label::CampaignGoal : Label::SeasonGoal, {40, 510, 1184, 42});
+        if (canalLesson) view.Add(Label::LessonIntro,{40,544,1184,42});
+        else if (data.freeFarming || data.contestSeason)
+            view.Add(data.freeFarming ? Label::FreeGoal : staged ? Label::CampaignGoal : Label::SeasonGoal, {40,544,1184,42});
         else view.Metric(Label::TrialGoal, {40, 510, 1184, 42}, 650, std::to_string(data.goalMoney) + "G");
-        view.Add(canalLesson ? Label::LessonBegin : Label::TrialBegin, {40, 572, 570, 48}, {Action::FlowContinue});
-        view.Add(Label::Records, {630, 572, 602, 48}, {Action::FlowRecords});
-        view.Add(data.freeFarming ? Label::SeasonMode : Label::FreeMode, {40, 636, 570, 48},
-            {Action::ChangePlayMode, data.freeFarming ? 1 : 2});
-        view.Add(Label::Restart, {630, 636, 602, 48}, {Action::Restart});
+        view.Add(canalLesson ? Label::LessonBegin : Label::TrialBegin, {40,628,560,56}, {Action::FlowContinue},true,true);
         return;
     }
     view.Add(data.freeFarming ? Label::FreeMode : data.contestSeason ? Label::SeasonMode : result ? Label::TrialComplete : Label::TrialStart, {166, 66, 940, 52});

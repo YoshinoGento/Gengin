@@ -13,6 +13,8 @@ public:
 	void Initialize();
 
 	void SetTool(FarmTool tool);
+	void ToggleSeedKit() noexcept;
+	[[nodiscard]] bool WheelSelectsSeeds() const noexcept { return seedKit_; }
 	void CycleTools(int steps);
 	void SelectNextTool();
 	void SelectPreviousTool();
@@ -22,4 +24,6 @@ public:
 
 private:
 	FarmTool currentTool_ = FarmTool::Hoe;
+	FarmTool lastWorkTool_ = FarmTool::Hoe;
+	bool seedKit_ = false;
 };

@@ -4,7 +4,7 @@
 
 namespace farm::actionfx {
 using rain::Vertex;
-// An eight-segment annulus is the most expensive shape in this batch.
+// An eight-segment annulus and an irrigation stain each use at most 48 vertices.
 inline constexpr std::size_t kPerGrain=8*6, kVertexCount=FarmActionParticles::kCapacity*kPerGrain;
 inline std::size_t BuildSownGrain(std::span<Vertex> out,const FieldParticle& p) noexcept {
     constexpr std::size_t sides=6, count=sides*6;
@@ -36,6 +36,33 @@ inline std::size_t BuildSownGrain(std::span<Vertex> out,const FieldParticle& p) 
     }
     return n;
 }
+inline std::size_t BuildSeep(std::span<Vertex> out, const FieldParticle& p) noexcept {
+    // The bank stays fixed; the five points on the leading edge reach into the soil at different rates.
+    constexpr std::array reach{.69f,1.28f,1.52f,1.17f,.78f};
+    constexpr std::array along{0.f,.76f,1.f};
+    constexpr size_t triangles=(reach.size()-1)*(along.size()-1)*2;
+    static_assert(triangles*3<=kPerGrain);
+    if(out.size()<triangles*3) return 0;
+    const float t=p.age/p.life, travel=watering::Smooth(t/.64f);
+    const float opacity=watering::Smooth(t/.09f)*(1.f-watering::Smooth((t-.68f)/.32f));
+    const Vector3 forward{std::cos(p.angle),0,std::sin(p.angle)}, side{-forward.z,0,forward.x};
+    std::array<std::array<Vertex,reach.size()>,along.size()> points{};
+    for(size_t row=0;row<along.size();++row) for(size_t col=0;col<reach.size();++col) {
+        const float lane=(static_cast<float>(col)-2.f)*.5f;
+        const float depth=reach[col]*along[row]*travel;
+        const float across=lane*(.44f+.29f*travel) + (p.tone-.5f)*.09f*depth;
+        const auto pos=p.position+(forward*depth+side*across)*p.radius;
+        const float alpha=(row==2 || col==0 || col==reach.size()-1) ? 0.f : opacity*(row==0?.60f:.78f);
+        points[row][col]={pos,{.095f,.055f,.032f,alpha}};
+    }
+    size_t n=0;
+    for(size_t row=0;row+1<along.size();++row) for(size_t col=0;col+1<reach.size();++col) {
+        const auto& a=points[row][col]; const auto& b=points[row][col+1];
+        const auto& c=points[row+1][col]; const auto& d=points[row+1][col+1];
+        out[n++]=a; out[n++]=b; out[n++]=c; out[n++]=b; out[n++]=d; out[n++]=c;
+    }
+    return n;
+}
 inline std::size_t Build(std::span<Vertex> out, std::span<const FieldParticle> particles, Vector3 right, Vector3 up) noexcept {
     std::size_t n=0;
     for (const auto& p : particles) {
@@ -44,6 +71,7 @@ inline std::size_t Build(std::span<Vertex> out, std::span<const FieldParticle> p
         if (p.kind==FieldGrain::Seed || p.kind==FieldGrain::CoverSoil) {
             n+=BuildSownGrain(out.subspan(n),p); continue;
         }
+        if (p.kind==FieldGrain::Seep) { n+=BuildSeep(out.subspan(n),p); continue; }
         const float t=p.age/p.life, fade=(std::min)(1.f,(1.f-t)*3.5f);
         const float r=p.radius*(p.kind==FieldGrain::PourDrop && p.bounced?.70f:1.f);
         const auto& c=p.position;
@@ -59,8 +87,8 @@ inline std::size_t Build(std::span<Vertex> out, std::span<const FieldParticle> p
             const Vector4 tint{.56f,.83f,.85f,.48f*fade*std::clamp(t*8.f,0.f,1.f)};
             tri(streak(-1.2f,.02f),streak(.1f,-.18f),streak(.92f,-.04f),tint);
             tri(streak(-1.2f,.02f),streak(.92f,-.04f),streak(-.12f,.15f),tint);
-        } else if (p.kind==FieldGrain::Ripple || p.kind==FieldGrain::WetSoil || p.kind==FieldGrain::Soak || p.kind==FieldGrain::Seep) {
-            const bool soak=p.kind==FieldGrain::Soak || p.kind==FieldGrain::Seep, stain=soak || p.kind==FieldGrain::WetSoil;
+        } else if (p.kind==FieldGrain::Ripple || p.kind==FieldGrain::WetSoil || p.kind==FieldGrain::Soak) {
+            const bool soak=p.kind==FieldGrain::Soak, stain=soak || p.kind==FieldGrain::WetSoil;
             const float radius=r*(soak?.12f+watering::Smooth(t*1.7f):.55f+1.15f*t);
             const float a0=p.angle, sweep=6.2831853f;
             constexpr int segments=8;

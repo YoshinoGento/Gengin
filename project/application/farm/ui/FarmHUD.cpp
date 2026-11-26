@@ -2,6 +2,7 @@
 #include "farm/ui/FarmHUDIcons.h"
 #include "farm/ui/FarmHUDLayout.h"
 #include "farm/ui/FarmRuntimeUI.h"
+#include "ui/FieldSurfaceTexture.h"
 #include "2d/SpriteCommon.h"
 #include "base/Logger.h"
 
@@ -16,7 +17,6 @@ namespace layout = farmui::HUDLayout;
 constexpr const char* kFontConfigPath = "Resources/ui/font/ascii_bitmap_font.json";
 constexpr const char* kPanelTexturePath = "Resources/ui/hud_panel_fill.png";
 constexpr const char* kCropPieGuidePath = "Resources/generated/text/hud_crop_pie_guide.png";
-constexpr Vector4 kPanelColor{0.018f, 0.027f, 0.024f, 0.88f};
 constexpr Vector4 kFeedbackPanelColor{0.035f, 0.044f, 0.038f, 0.94f};
 constexpr Vector4 kTrackColor{0.12f, 0.15f, 0.13f, 0.95f};
 constexpr Vector4 kGrowthColor{0.36f, 0.78f, 0.42f, 1.0f};
@@ -27,10 +27,7 @@ constexpr Vector4 kWaterColor{0.40f, 0.72f, 0.94f, 1.0f};
 constexpr Vector4 kDryColor{0.94f, 0.65f, 0.24f, 1.0f};
 constexpr Vector4 kExcessColor{0.96f, 0.48f, 0.40f, 1.0f};
 constexpr Vector4 kRangeColor{0.58f, 0.80f, 0.73f, 1.0f};
-constexpr Vector4 kSelectedSlotTextColor{0.06f, 0.07f, 0.06f, 1.0f};
-constexpr Vector4 kPiePanelColor{0.035f, 0.055f, 0.045f, 0.97f};
-constexpr Vector4 kPieCurrentColor{0.18f, 0.38f, 0.22f, 0.98f};
-constexpr Vector4 kPieHoveredColor{0.94f, 0.68f, 0.10f, 1.0f};
+constexpr Vector4 kSelectedSlotTextColor=fieldsign::kWheat;
 constexpr Vector2 kPiePanelSize{174.0f, 126.0f};
 constexpr float kPiePanelGap = 20.0f;
 constexpr float kFeedbackPadding = 16.0f;
@@ -196,6 +193,10 @@ void ConfigureIcon(Sprite& sprite, farmui::HUDIcon icon, Rect bounds) {
     sprite.SetTextureRect(farmui::IconUV(icon), {farmui::kHUDIconSize, farmui::kHUDIconSize});
     ConfigurePanel(sprite, bounds, {1, 1, 1, 1});
 }
+void ConfigureSurface(Sprite& sprite,Rect bounds,fieldsign::Region uv) {
+    sprite.SetTextureRect({uv.x,uv.y},{uv.w,uv.h});
+    ConfigurePanel(sprite,bounds,fieldsign::kWhite);
+}
 void SetLocalizedTexture(Sprite& sprite, Texture2DHandle handle, Rect bounds, float maximumScale = 0.8f) {
     // SetTexture restores natural dimensions, preventing cumulative shrinking.
     sprite.SetTexture(handle);
@@ -283,14 +284,19 @@ InitializationTask FarmHUD::InitializeText(SpriteCommon* common) {
     co_return true;
 }
 InitializationTask FarmHUD::InitializePanels(SpriteCommon* common) {
-    for (Sprite* panel : {&statusPanel_, &economyPanel_, &selectedTilePanel_, &goalPanel_,
-        &feedbackPanel_, &goalBarTrack_, &goalBarFill_, &waterBarTrack_, &waterBarFill_,
+    const auto skin=fieldsign::LoadForScene();
+    if (!skin.IsValid()) co_return false;
+    for (Sprite* panel : {&statusPanel_, &economyPanel_, &selectedTilePanel_, &goalPanel_, &feedbackPanel_}) {
+        if (!panel->Initialize(common,skin.Index())) co_return false;
+        co_await std::suspend_always{};
+    }
+    for (Sprite* panel : {&goalBarTrack_, &goalBarFill_, &waterBarTrack_, &waterBarFill_,
         &waterRangeBand_, &waterPointer_, &growthBarTrack_, &growthBarFill_, &cropPieCenterPanel_}) {
         if (!panel->Initialize(common, kPanelTexturePath)) co_return false;
         co_await std::suspend_always{};
     }
     for (auto& panel : cropPiePanels_) {
-        if (!panel.Initialize(common, kPanelTexturePath)) co_return false;
+        if (!panel.Initialize(common, skin.Index())) co_return false;
         co_await std::suspend_always{};
     }
     for (Sprite* icon : {&dayIcon_, &rankIcon_, &moneyIcon_, &inventoryIcon_, &selectedIcon_, &waterIcon_, &growthIcon_}) {
@@ -325,11 +331,12 @@ bool FarmHUD::InitializeLocalizedSprites(SpriteCommon* common) {
         localizedFeedbackCrop_.Initialize(common, kCropPaths[0]);
 }
 void FarmHUD::ApplyLayout() {
-    ConfigurePanel(statusPanel_, layout::status, kPanelColor);
-    ConfigurePanel(economyPanel_, layout::economy, kPanelColor);
-    ConfigurePanel(selectedTilePanel_, layout::selected, kPanelColor);
-    ConfigurePanel(goalPanel_, layout::goal, kPanelColor);
-    ConfigurePanel(feedbackPanel_, kFeedbackPanel, kFeedbackPanelColor);
+    const auto info=[](Sprite& sprite,Rect r) { ConfigureSurface(sprite,r,fieldsign::Info(r.width,r.height)); };
+    info(statusPanel_,layout::status);
+    info(economyPanel_,layout::economy);
+    info(selectedTilePanel_,layout::selected);
+    info(goalPanel_,layout::goal);
+    info(feedbackPanel_,kFeedbackPanel);
     ConfigurePanel(goalBarTrack_, kGoalTrack, kTrackColor);
     ConfigurePanel(waterBarTrack_, kWaterTrack, kTrackColor);
     ConfigurePanel(growthBarTrack_, kGrowthTrack, kTrackColor);
@@ -539,8 +546,8 @@ void FarmHUD::UpdateCropPieMenu() {
         const auto crop = farm::PlayableCrop(static_cast<int>(i));
         const bool hovered = crop == viewData_.cropPieHovered;
         const auto position = positions[i];
-        ConfigurePanel(cropPiePanels_[i], {position.x, position.y, kPiePanelSize.x, kPiePanelSize.y},
-            hovered ? kPieHoveredColor : crop == viewData_.selectedSeedCrop ? kPieCurrentColor : kPiePanelColor);
+        ConfigureSurface(cropPiePanels_[i], {position.x, position.y, kPiePanelSize.x, kPiePanelSize.y},
+            fieldsign::Button(kPiePanelSize.x,kPiePanelSize.y,crop == viewData_.selectedSeedCrop,hovered));
         SetLocalizedTexture(localizedCropPieNames_[i], cropTextureHandles_[CropTextureIndex(crop)],
             {position.x + 30, position.y + 9, kPiePanelSize.x - 48, 37}, 0.95f);
         localizedCropPieNames_[i].SetColor(hovered ? kSelectedSlotTextColor : kTextColor);
@@ -625,25 +632,27 @@ void FarmHUD::Update(float deltaTime) {
     }
 }
 
-void FarmHUD::Draw() {
+void FarmHUD::Draw(bool simpleField) {
     if (!initialized_) return;
     statusPanel_.Draw();
-    economyPanel_.Draw();
     dayIcon_.Draw();
     rankIcon_.Draw();
-    moneyIcon_.Draw();
-    inventoryIcon_.Draw();
     dayText_.Draw();
     rankText_.Draw();
-    moneyText_.Draw();
-    cropCountText_.Draw();
-    if (!viewData_.freeFarming) {
+    if (!simpleField) {
+        economyPanel_.Draw();
+        moneyIcon_.Draw();
+        inventoryIcon_.Draw();
+        moneyText_.Draw();
+        cropCountText_.Draw();
+    }
+    if (!simpleField && !viewData_.freeFarming) {
         goalPanel_.Draw();
         goalBarTrack_.Draw();
         if (viewData_.goalProgress > 0) goalBarFill_.Draw();
         goalText_.Draw();
     }
-    if (viewData_.selectedTileValid) {
+    if (!simpleField && viewData_.selectedTileValid) {
         selectedTilePanel_.Draw();
         selectedIcon_.Draw();
         localizedSelectedName_.Draw();

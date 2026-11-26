@@ -664,6 +664,13 @@ labels.extend([
     ["LessonPreview", "選んだマスに仮置き"], ["LessonConnect", "ここにつなぐ"],
     ["LessonUndo", "選び直す"], ["LessonAgain", "別の株にも挑戦"],
     ["LessonExit", "練習を終えて畑へ"],
+    ["GapTitle", "畑に水を届けよう"],
+    ["GapSource", "青い水が水源。水路から隣の畑に水がしみこむ。"],
+    ["GapHint", "水源と水路の間の土をクリックしよう。"],
+    ["GapMiss", "そこではなく、水源のすぐ隣の枠を選ぼう。"],
+    ["GapDig", "枠の中に水路を掘る"], ["GapSkip", "今は掘らずに遊ぶ"],
+    ["GapDone", "水路がつながった！　水の行き先を見てみよう。"],
+    ["FieldDetails", "畑の詳しい表示"], ["FieldSimple", "シンプル表示に戻す"],
 ])
 labels.extend([
     ["ForecastGain", "＋ 給水が強まる畑"], ["ForecastLoss", "－ 給水が弱まる畑"],
@@ -671,6 +678,36 @@ labels.extend([
     ["ForecastHover", "畑にカーソルを重ねて給水力を比較"],
     ["ForecastEmpty", "耕した畑が比較の対象です"],
     ["ForecastClosed", "この畑は取水を停止しています"],
+])
+labels.extend([["WheelTools", "ホイール：道具"], ["WheelSeeds", "ホイール：種"]])
+labels.extend([
+    ["WheelHoe", "クワ"], ["WheelWater", "じょうろ"], ["WheelBag", "種袋"], ["WheelBasket", "収穫かご"],
+    ["WheelCandidateCarrot", "候補：ニンジン"], ["WheelCandidateTomato", "候補：トマト"],
+    ["WheelCandidatePumpkin", "候補：かぼちゃ"],
+    ["GuideOpen", "操作  H"], ["GuideDetail", "詳細表示"],
+    ["GuideTitle", "畑の操作"], ["GuideMouse", "マウス"], ["GuideKeys", "キーボード"],
+    ["GuideBoth", "キー＋マウス"], ["GuidePad", "パッド"],
+    ["GuideWork", "作業する"], ["GuideAim", "マスを選ぶ"], ["GuideEquip", "道具を選ぶ"],
+    ["GuideBag", "種袋を持つ／戻す"], ["GuideSeeds", "種を選ぶ"],
+    ["GuideClick", "畑を左クリック"], ["GuideWheel", "畑の上でホイール"],
+    ["GuideRight", "畑を短く右クリック"], ["GuideBagWheel", "種袋に持ち替えてホイール"],
+    ["GuideArrows", "矢印キー"], ["GuideQE", "Q で前へ、E で次へ"], ["GuideEnter", "Enter"],
+    ["GuideKeySeeds", "C → 左右で選ぶ → Enter"],
+    ["GuideMixedWork", "Q / E で道具を選び、畑をクリック"],
+    ["GuideMixedSeeds", "C → 畑の上でホイール → 畑をクリック"],
+    ["GuideMenu", "農場メニュー"], ["GuidePadMenu", "畑で B"],
+    ["GuidePadChoose", "メニューの選択"], ["GuidePadButtons", "十字キーで選ぶ、A で決定、B で戻る"],
+    ["GuideFirstWater", "最初の水路案内"], ["GuidePadWater", "A で掘る、B でスキップ"],
+    ["GuidePadScope", "通常の農作業はマウスかキーボードで"],
+    ["GuideFooter", "上下で切替　Esc / B で閉じる"],
+    ["HoverHoe", "クリック：クワを持つ"], ["HoverWater", "クリック：じょうろを持つ"],
+    ["HoverBag", "クリック：種を選ぶ"], ["HoverBasket", "クリック：収穫道具を持つ"],
+    ["HoverCarrot", "クリック：ニンジンの種を持つ"], ["HoverTomato", "クリック：トマトの種を持つ"],
+    ["HoverPumpkin", "クリック：かぼちゃの種を持つ"],
+    ["GuidePlaqueHelp", "操作"], ["GuidePlaqueSimple", "簡易表示"],
+    ["WalkEnter", "畑に降りる"], ["WalkLeave", "見渡す"],
+    ["WalkKeys", "WASD / 矢印で歩く　Enter を押しながら引く"],
+    ["WalkMouse", "左ドラッグで鍬を引く　右で歩く"],
 ])
 clear_font = ImageFont.truetype(str(font_path), 72)
 clear_font.set_variation_by_axes([700])
@@ -725,6 +762,61 @@ for side in range(2):
     else:
         draw.polygon([(x+333,bubble_y+80),(x+351,bubble_y+111),(x+333,bubble_y+104)], fill=outline)
         draw.polygon([(x+332,bubble_y+85),(x+344,bubble_y+105),(x+332,bubble_y+101)], fill=fill)
+# The title also uses these surfaces, without loading the full farm text atlas.
+def board_skin(size, state="normal"):
+    w, h = size
+    selected = state == "selected"
+    plank = Image.new("RGBA", size)
+    pen = ImageDraw.Draw(plank)
+    if state == "quiet":
+        pen.polygon([(3,0),(w-4,0),(w-1,3),(w-1,h-4),(w-4,h-1),(3,h-1),(0,h-4),(0,3)], fill="#233830")
+        pen.line((4,1,w-5,1),fill="#61806b")
+        pen.line((4,h-2,w-5,h-2),fill="#172c28")
+        pen.rectangle((1,5,2,h-6),fill="#739882")
+        return plank
+    pen.polygon([(3,0),(w-4,0),(w-1,3),(w-1,h-4),(w-4,h-1),(3,h-1),(0,h-4),(0,3)], fill="#422f24")
+    pen.rectangle((2,3,w-3,h-4), fill="#986d44")
+    pen.rectangle((4,2,w-5,4), fill="#cca06b")
+    pen.rectangle((4,h-5,w-5,h-4), fill="#6c4b32")
+    for gx in range(16,w-12,37):
+        pen.line((gx,3,gx+8,3), fill="#b68352")
+    inset = 6 if w > 200 else 4
+    face = {"info":"#233830","normal":"#30473c","selected":"#504832","focus":"#395954"}
+    pen.rectangle((inset,inset,w-inset-1,h-inset-1), fill=face[state])
+    pen.line((inset,inset,w-inset-1,inset), fill="#1c302a")
+    pen.line((inset,h-inset-1,w-inset-1,h-inset-1), fill="#496455")
+    for px in (3,w-6):
+        for py in (5,h-8):
+            pen.rectangle((px,py,px+1,py+2), fill="#533e30")
+            pen.point((px,py), fill="#ead2a1")
+    if selected or state == "focus":
+        pen.rectangle((inset+1,inset+1,w-inset-2,h-inset-2), outline="#eac06b" if selected else "#9dd3c8", width=2)
+        pen.rectangle((inset+2,9,inset+4,h-10), fill="#edc369" if selected else "#9dd3c8")
+    return plank
+
+skin = Image.new("RGBA",(1024,512))
+parts = []
+def put(name, pos, size, state):
+    sx, sy = pos
+    assert sx+size[0] < skin.width and sy+size[1] < skin.height
+    skin.paste(board_skin(size,state),pos)
+    parts.append((name, (*pos,*size)))
+
+put("Board",(2,2),(544,258),"info")
+put("Info",(552,2),(264,60),"quiet")
+put("Strip",(2,264),(624,44),"quiet")
+for i,state in enumerate(("normal","focus","selected")):
+    y=312+i*64
+    put("Slot"+state.title(),(2,y),(60,60),state)
+    put("Sign"+state.title(),(66,y),(172,44),state)
+    put("Wide"+state.title(),(242,y),(456,48),state)
+ImageDraw.Draw(skin).rectangle((990,490,1006,506),fill="white")
+parts.append(("Fill",(995,495,4,4)))
+skin.save(ROOT / "project/Resources/ui/field_surfaces.png")
+skin_header = "#pragma once\nnamespace fieldsign {\nstruct Region { float x, y, w, h; };\n"
+for name, rect in parts:
+    skin_header += f"inline constexpr Region k{name} = {{" + ", ".join(f"{v}.0f" for v in rect) + "};\n"
+(ROOT / "project/application/ui/FieldSurfaceAtlas.h").write_text(skin_header+"}\n", encoding="utf-8")
 asset = ROOT / "project/Resources/ui/farm_runtime_menu.png"
 asset.parent.mkdir(parents=True, exist_ok=True)
 with NamedTemporaryFile(dir=asset.parent, suffix=".png", delete=False) as temporary:

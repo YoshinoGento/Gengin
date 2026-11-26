@@ -1,5 +1,8 @@
 #include "farm/ui/FarmRuntimeUI.h"
 #include "farm/ui/FarmSeedShopView.h"
+#include "farm/ui/FarmHotbarView.h"
+#include "farm/ui/FarmControlGuideView.h"
+#include "ui/FieldSurfaceTexture.h"
 #include "farm/ui/FarmRuntimeAtlas.h"
 #include "farm/render/FarmContestStageLayout.h"
 #include "base/Logger.h"
@@ -22,8 +25,10 @@ InitializationTask RuntimeUI::InitializeIncrementally(SpriteCommon* common) {
             co_return false;
         }
     }
+    const auto skin=fieldsign::LoadForScene();
+    if (!skin.IsValid()) co_return false;
     for (auto& sprite : panels_) {
-        if (!sprite.Initialize(common, "Resources/ui/hud_panel_fill.png")) co_return false;
+        if (!sprite.Initialize(common, skin.Index())) co_return false;
         co_await std::suspend_always{};
     }
     // Screen-space atlas: keep the source level instead of building a full mip chain during entry.
@@ -112,24 +117,53 @@ void RuntimeUI::PrepareNames(const View& view) {
     Gdiplus::GdiplusShutdown(token);
 }
 
-void RuntimeUI::Panel(Rect r, Vector4 color) {
+void RuntimeUI::Panel(Rect r, Vector4 color, fieldsign::Region uv) {
     color.w *= opacity_;
     if (panelCount_ >= panels_.size()) return;
     auto& sprite = panels_[panelCount_++];
+    sprite.SetTextureRect({uv.x,uv.y},{uv.w,uv.h});
     sprite.SetPosition({r.x, r.y}); sprite.SetSize({r.width, r.height});
     sprite.SetColor(color); sprite.Update(); sprite.Draw();
 }
+void RuntimeUI::InfoPanel(Rect r,float alpha) {
+    Panel(r,{1,1,1,alpha},fieldsign::Info(r.width,r.height));
+}
 void RuntimeUI::LabelQuad(Label label, Rect r, Vector4 color) {
-    color.w *= opacity_;
     const auto index = static_cast<std::size_t>(label);
-    if (index >= kLabels.size() || labelCount_ >= labels_.size()) return;
+    if (index >= kLabels.size()) return;
     const auto& uv = kLabels[index];
     const float scale = (std::min)(1.0f, (std::max)(0.0f, r.width - 20.0f) / uv.width);
+    AtlasQuad(uv, {r.x + 10, r.y + (r.height - uv.height * scale) * .5f, uv.width * scale, uv.height * scale}, color);
+}
+void RuntimeUI::AtlasQuad(const AtlasRect& uv, Rect r, Vector4 color) {
+    if (labelCount_ >= labels_.size()) return;
+    color.w *= opacity_;
     auto& sprite = labels_[labelCount_++];
     sprite.SetTextureRect({uv.x, uv.y}, {uv.width, uv.height});
-    sprite.SetPosition({r.x + 10, r.y + (r.height - uv.height * scale) * 0.5f});
-    sprite.SetSize({uv.width * scale, uv.height * scale});
+    sprite.SetPosition({r.x,r.y}); sprite.SetSize({r.width,r.height});
     sprite.SetColor(color); sprite.Update(); sprite.Draw();
+}
+void RuntimeUI::DrawGuideBoard() {
+    constexpr auto board=GuideLayout::board;
+    constexpr Vector4 chalkRule{.16f,.29f,.23f,1};
+    Panel({0,0,1280,720},{.012f,.024f,.019f,.56f});
+    InfoPanel(board);
+    IconQuad(HUDIcon::Sprout,{132,114,40,40},{1,1,1,1});
+    Panel({132,167,1018,2},chalkRule);
+    Panel({358,188,2,236},chalkRule);
+    Panel({132,500,1018,2},chalkRule);
+}
+void RuntimeUI::DrawGuideSign(const Item& item, bool field, bool hover) {
+    const bool highlighted=item.selected || hover || item.focused;
+    const Vector4 wood=highlighted ? Vector4{1,1,1,1} : Vector4{.88f,.9f,.88f,1};
+    Panel(item.rect,wood,fieldsign::Button(item.rect.width,item.rect.height,item.selected,highlighted));
+    if (field) {
+        const Rect key=GuideLayout::keycap(item.rect);
+        Panel(key,{.033f,.059f,.047f,1});
+        const bool detail=item.request.action==Action::FieldDetails;
+        ValueText(detail ? "Tab" : item.request.action==Action::WalkToggle ? "F4" : "H",{key.x+(detail ? 6 : 10),key.y+2},key.x+key.width,{.93f,.82f,.57f,1},.65f);
+    }
+    LabelQuad(item.label,GuideLayout::signText(item.rect,field),item.selected ? Vector4{1,.88f,.56f,1} : Vector4{.98f,.96f,.85f,1});
 }
 void RuntimeUI::ValueText(const std::string& value, Vector2 position, float right, Vector4 color, float scale) {
     color.w *= opacity_;
@@ -192,6 +226,34 @@ void RuntimeUI::DrawRadar(const QualityRadar& radar) {
     }
     opacity_ = savedOpacity;
 }
+void RuntimeUI::DrawFieldWheelHint(const View& view, Vector2 pointer) {
+    if (view.fieldWheelHint == WheelHint::Hidden) return;
+    const bool seeds = view.fieldWheelHint == WheelHint::Seeds;
+    const auto group = seeds ? Label::WheelSeeds : Label::WheelTools;
+    constexpr float iconSize = 24.f, textInset = 20.f, groupScale = .68f, itemScale = .78f;
+    const auto textWidth = [=](Label label, float scale) {
+        return textInset + kLabels[static_cast<std::size_t>(label)].width * scale;
+    };
+    const float groupWidth = textWidth(group, groupScale);
+    const auto* item = view.wheelItem ? &*view.wheelItem : nullptr;
+    Rect box{};
+    if (item) {
+        const float width = iconSize + (std::max)(groupWidth, textWidth(item->label, itemScale));
+        box = PlaceFieldWheelHint(view, pointer, width, kWheelHintRowHeight * 2);
+        if (!box.width) item = nullptr;
+    }
+    if (!item) box = PlaceFieldWheelHint(view, pointer, iconSize + groupWidth);
+    if (!box.width) return;
+    InfoPanel(box,.96f);
+    const auto row = [&](float y, HUDIcon icon, Label label, float width, Vector4 color) {
+        IconQuad(icon, {box.x+4, y+3, iconSize, iconSize}, {1,1,1,1});
+        LabelQuad(label, {box.x+iconSize, y, width, kWheelHintRowHeight}, color);
+    };
+    row(box.y, seeds ? HUDIcon::SeedBag : HUDIcon::Hoe, group, groupWidth,
+        seeds ? Vector4{.79f, 1.f, .80f, 1.f} : Vector4{1.f, .92f, .71f, 1.f});
+    if (item) row(box.y+kWheelHintRowHeight, item->icon, item->label, textWidth(item->label, itemScale), {1,1,1,1});
+}
+
 void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     if (!ready_) return;
     panelCount_ = labelCount_ = digitCount_ = iconCount_ = 0;
@@ -200,11 +262,11 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
     const Item* tooltip = nullptr;
     const Item* selectedTool = nullptr;
     const Item* focusedSlot = nullptr;
-    if (view.compactHUD && view.hotbarVisible) Panel(HUDLayout::tools, {0.025f, 0.035f, 0.032f, 0.93f});
+    if (view.compactHUD && view.hotbarVisible) InfoPanel(HUDLayout::tools);
     if (view.audioSettings) {
         Panel({0,0,1280,720},{.01f,.015f,.02f,.75f});
         const auto& box=title::kAudioSettingsPanel;
-        Panel({box.position.x,box.position.y,box.size.x,box.size.y},{.055f,.075f,.072f,.99f});
+        InfoPanel({box.position.x,box.position.y,box.size.x,box.size.y});
         for (std::size_t i=0;i<title::kAudioChannelCount;++i) {
             const float y=title::kAudioSliderY[i];
             const int volume=std::clamp(view.audioFrame.volume[i],0,100);
@@ -219,8 +281,8 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         for (std::size_t i=0;i<buttons.size();++i) {
             const auto& button=buttons[i];
             const bool active=view.audioFrame.selected==static_cast<int>(title::kAudioChannelCount+i) || button.Contains(pointer);
-            Panel({button.position.x,button.position.y,button.size.x,button.size.y},
-                active ? Vector4{.25f,.4f,.36f,1} : Vector4{.16f,.23f,.22f,1});
+            Panel({button.position.x,button.position.y,button.size.x,button.size.y},fieldsign::kWhite,
+                fieldsign::Button(button.size.x,button.size.y,false,active));
         }
         if (view.audioFrame.saveFailed) Panel({320,648,640,56},{.15f,.06f,.035f,1});
     } else if (view.starting) {
@@ -228,22 +290,22 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
         Panel({0, 0, 1280, height}, {0.015f, 0.025f, 0.026f, 0.90f});
         Panel({0, 720-height, 1280, height}, {0.015f, 0.025f, 0.026f, 0.90f});
     } else if (view.briefing) {
-        Panel({0, 0, 1280, 96}, {0.035f, 0.055f, 0.06f, 0.94f});
-        Panel({0, 496, 1280, 224}, {0.035f, 0.055f, 0.06f, 0.97f});
+        InfoPanel({0, 0, 1280, 96},.96f);
+        InfoPanel({0, 496, 1280, 224},.97f);
     } else if (view.seedShop || view.harvestDisplay) {
-        Panel({24, 16, 1232, 60}, {0.035f, 0.055f, 0.06f, 0.94f});
-        Panel(view.seedShop ? SeedShopLayout::shopReceipt : SeedShopLayout::receipt, {0.035f, 0.055f, 0.06f, 0.97f});
-        Panel(view.seedShop ? SeedShopLayout::shopFooter : SeedShopLayout::footer, {0.035f, 0.055f, 0.06f, 0.97f});
+        InfoPanel({24,16,1232,60});
+        InfoPanel(view.seedShop ? SeedShopLayout::shopReceipt : SeedShopLayout::receipt);
+        InfoPanel(view.seedShop ? SeedShopLayout::shopFooter : SeedShopLayout::footer);
     } else if (view.contestDetail) {
         const auto& frame = view.contestFrame;
         const bool ceremony=frame.page==FarmContestPresentationSystem::Page::Result || frame.unsubmitted;
-        Panel({0,0,1280,frame.finalClear ? 46.f+32.f*frame.clearReveal : 78.f},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
-        Panel({0,648,1280,72},{.025f,.03f,.035f,ceremony ? .78f : 1.f});
+        InfoPanel({0,0,1280,frame.finalClear ? 46.f+32.f*frame.clearReveal : 78.f},ceremony ? .85f : 1.f);
+        InfoPanel({0,648,1280,72},ceremony ? .85f : 1.f);
         const float resultOpacity=frame.resultReveal;
         if (ceremony && resultOpacity>0) {
             const float left=frame.unsubmitted ? 658.f : FarmContestStageLayout::kResultLeft;
             const float height=frame.unsubmitted ? 440.f : 260.f;
-            Panel({left,160,1248-left,height},{.035f,.065f,.055f,.97f*resultOpacity});
+            InfoPanel({left,160,1248-left,height},.97f*resultOpacity);
             Panel({left,160,4,height},{.70f,.64f,.40f,resultOpacity});
         }
         const auto& result = frame.comparison;
@@ -281,26 +343,28 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
                     Panel({80+1120*std::clamp(view.outcomeTargets[i],0.0f,1.0f),y-4,2,11},{.85f,.89f,.87f,rowReveal});
             }
         }
+    } else if (view.controlGuide) {
+        DrawGuideBoard();
     } else if (view.modal) {
         Panel({0, 0, 1280, 720}, {0.01f, 0.015f, 0.02f, 0.75f});
-        Panel(view.menuShell ? Rect{130,24,1020,688} : Rect{130,32,1020,656}, {0.055f, 0.075f, 0.072f, 0.99f});
+        InfoPanel(view.menuShell ? Rect{130,24,1020,688} : Rect{130,32,1020,656});
         if (view.menuShell) {
             Panel({150,112,980,2},{.22f,.29f,.28f,1});
             Panel({150,618,980,2},{.22f,.29f,.28f,1});
         }
     }
     if (view.observation) {
-        Panel(View::kObservationTop, {0.035f, 0.055f, 0.06f, 0.96f});
-        Panel(View::kObservationBottom, {0.035f, 0.055f, 0.06f, 0.96f});
+        InfoPanel(View::kObservationTop);
+        InfoPanel(View::kObservationBottom);
     }
     if (view.terrain) {
-        Panel(View::kTerrainTop, {0.035f, 0.055f, 0.06f, 0.96f});
-        Panel(View::kTerrainBottom, {0.035f, 0.055f, 0.06f, 0.96f});
+        InfoPanel(View::kTerrainTop);
+        InfoPanel(View::kTerrainBottom);
     }
-    if (view.fieldActions) Panel(View::kFieldActionsPanel, {0.035f, 0.055f, 0.06f, 0.96f});
-    if (view.shortGoal) Panel(HUDLayout::shortGoal, {0.045f, 0.075f, 0.065f, 0.92f});
-    if (view.shortGoalDetail) Panel(HUDLayout::shortGoalDetail, {0.045f, 0.075f, 0.065f, 0.92f});
-    if (view.waterGuidance) Panel(View::kWaterGuidancePanel, {0.035f, 0.055f, 0.06f, 0.96f});
+    if (view.fieldActions) InfoPanel(View::kFieldActionsPanel);
+    if (view.shortGoal) InfoPanel(HUDLayout::shortGoal);
+    if (view.shortGoalDetail) InfoPanel(HUDLayout::shortGoalDetail);
+    if (view.waterGuidance) InfoPanel(View::kWaterGuidancePanel);
     if (view.radar.visible) DrawRadar(view.radar);
     if (view.referenceRadar.visible) DrawRadar(view.referenceRadar);
     if (view.harvestDisplay) {
@@ -345,15 +409,21 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             continue;
         }
         const bool button = item.request.action != Action::None;
+        if (item.label==Label::WalkKeys) {
+            Panel({item.rect.x-8,item.rect.y-2,item.rect.width+16,84},{.055f,.085f,.07f,.83f});
+        }
+        const bool fieldSign=view.compactHUD && (item.request.action==Action::FieldDetails ||
+            item.request.action==Action::OpenControlGuide || item.request.action==Action::WalkToggle);
+        if (fieldSign || (view.controlGuide && button)) {
+            DrawGuideSign(item,fieldSign,item.rect.Contains(pointer));
+            continue;
+        }
         if (IsValidIcon(item.icon) && !item.leadingIcon) {
             const bool hover = item.rect.Contains(pointer) || item.focused;
             const bool barFocus = view.hotbarVisible && item.focused &&
                 (item.request.action == Action::Tool || item.request.action == Action::Crop);
-            const Vector4 border = barFocus ? Vector4{0.88f, 1.f, 1.f, 1} : item.selected ? Vector4{0.96f, 0.78f, 0.35f, 1} :
-                hover ? Vector4{0.68f, 0.89f, 0.85f, 1} : Vector4{0.23f, 0.30f, 0.28f, 1};
-            Panel(item.rect, border);
-            Panel({item.rect.x + 3, item.rect.y + 3, item.rect.width - 6, item.rect.height - 6},
-                item.enabled ? Vector4{0.07f, 0.10f, 0.09f, 0.98f} : Vector4{0.045f, 0.05f, 0.05f, 1});
+            Panel(item.rect,item.enabled ? fieldsign::kWhite : fieldsign::kDisabled,
+                fieldsign::Button(item.rect.width,item.rect.height,item.selected,barFocus || hover));
             const float size = (std::min)(item.rect.width, item.rect.height) - 12;
             IconQuad(item.icon, {item.rect.x + (item.rect.width-size)*0.5f, item.rect.y+5, size, size},
                 item.enabled ? Vector4{1,1,1,1} : Vector4{0.40f,0.43f,0.42f,1});
@@ -367,14 +437,13 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             }
             if (item.request.action == Action::Tool && item.selected) selectedTool = &item;
             if (barFocus) focusedSlot = &item;
-            if (hover) tooltip = &item;
+            if (item.rect.Contains(pointer)) tooltip = &item;
             continue;
         }
         if (button) {
-            Vector4 color = item.enabled ? Vector4{0.16f, 0.23f, 0.22f, 1} : Vector4{0.09f, 0.11f, 0.11f, 1};
-            if (item.selected) color = {0.40f, 0.32f, 0.10f, 1};
-            if (item.enabled && !item.selected && (item.focused || item.rect.Contains(pointer))) color = {0.25f, 0.40f, 0.36f, 1};
-            Panel(item.rect, color);
+            Panel(item.rect,item.enabled ? fieldsign::kWhite : fieldsign::kDisabled,
+                fieldsign::Button(item.rect.width,item.rect.height,item.enabled && item.selected,
+                    item.enabled && (item.focused || item.rect.Contains(pointer))));
             if (view.menuShell && item.enabled && (item.selected || item.focused))
                 Panel({item.rect.x,item.rect.y+item.rect.height-3,item.rect.width,3},{.97f,.81f,.40f,1});
         }
@@ -414,15 +483,17 @@ void RuntimeUI::Draw(const View& view, Vector2 pointer) {
             Panel({cx-half, notch->rect.y-8.f+2.f*i, half*2.f, 2.f}, ink);
         }
     }
-    const Item* caption = focusedSlot ? focusedSlot : tooltip ? tooltip : selectedTool;
+    const Item* caption = tooltip ? tooltip : focusedSlot ? focusedSlot : selectedTool;
     if (caption) {
-        const auto index = static_cast<std::size_t>(caption->label);
+        const Label label = tooltip ? HoverCaption(*caption) : caption->label;
+        const auto index = static_cast<std::size_t>(label);
         if (index < kLabels.size()) {
-            const Rect box = IconCaptionRect(*caption);
-            Panel(box, {0.018f,0.026f,0.024f,0.98f});
-            LabelQuad(caption->label,box,{0.97f,0.98f,0.94f,1});
+            const Rect box = IconCaptionRect(label);
+            InfoPanel(box);
+            LabelQuad(label,box,{0.97f,0.98f,0.94f,1});
         }
     }
+    DrawFieldWheelHint(view, pointer);
     if (!view.recordNames[0].empty() && namesReady_) { names_.Update(); names_.Draw(); }
     if (view.starting && view.cinematicCover > 0) {
         opacity_=1;

@@ -51,8 +51,12 @@ public:
             if (!Matches(entry, grid)) { entry.active = false; continue; }
             const float previous=entry.age;
             entry.age += step;
-            if(previous<harvest::kContact && entry.age>=harvest::kContact && entry.age<harvest::kDuration &&
-                entry.pickup.crop.parts[0].shape==FarmMeshShape::Pumpkin) onContact(harvest::Contact(entry.pickup));
+            if(entry.age<harvest::kDuration) {
+                const auto crossed=[&](float t) { return previous<t && entry.age>=t; };
+                if(crossed(harvest::kContact)) onContact(harvest::Contact(entry.pickup));
+                if(entry.pickup.crop.parts[0].shape==FarmMeshShape::Tomato &&
+                    crossed(harvest::kContact+harvest::kStagger)) onContact(harvest::Contact(entry.pickup));
+            }
             if (entry.age >= kDuration) entry.active = false;
         }
     }

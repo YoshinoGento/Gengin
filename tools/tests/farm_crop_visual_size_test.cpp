@@ -82,11 +82,11 @@ static void CheckPumpkinLanding() {
             assert(std::abs(local.x)+.951f*fruit.scale.x<.45f*bin.scale.x && .819f*fruit.scale.z<.30f*bin.scale.z);
             const auto foot=bin.position+farm::harvest::Roll({side*.53f*bin.scale.x,.015f*bin.scale.y,0},bin.roll);
             assert(Near(foot.y,at.floor+.015f*bin.scale.y) && Near(at.rim.y,at.floor+.345f*bin.scale.y));
-        } else assert(hits==0 && Near(bin.roll,0));
+        } else assert(hits==1 && !at.spillsSoil && Near(bin.roll,0));
         advance(.14f);
         if(kind==farm::CropType::Pumpkin) assert(FindPart(fx.GetParts(grid,0),S::HarvestBasket).roll*side>0);
         advance(.22f); assert(Near(FindPart(fx.GetParts(grid,0),S::HarvestBasket).roll,0));
-        advance(2); assert(hits==(kind==farm::CropType::Pumpkin?1:0));
+        advance(2); assert(hits==(kind==farm::CropType::Tomato?2:1));
         crop.crop=farm::CropType::Pumpkin; action.harvestedTile=crop;
         assert(fx.Start(action,grid,visual)); assert(grid.SetTile(index,crop));
         const int before=hits; advance(1); assert(hits==before);
@@ -132,6 +132,20 @@ static void CheckSizedMotion() {
     }
 }
 int main() {
+    for (float scale : {.5f,1.f,2.f}) {
+        farm::FarmTileVisualData v{}; v.valid=true; v.crop=farm::CropType::Pumpkin;
+        v.cropStage=farm::FarmCropGrowthStage::Ready; v.cropScale=scale;
+        auto parts=farm::BuildFarmCropMeshParts(v,1); assert(parts.count==2);
+        for (Vector2 lean : {Vector2{.4f,-.6f},Vector2{-.9f,.7f}}) {
+            const auto pose=[&](const auto& part){return farm::CropWindPose(part,{},farm::CropBrushTilt(part.shape,lean));};
+            const auto a=pose(parts.parts[0]), b=pose(parts.parts[1]);
+            assert(Near(a.rotation.x,b.rotation.x) && Near(a.rotation.y,b.rotation.y) && Near(a.rotation.z,b.rotation.z));
+            const float h=parts.parts[0].heightAboveWindPivot;
+            const float dy=h*std::cos(b.rotation.x);
+            assert(Near(a.position.x,b.position.x-dy*std::sin(b.rotation.z)) &&
+                Near(a.position.y,b.position.y+dy*std::cos(b.rotation.z)) && Near(a.position.z,b.position.z+h*std::sin(b.rotation.x)));
+        }
+    }
     CheckPumpkinLanding();
     CheckSizedMotion();
     {

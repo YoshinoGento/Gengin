@@ -182,9 +182,27 @@ PixelShaderOutput main(VertexShaderOutput input)
         if (gMaterial.surfaceDetail.y > 0 && gMaterial.surfaceDetail.z > 0)
         {
             float2 p = input.worldPosition.xz * gMaterial.surfaceDetail.z;
-            float band = sin(p.y * 2.6f + 0.8f * sin(p.x + p.y * 0.4f)) + 0.55f * sin(p.x * 1.1f - p.y);
-            float aa = 1.0f - smoothstep(0.35f, 1.0f, fwidth(band));
-            output.color.rgb *= 1.0f + gMaterial.surfaceDetail.y * aa * (smoothstep(0.4f, 1.45f, band) - 0.24f);
+            if (gMaterial.surfaceDetail.w > 0.0f)
+            {
+                // Broken sky reflections share world coordinates across ramps and mesh boundaries.
+                float bend = sin(dot(p,float2(.49f,.37f)));
+                float ripple = sin(dot(p,float2(.64f,2.2f))+1.6f*bend);
+                float crossRipple = sin(dot(p,float2(-1.28f,1.06f))-.87f*bend);
+                float crest = ripple+.58f*crossRipple;
+                float aa = 1.0f - smoothstep(.28f,.95f,fwidth(crest));
+                output.color.rgb *= 1.0f + gMaterial.surfaceDetail.y * aa * (.26f*crossRipple+.34f*ripple);
+                float3 eye = SafeNormalize(gCamera.worldPosition-input.worldPosition,N);
+                float grazing = 1.0f-saturate(dot(N,eye));
+                float glint = smoothstep(1.09f,1.56f,crest)*aa;
+                output.color.rgb = lerp(output.color.rgb,float3(.43f,.60f,.62f),
+                    .07f+.34f*grazing*grazing+gMaterial.surfaceDetail.w*glint);
+            }
+            else
+            {
+                float band = sin(p.y * 2.6f + 0.8f * sin(p.x + p.y * 0.4f)) + 0.55f * sin(p.x * 1.1f - p.y);
+                float aa = 1.0f - smoothstep(0.35f, 1.0f, fwidth(band));
+                output.color.rgb *= 1.0f + gMaterial.surfaceDetail.y * aa * (smoothstep(0.4f, 1.45f, band) - 0.24f);
+            }
             if (gMaterial.surfaceFront.w > 0.0f)
             {
                 // Only the wet side is shaded. The meniscus cannot separate from its water mesh.

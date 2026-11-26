@@ -1,5 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$InitialFarm,
+    [switch]$ParticleShowcase,
     [string]$Destination = 'generated/submissions/game_system_20261111',
     [string]$PackageName = 'LE3C_28_ヨシノ_ゲント_水路農業'
 )
@@ -22,8 +23,19 @@ $save = @($preparedFiles | Where-Object { $_.Directory.Name -eq 'saves' -and $_.
 if ($save.Count -ne 1 -or !([IO.File]::ReadAllText($save[0].FullName).Contains('FreeFarming'))) {
     throw 'Expected one prepared FreeFarming save'
 }
-& (Join-Path $PSScriptRoot 'prepare_system_experience.ps1') -InitialFarm $farm -OutputDirectory ([IO.Path]::GetRelativePath($root, $runtime))
+& (Join-Path $PSScriptRoot 'prepare_system_experience.ps1') -InitialFarm $farm -ParticleShowcase:$ParticleShowcase -OutputDirectory ([IO.Path]::GetRelativePath($root, $runtime))
 $allowedSettings = @($preparedFiles | ForEach-Object { 'Settings/farm/' + [IO.Path]::GetRelativePath($farm, $_.FullName).Replace('\','/') })
+if (!$ParticleShowcase) {
+    $allowedSettings += 'Settings/runtime/system_experience.flag'
+    if (!(Test-Path -LiteralPath (Join-Path $runtime 'Settings/runtime/system_experience.flag') -PathType Leaf)) { throw 'Missing dedicated experience launcher flag' }
+}
+if ($ParticleShowcase) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'system_experience/particle_readme.txt') -Destination (Join-Path $runtime 'README.txt') -Force
+    Add-Content -LiteralPath (Join-Path $runtime 'CREDITS.txt') -Encoding utf8 -Value '農作業・水路の効果音：本作品用に手続き合成（外部録音・音源の使用なし）。'
+    foreach ($name in 'hoe','seed','cover','pour','pull','pick','cut','basket','heavy_basket','bend','seep','ripple','brush_soil','brush_leaf','equip') {
+        if (!(Test-Path -LiteralPath (Join-Path $runtime "Resources/farm/field/audio/$name.wav") -PathType Leaf)) { throw "Missing field effect: $name" }
+    }
+}
 $files = @(Get-ChildItem -LiteralPath $runtime -Recurse -File)
 $manifest = @($files | ForEach-Object {
     $relative = [IO.Path]::GetRelativePath($runtime, $_.FullName).Replace('\','/')
@@ -35,7 +47,7 @@ $manifest = @($files | ForEach-Object {
 if (Get-ChildItem -LiteralPath $runtime -Recurse -Attributes ReparsePoint) { throw 'Linked runtime file' }
 foreach ($required in @('SuiroNogyo.exe','README.txt','CREDITS.txt','dxcompiler.dll','dxil.dll',
     'Licenses/DXC/LICENSE-MS.txt','Resources/fonts/NotoSansJP-VF.ttf','Resources/fonts/OFL.txt',
-    'Resources/fonts/NotoSerifJP-OFL.txt','Resources/ui/farm_runtime_menu.png',
+    'Resources/fonts/NotoSerifJP-OFL.txt','Resources/ui/farm_runtime_menu.png','Resources/ui/field_surfaces.png',
     'Resources/title/sky.png','Resources/shader/TitleSky.PS.hlsl','Resources/levels/farm_scene.json')) {
     if ($required -notin $manifest.Path) { throw "Missing dependency: $required" }
 }

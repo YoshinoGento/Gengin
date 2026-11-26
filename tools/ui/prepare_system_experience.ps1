@@ -1,10 +1,12 @@
 param(
     [string]$InitialFarm,
     [switch]$MainGame,
+    [switch]$ParticleShowcase,
     [string]$OutputDirectory = 'generated/exhibitions/system_experience_20261111',
     [string]$BuildDirectory = 'generated/outputs/Release'
 )
 $ErrorActionPreference = 'Stop'
+if ($MainGame -and $ParticleShowcase) { throw 'Choose only one runtime edition' }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $target = [IO.Path]::GetFullPath((Join-Path $root $OutputDirectory))
 $farm = if (!$MainGame) { (Resolve-Path -LiteralPath $InitialFarm -ErrorAction Stop).Path }
@@ -75,7 +77,7 @@ $copiedBinary = $null
 foreach ($name in @('dxcompiler.dll','dxil.dll')) { Copy-Item -LiteralPath (Join-Path $release $name) -Destination $target }
 Get-ChildItem -LiteralPath $release -Filter '*.cso' -File | Copy-Item -Destination $target
 Copy-Item -LiteralPath (Join-Path $root 'generated/codex_checks/contest_finish_20261027/review/Licenses') -Destination $target -Recurse
-$edition = if ($MainGame) { '大会本編' } else { 'ゲームシステム体験版' }
+$edition = if ($MainGame) { '大会本編' } elseif ($ParticleShowcase) { 'パーティクルエフェクト' } else { 'ゲームシステム体験版' }
 $credits = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'exhibition/CREDITS.txt')).Replace('ゲームオーバー演出デモ版',$edition)
 $credits += "`r`n雨音・害虫駆除音: プロジェクト内の音声合成で生成。Resources/farm/weather/audio と pests/audio の manifest.json を参照。`r`n"
 [IO.File]::WriteAllText((Join-Path $target 'CREDITS.txt'), $credits, [Text.UTF8Encoding]::new($true))
@@ -85,6 +87,10 @@ if ($MainGame) {
     New-Item -ItemType File -Path (Join-Path $target 'Settings/runtime/main_game.flag') | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'kurihaku/README.txt') -Destination $target
 } else {
+    if (!$ParticleShowcase) {
+        New-Item -ItemType Directory -Path (Join-Path $target 'Settings/runtime') | Out-Null
+        New-Item -ItemType File -Path (Join-Path $target 'Settings/runtime/system_experience.flag') | Out-Null
+    }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'system_experience/README.txt') -Destination $target
     Copy-Item -LiteralPath $farm -Destination (Join-Path $target 'Settings/farm') -Recurse
 }

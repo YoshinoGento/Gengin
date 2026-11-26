@@ -33,6 +33,7 @@ void StepSowing(FieldParticle& p,float before) {
 }
 }
 void FarmActionParticles::Clear() noexcept {
+    sounds_.reset();
     arrivals_.Clear();
     pours_={};
     hoe_={};
@@ -158,13 +159,14 @@ void FarmActionParticles::OnTool(const FarmToolActionResult& result, const FarmG
     const auto data = visual.GetTileVisualData(grid,result.tileIndex);
     if (!data.valid) return;
     Bind(grid);
+    if (const auto hit=hoe_.Finish(grid)) ScatterHoeImpact(*hit);
     auto p = data.center;
     const float floor = p.y + kFarmSoilRidgeHeight + .007f;
     p.y = floor+.045f;
     if (result.status == FarmToolActionStatus::Applied) {
         if (result.tool == FarmTool::Hoe && tile->state == FarmTileState::Tilled) {
             const auto contact=data.center+Vector3{0,kFarmSoilRidgeHeight,-.12f*data.halfExtent};
-            hoe_.Enqueue({result.tileIndex,contact,1.85f*data.halfExtent,tile->moisture});
+            hoe_.Start({result.tileIndex,contact,1.85f*data.halfExtent,tile->moisture});
         } else if (result.tool==FarmTool::Seed && tile->state==FarmTileState::Planted && IsPlantableCrop(tile->crop)) {
             Sow(result.tileIndex,tile->crop,data);
         } else if (result.tool == FarmTool::Water && result.moistureAfter > result.moistureBefore) {
@@ -180,6 +182,7 @@ void FarmActionParticles::OnTool(const FarmToolActionResult& result, const FarmG
     switch (crop.crop) {
     case CropType::Carrot:
     case CropType::TestCrop:
+        Mark(sounds_,FieldCue::Pull);
         Scatter(FieldGrain::Clod,p,floor,BySize(size,4,11,13),BySize(size,.48f,1.f,1.25f),
             BySize(size,.94f,2.05f,2.50f),BySize(size,.035f,.055f,.085f));
         p.y += .22f*scale;
@@ -187,11 +190,13 @@ void FarmActionParticles::OnTool(const FarmToolActionResult& result, const FarmG
         if (crop.moisture < .42f) Scatter(FieldGrain::Dust,p,floor,BySize(size,1,4,5),.36f,.48f,BySize(size,.045f,.065f,.090f));
         break;
     case CropType::Tomato:
+        Mark(sounds_,FieldCue::Pick);
         p.y += .48f*scale;
         Scatter(FieldGrain::Leaf,p,floor,BySize(size,2,6,7),BySize(size,.60f,1.02f,1.18f),1.22f,BySize(size,.083f,.115f,.125f));
         if (wetLeafSeconds_ > 0) Scatter(FieldGrain::Drop,p,floor,3,.38f,.25f,.048f);
         break;
     case CropType::Pumpkin:
+        Mark(sounds_,FieldCue::Cut);
         p.y += .15f*scale;
         Scatter(FieldGrain::Clod,p,floor,BySize(size,3,10,10),BySize(size,.45f,.98f,1.06f),.38f,BySize(size,.042f,.080f,.085f),.41f*scale);
         break;
@@ -200,6 +205,8 @@ void FarmActionParticles::OnTool(const FarmToolActionResult& result, const FarmG
 }
 void FarmActionParticles::OnBasketLanding(const FarmGrid& grid,const harvest::BasketLanding& hit) noexcept {
     if(board_!=&grid || generation_!=grid.GetGeneration() || hit.unit<=0.f) return;
+    Mark(sounds_,hit.spillsSoil && hit.size==harvest::SizeCue::Large ? FieldCue::HeavyBasket : FieldCue::Basket);
+    if(!hit.spillsSoil) return;
     const bool dry=hit.moisture<.42f;
     const int grains=hit.size==harvest::SizeCue::Small?1:(dry?3:2);
     for(int i=0;i<grains;++i) {
@@ -226,6 +233,7 @@ void FarmActionParticles::OnBasketLanding(const FarmGrid& grid,const harvest::Ba
     }
 }
 void FarmActionParticles::ScatterHoeImpact(const hoeing::Stroke& stroke) {
+    Mark(sounds_,FieldCue::Hoe);
     const bool dry=stroke.moisture<.42f;
     const auto first=count_;
     const float unit=stroke.scale;
@@ -240,6 +248,7 @@ void FarmActionParticles::ScatterHoeImpact(const hoeing::Stroke& stroke) {
 void FarmActionParticles::Step(float dt,const FarmGrid& grid,const FarmIrrigationSystem& water) noexcept {
     sowing_=false;
     for(auto& cue:pours_) if(cue.tile>=0) {
+        if(cue.age<watering::kTip && cue.age+dt>=watering::kTip) Mark(sounds_,FieldCue::Pour);
         cue.age+=dt;
         if(cue.age>=watering::kSoaked+watering::kSpacing*watering::kPatches) cue={};
     }
@@ -272,6 +281,8 @@ void FarmActionParticles::Step(float dt,const FarmGrid& grid,const FarmIrrigatio
             if (!bed || bed->state!=FarmTileState::Planted || bed->crop!=p.plantedCrop) {
                 p=particles_[--count_]; continue;
             }
+            if(p.kind==FieldGrain::Seed && before<kFlight && p.age>=kFlight) Mark(sounds_,FieldCue::Seed);
+            if(p.kind==FieldGrain::CoverSoil && before<0 && p.age>=0) Mark(sounds_,FieldCue::Cover);
             StepSowing(p,before); sowing_=true; ++i; continue;
         }
         p.angle += p.spin*dt;
@@ -305,22 +316,27 @@ void FarmActionParticles::Step(float dt,const FarmGrid& grid,const FarmIrrigatio
 }
 void FarmActionParticles::EmitArrival(arrival::Beat beat,int tile,int parent,const FarmGrid& grid,const FarmIrrigationSystem& water,const FarmVisualSystem& visual) {
     const auto dst=visual.GetTileVisualData(grid,tile), src=visual.GetTileVisualData(grid,parent);
-    if(!dst.valid || !src.valid || count_+3>kWaterBudget) return;
+    if(!dst.valid || !src.valid) return;
     if(beat==arrival::Beat::Soil) {
-        // Overlapping patches expand inwards, never darken the opposite edge first.
-        for(int j=0;j<3;++j) {
-            auto p=dst.center+(src.center-dst.center)*(.34f-.13f*j);
-            p.y=dst.center.y+kFarmSoilRidgeHeight+.011f;
-            if(auto* grain=Emit(FieldGrain::Seep,p,{},p.y,dst.halfExtent*(.40f+.07f*j),arrival::kWick)) {
-                grain->age=-.105f*j; grain->flowTile=tile;
-            }
+        if(count_>=kWaterBudget) return;
+        // Start on the donor side of the flat soil plateau, below the raised ridges.
+        const auto delta=dst.center-src.center;
+        const float angle=std::atan2(delta.z,delta.x);
+        constexpr float kBankOffset=.84f, kSurfaceLift=.009f;
+        const auto entry=dst.center-Vector3{std::cos(angle),0,std::sin(angle)}*(kBankOffset*dst.halfExtent);
+        auto p=entry; p.y+=kSurfaceLift;
+        if(auto* stain=Emit(FieldGrain::Seep,p,{},p.y,dst.halfExtent,arrival::kWick)) {
+            stain->angle=angle; stain->flowTile=tile;
+            Mark(sounds_,FieldCue::Seep);
         }
         return;
     }
+    if(count_+2>kWaterBudget) return;
     const int out=arrivals_.Surface(tile).outlet;
     if(out>=0 && water.GetUpstreamTileIndex(out)==tile && out%grid.GetWidth()!=parent%grid.GetWidth() &&
         out/grid.GetWidth()!=parent/grid.GetWidth()) {
         auto bank=dst.waterSurfaceCenter+(dst.center-src.center)*.21f;
+        Mark(sounds_,FieldCue::Bend);
         bank.y=dst.waterSurfaceCenter.y+.018f;
         Scatter(FieldGrain::Drop,bank,bank.y-.012f,2,.27f,.70f,.032f);
     }
@@ -381,7 +397,7 @@ void FarmActionParticles::Update(const FarmGrid& grid, const FarmIrrigationSyste
     const FarmVisualSystem& visual, float dt, float rain, bool visible) {
     Bind(grid);
     const auto revision=water.MeasurementRevision();
-    if (!visible) { count_=0; pours_={}; hoe_={}; arrivals_.Clear(); sowing_=false; lastMeasurement_=revision; waterCooldown_=0; return; }
+    if (!visible) { sounds_.reset(); count_=0; pours_={}; hoe_={}; arrivals_.Clear(); sowing_=false; lastMeasurement_=revision; waterCooldown_=0; return; }
     if (!std::isfinite(dt) || dt <= 0) return;
     dt=(std::min)(dt,.1f);
     wetLeafSeconds_=rain>.1f ? kRainDripMemory : (std::max)(0.f,wetLeafSeconds_-dt);
