@@ -39,6 +39,7 @@ public:
     float X() const noexcept { return x_; }
     float Z() const noexcept { return z_; }
     const FarmerPose& Pose() const noexcept { return pose_; }
+    bool LastCutAcrossBank() const noexcept { return pull_.LastCutAcrossBank(); }
     void Ground(Vector3 feet) noexcept { pose_.feet=feet; }
     // Movement is never locked by the tool. Only a completed pull can request a tile edit.
     int Step(const FarmGrid& grid,int dx,int dz,bool dig,float dt,int destination=-1) noexcept {

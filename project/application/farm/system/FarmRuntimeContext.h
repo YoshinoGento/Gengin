@@ -41,6 +41,7 @@ public:
     virtual bool IsViewportFocused() const = 0;
     virtual bool IsViewportHovered() const = 0;
     virtual void ApplyCameraPose(const farm::OverviewPose& pose, bool updateOverview) = 0;
+    virtual void SetFieldLens(bool) {}
     virtual void SetUsePlayerCamera(bool enabled) = 0;
     virtual void InitializeTimeline() = 0;
     virtual void RequestFarmLayoutLibrary() noexcept = 0;
@@ -50,6 +51,7 @@ public:
     virtual void RouteFarmToolFeedback(const FarmToolActionResult& result) = 0;
     virtual bool ConvertMouseToVirtualScreen(const Vector2& position, Vector2& output) const = 0;
     virtual bool TryBuildViewportRay(Vector3& origin, Vector3& direction) const = 0;
+    virtual bool TryBuildViewportRayAt(Vector2 position, Vector3& origin, Vector3& direction) const = 0;
     virtual ScreenTransitionResult BeginScreenTransition(scene::RipplePoint origin,
         scene::TransitionSoundTheme sound, scene::TransitionStyle style) = 0;
 };

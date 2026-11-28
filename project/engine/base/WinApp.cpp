@@ -1,4 +1,5 @@
 #include "WinApp.h"
+#include <windowsx.h>
 #include "audio/Audio.h"
 #include <algorithm>
 #pragma comment(lib, "winmm.lib")
@@ -18,13 +19,38 @@ LRESULT WinApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #endif
 
 	switch (msg) {
+	case WM_SETCURSOR:
+		if (auto* app=reinterpret_cast<WinApp*>(GetWindowLongPtr(hwnd,GWLP_USERDATA));
+			app && app->fieldMouseLook_ && LOWORD(lparam)==HTCLIENT) {
+			SetCursor(nullptr); return TRUE;
+		}
+		break;
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONUP:
+	case WM_KILLFOCUS:
+		if (auto* app=reinterpret_cast<WinApp*>(GetWindowLongPtr(hwnd,GWLP_USERDATA))) {
+			auto& sample=app->leftDrag_;
+			const POINT point{GET_X_LPARAM(lparam),GET_Y_LPARAM(lparam)};
+			if (msg==WM_LBUTTONDOWN) { sample.press=point; sample.began=sample.down=true; }
+			else if (msg==WM_LBUTTONUP) { sample.release=point; sample.ended=sample.down; sample.down=false; }
+			else { sample={}; app->windowHeld_.reset(); app->windowPressed_.reset(); app->SetFieldMouseLook(false); }
+		}
+		break;
 	case WM_KEYDOWN:
+		if (auto* app=reinterpret_cast<WinApp*>(GetWindowLongPtr(hwnd,GWLP_USERDATA)); app && wparam<256) {
+			if (!(lparam & (1L<<30))) app->windowPressed_.set(wparam);
+			app->windowHeld_.set(wparam);
+		}
 		if (wparam == VK_F11) {
 			if (WinApp* winApp = reinterpret_cast<WinApp*>(GetWindowLongPtr(hwnd, GWLP_USERDATA))) {
 				winApp->ToggleBorderlessFullscreen();
 				return 0;
 			}
 		}
+		break;
+	case WM_KEYUP:
+		if (auto* app=reinterpret_cast<WinApp*>(GetWindowLongPtr(hwnd,GWLP_USERDATA)); app && wparam<256)
+			app->windowHeld_.reset(wparam);
 		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -51,7 +77,39 @@ void WinApp::Initialize() {
 
 void WinApp::Update() {}
 
+void WinApp::SetFieldMouseLook(bool enabled) {
+	if (enabled && GetForegroundWindow()!=hwnd) enabled=false;
+	if (!enabled && !fieldMouseLook_) return;
+	if (enabled) {
+		RECT r{};
+		if (!GetClientRect(hwnd,&r) || IsIconic(hwnd) || r.right<=0 || r.bottom<=0) return;
+		MapWindowPoints(hwnd,nullptr,reinterpret_cast<POINT*>(&r),2);
+		if (!ClipCursor(&r)) return;
+		if (!fieldMouseLook_) {
+			restoreFieldCursor_=GetCursorPos(&fieldLookOrigin_)!=FALSE;
+			SetCursorPos((r.left+r.right)/2,(r.top+r.bottom)/2);
+		}
+		SetCursor(nullptr);
+	} else {
+		ClipCursor(nullptr); SetCursor(LoadCursor(nullptr,IDC_ARROW));
+		if (restoreFieldCursor_ && GetForegroundWindow()==hwnd) SetCursorPos(fieldLookOrigin_.x,fieldLookOrigin_.y);
+		restoreFieldCursor_=false;
+	}
+	fieldMouseLook_=enabled;
+}
+
+POINT WinApp::SampleFieldLookDelta() const noexcept {
+	if (!fieldMouseLook_ || GetForegroundWindow()!=hwnd) return {};
+	RECT r{}; POINT p{};
+	if (!GetClientRect(hwnd,&r) || r.right<=0 || r.bottom<=0 || !GetCursorPos(&p)) return {};
+	POINT center{r.right/2,r.bottom/2};
+	if (!ClientToScreen(hwnd,&center) || (center.x==p.x && center.y==p.y)) return {};
+	if (!SetCursorPos(center.x,center.y)) return {};
+	return {p.x-center.x,p.y-center.y};
+}
+
 void WinApp::Finalize() {
+	SetFieldMouseLook(false);
 	CloseWindow(hwnd);
 	CoUninitialize();
 }
@@ -107,6 +165,8 @@ void WinApp::SetBorderlessFullscreen(bool enabled) {
 }
 
 bool WinApp::ProcessMessage() {
+	windowPressed_.reset();
+	leftDrag_.began=leftDrag_.ended=false;
 	MSG msg{};
 	if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
 		TranslateMessage(&msg);

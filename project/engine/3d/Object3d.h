@@ -35,6 +35,8 @@ public:
 	void Update(Camera* camera, float deltaTime);
 	void Update(Camera* camera);
 	void Draw();
+    // Borrowed static PSO must use the common static object root signature and MRT layout.
+    void DrawStaticWithPipeline(ID3D12PipelineState* pipeline);
 	void DrawShadow();
 	void SetModel(Model* model);
 	void InitializeSkeleton();

@@ -232,6 +232,7 @@ void FarmVisualSystem::Initialize(const FarmVisualLayout& layout, const FarmRule
 {
 	cropSizeSystem_.Initialize(rules);
 	layout_ = layout;
+	layout_.pondLipRise = std::isfinite(layout.pondLipRise) ? std::clamp(layout.pondLipRise,0.f,1.f) : 0.f;
 	const FarmVisualLayout defaults;
 	if (!IsFinite(layout_.center)) { layout_.center = defaults.center; }
 	layout_.tileSize = std::isfinite(layout_.tileSize) ? (std::max)(layout_.tileSize, 0.1f) : defaults.tileSize;
@@ -292,10 +293,16 @@ FarmTileVisualData FarmVisualSystem::GetTileVisualData(const FarmGrid& grid, int
 		}
 	} else {
 		data.waterFill = SanitizeStrength(tile->waterAmount);
-		data.showWaterSurface = data.waterFill > 0.0f;
 	}
+	// A newly fed or draining canal can contain less water than one D24 depth
+	// step at overview distance. Keep the visible film separate from the bed;
+	// the simulation, HUD amount, dry tiles and full reservoir stay unchanged.
+	constexpr float minVisibleDepth = .008f;
+	data.showWaterSurface = data.waterFill > 0.f && layout_.waterMaxDepth >= minVisibleDepth;
+	const float depth = data.showWaterSurface
+		? (std::max)(minVisibleDepth, layout_.waterMaxDepth * data.waterFill) : 0.f;
 	data.waterSurfaceCenter = { data.center.x,
-		data.center.y + layout_.waterBottomOffset + layout_.waterMaxDepth * data.waterFill, data.center.z };
+		data.center.y + layout_.waterBottomOffset + depth, data.center.z };
 	if (!IsFinite(data.center) || !IsFinite(data.cropAnchor) || !IsFinite(data.waterSurfaceCenter)) { return {}; }
 	data.valid = true;
 	return data;
@@ -305,7 +312,7 @@ bool FarmVisualSystem::TryPickTile(
 	const FarmGrid& grid,
 	const Vector3& rayOrigin,
 	const Vector3& rayDirection,
-	int& outTileIndex) const noexcept
+	int& outTileIndex,float* hitDistance) const noexcept
 {
 	outTileIndex = -1;
 	if (grid.GetTileCount() <= 0 || !IsFinite(rayOrigin) || !IsFinite(rayDirection) ||
@@ -343,7 +350,28 @@ bool FarmVisualSystem::TryPickTile(
 			outTileIndex = index;
 		}
 	}
+	if (hitDistance) *hitDistance = nearestDistance;
 	return outTileIndex >= 0;
+}
+
+int farm::FarmVisualSystem::PickWorkTarget(const FarmGrid& grid,Vector3 eye,Vector3 direction,float reach) const noexcept {
+    if (!IsFinite(eye) || !IsFinite(direction) || !(reach>0.f)) return -1;
+    int hit=-1; float distance=reach;
+    if (!TryPickTile(grid,eye,direction,hit,&distance) || distance>reach) { hit=-1; distance=reach; }
+    // A visible plant can be in front of a different soil tile at eye level.
+    for (int i=0;i<grid.GetTileCount();++i) {
+        const auto* tile=grid.GetTile(i);
+        if (!tile || tile->crop==CropType::None) continue;
+        const auto v=GetTileVisualData(grid,i);
+        const float radius=(.09f+.23f*std::clamp(tile->growth,0.f,1.f))*v.cropScale;
+        const auto offset=eye-(v.cropAnchor+Vector3{0,radius,0});
+        const float b=offset.x*direction.x+offset.y*direction.y+offset.z*direction.z;
+        const float disc=b*b-(offset.x*offset.x+offset.y*offset.y+offset.z*offset.z-radius*radius);
+        if (disc<0) continue;
+        const float t=-b-std::sqrt(disc);
+        if(t>=0 && t<distance) {hit=i;distance=t;}
+    }
+    return hit;
 }
 
 void FarmVisualSystem::Draw(

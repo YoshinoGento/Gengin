@@ -1,18 +1,19 @@
 #pragma once
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmIrrigationSystem.h"
+#include "farm/system/FarmPondBank.h"
 
 namespace farm::arrival {
 inline constexpr float kTravel=.37f, kWick=1.25f;
 enum class Beat { Bank, Soil };
-struct Reveal { int parent=-1; float fraction=1; int outlet=-1; };
+struct Reveal { int parent=-1; float fraction=1; int outlet=-1; bool fromPond=false; };
 
 // The hydraulic step is instantaneous to the player. Only presentation waits for the upstream front.
 class Timeline final {
     struct Cell {
         int parent=-1,outlet=-1;
         double start=-1, end=-1, drySince=-1, donorStamp=-1;
-        bool wet=false, soil=false, fired=false;
+        bool wet=false, soil=false, fired=false, fromPond=false;
     };
     std::vector<Cell> cells_;
     double now_=0;
@@ -28,11 +29,12 @@ public:
         const auto& c=cells_[i];
         if(c.soil || c.start<0) return {};
         const float t=static_cast<float>((now_-c.start)/kTravel);
-        return t>=1 ? Reveal{} : Reveal{c.parent,(std::max)(0.f,t),c.outlet};
+        return t>=1 ? Reveal{} : Reveal{c.parent,(std::max)(0.f,t),c.outlet,c.fromPond};
     }
     bool StillConnected(int index,const FarmGrid& grid,const FarmIrrigationSystem& water) const noexcept {
         if(index<0 || static_cast<size_t>(index)>=cells_.size()) return false;
         const auto& c=cells_[index];
+        if(c.fromPond) return pond::IsOpen(grid,index) && water.IsSupplied(index);
         const auto* tile=grid.GetTile(index); const auto* donor=grid.GetTile(c.parent);
         if(!tile || !donor || donor->feature==FarmTileFeature::None) return false;
         return c.soil ? tile->feature==FarmTileFeature::None && tile->state!=FarmTileState::Empty &&
@@ -46,22 +48,23 @@ public:
         // Parent-first even when several fixed steps complete before a single render.
         for(int index:water.GetSupplyOrder()) {
             const int parent=water.GetUpstreamTileIndex(index);
-            if(parent<0) continue;
+            const bool fromPond=parent<0 && pond::IsOpen(grid,index);
+            if(parent<0 && !fromPond) continue;
             const size_t i=static_cast<size_t>(index);
             auto& c=cells_[i];
-            if(c.soil || parent!=c.parent) { c={}; c.parent=parent; }
+            if(c.soil || parent!=c.parent || c.fromPond!=fromPond) { c={}; c.parent=parent; c.fromPond=fromPond; }
             c.outlet=-1;
-            if(water.GetDownstreamCanalCount(parent)==1) cells_[parent].outlet=index;
+            if(parent>=0 && water.GetDownstreamCanalCount(parent)==1) cells_[parent].outlet=index;
             const auto& flow=flows[i];
             const bool first=flow.firstInflowRevision>previousRevision;
-            if(!first && grid.GetTile(index)->waterAmount==0 && flow.incoming<=0) {
+            if(!first && grid.GetTile(index)->waterAmount==0 && flow.incoming<=0 && flow.sourceRefill<=0) {
                 if(c.drySince<0) c.drySince=now_;
                 if(now_-c.drySince>.8 && c.end<=now_) c.wet=false;
                 continue;
             }
             c.drySince=-1;
-            if(!c.wet && first && static_cast<size_t>(parent)<cells_.size()) {
-                c.start=(std::max)(now_,cells_[parent].end);
+            if(!c.wet && first) {
+                c.start=fromPond ? now_ : (std::max)(now_,cells_[parent].end);
                 c.end=c.start+kTravel; c.fired=false; busy_=true;
             }
             c.wet=true;
@@ -70,7 +73,7 @@ public:
         for(size_t i=0;i<flows.size();++i) {
             auto& c=cells_[i]; const auto& flow=flows[i];
             const auto& tile=*grid.GetTile(static_cast<int>(i));
-            if(!c.soil && c.parent>=0 && !water.IsSupplied(static_cast<int>(i))) c={};
+            if(!c.soil && (c.fromPond || c.parent>=0) && !StillConnected(static_cast<int>(i),grid,water)) c={};
             if(c.soil && (tile.feature!=FarmTileFeature::None || tile.state==FarmTileState::Empty || !tile.irrigationEnabled)) c={};
             const int donor=flow.soilDonor;
             if(flow.soilReceived<=0 || !Playing(donor)) continue;

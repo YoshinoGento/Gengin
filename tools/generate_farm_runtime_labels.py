@@ -708,6 +708,7 @@ labels.extend([
     ["WalkEnter", "畑に降りる"], ["WalkLeave", "見渡す"],
     ["WalkKeys", "WASD / 矢印で歩く　Enter を押しながら引く"],
     ["WalkMouse", "左ドラッグで鍬を引く　右で歩く"],
+    ["PondCut", "右の土手から、鍬を畑へ引く"],
 ])
 clear_font = ImageFont.truetype(str(font_path), 72)
 clear_font.set_variation_by_axes([700])

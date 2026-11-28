@@ -59,7 +59,7 @@ public:
 	[[nodiscard]] bool CanToggleCanal(
 		const farm::FarmGrid& grid, int tileIndex) const noexcept;
 	bool ToggleSelectedCanal(farm::FarmGrid& grid);
-    bool DigCanalAt(farm::FarmGrid& grid,int index);
+    bool DigCanalAt(farm::FarmGrid& grid,int index,bool cutAcrossBank=true);
 	[[nodiscard]] bool CanSetIrrigation(const farm::FarmGrid& grid, int tileIndex) const noexcept;
 	bool SetSelectedIrrigation(farm::FarmGrid& grid, bool enabled);
 	bool PlaceCanalPath(farm::FarmGrid& grid, const std::vector<int>& tileIndices);

@@ -1,0 +1,129 @@
+water_trial_test.cpp
+WaterTrialSystem.cpp
+FarmGrid.cpp
+FarmEconomySystem.cpp
+FarmCropQualitySystem.cpp
+FarmGrowthSystem.cpp
+FarmIrrigationSystem.cpp
+FarmToolActionSystem.cpp
+FarmToolBehavior.cpp
+CommandHistory.cpp
+コードを生成中...
+local detour=0 speed=1
+t=1 input_sum=0.5 stock=0.490643 soil_sum=0.00935677 edges(parent>child:sum)=12>7:0.193333 13>12:0.393333 14>13:0.4 12>17:0.193333  bed=2 donor=7 store=0.188655 in/use=0.00944048/0.0181818 moisture=0.236497 bed=16 donor=17 store=0.188655 in/use=0.00944048/0.0181818 moisture=0.236497
+t=10 input_sum=4.99333 stock=4.26962 soil_sum=0.723706 edges(parent>child:sum)=12>7:1.36102 13>12:3.72038 14>13:4 12>17:1.36102  bed=2 donor=7 store=0.999167 in/use=0.0499999/0.0181818 moisture=0.430035 bed=16 donor=17 store=0.999167 in/use=0.0499999/0.0181818 moisture=0.430035
+pick t=16.3667 bed=2 crop=1 q=78 moisture=0.63261>0.38261
+pick t=16.3667 bed=16 crop=1 q=78 moisture=0.63261>0.38261
+t=20 input_sum=6.71704 stock=4.99333 soil_sum=1.7237 edges(parent>child:sum)=12>7:1.86102 13>12:4.72037 14>13:5.71871 12>17:1.86102  bed=2 donor=7 store=0.999167 in/use=0.0499999/0.0181818 moisture=0.498216 bed=16 donor=17 store=0.999167 in/use=0.0499999/0.0181818 moisture=0.498216
+t=30 input_sum=7.65371 stock=4.99546 soil_sum=2.65825 edges(parent>child:sum)=12>7:2.32856 13>12:5.65599 14>13:6.65486 12>17:2.32856  bed=2 donor=7 store=0.999434 in/use=0.0339603/0.0181818 moisture=0.783672 bed=16 donor=17 store=0.999434 in/use=0.0339603/0.0181818 moisture=0.783672
+pick t=31.3833 bed=2 crop=2 q=71 moisture=0.802802>0.552802
+pick t=31.3833 bed=16 crop=2 q=71 moisture=0.802802>0.552802
+pick t=47.0333 bed=2 crop=3 q=68 moisture=0.845662>0.595662
+pick t=47.0333 bed=16 crop=3 q=68 moisture=0.845662>0.595662
+local result quality=68,68 t=47.0333,47.0333 input=8.89869 soilIn=3.90163 used=1.7103 harvestLoss=1.5 worst=8.9407e-08
+local detour=0 speed=4
+local result quality=68,68 t=47.2,47.2 input=8.89696 soilIn=3.9087 used=1.71636 harvestLoss=1.5 worst=8.9407e-08
+local detour=1 speed=1
+t=1 input_sum=0.5 stock=0.490952 soil_sum=0.00904782 edges(parent>child:sum)=6>1:0.373022 11>6:0.379683 12>11:0.386667 13>12:0.393333 14>13:0.4  bed=2 donor=1 store=0.364297 in/use=0.0182301/0.0181818 moisture=0.240544 bed=16 donor=11 store=0.00666111 in/use=0.000333488/0.0181818 moisture=0.232141
+t=10 input_sum=4.99333 stock=4.41232 soil_sum=0.581013 edges(parent>child:sum)=6>1:1.43094 11>6:2.4301 12>11:3.57768 13>12:3.99333 14>13:4  bed=2 donor=1 store=0.999167 in/use=0.0499999/0.0181818 moisture=0.499954 bed=16 donor=11 store=0.998334 in/use=0.0499579/0.0181818 moisture=0.217422
+pick t=15.8333 bed=2 crop=1 q=79 moisture=0.68556>0.43556
+pick t=19.1833 bed=16 crop=1 q=73 moisture=0.50924>0.25924
+t=20 input_sum=7.57225 stock=5.99167 soil_sum=1.5806 edges(parent>child:sum)=6>1:1.93094 11>6:2.9301 12>11:4.57725 13>12:5.57558 14>13:6.57392  bed=2 donor=1 store=0.999167 in/use=0.0499999/0.0181818 moisture=0.568136 bed=16 donor=11 store=0.998334 in/use=0.0499588/0.0181818 moisture=0.285191
+t=30 input_sum=8.4996 stock=5.99381 soil_sum=2.50582 edges(parent>child:sum)=6>1:2.35687 11>6:3.3564 12>11:5.50354 13>12:6.50223 14>13:7.50092  bed=2 donor=1 store=0.999525 in/use=0.0285137/0.0181818 moisture=0.811895 bed=16 donor=11 store=0.998691 in/use=0.0499749/0.0181818 moisture=0.603019
+pick t=30.9167 bed=2 crop=2 q=71 moisture=0.820564>0.570564
+pick t=34.4667 bed=16 crop=2 q=70 moisture=0.739429>0.489429
+pick t=46.6833 bed=2 crop=3 q=68 moisture=0.848074>0.598074
+pick t=49.75 bed=16 crop=3 q=69 moisture=0.834165>0.584165
+local result quality=68,69 t=46.6833,49.75 input=10.0784 soilIn=4.08421 used=1.75333 harvestLoss=1.5 worst=5.96046e-08
+local detour=1 speed=4
+local result quality=68,69 t=46.8667,49.7333 input=10.0547 soilIn=4.07904 used=1.75636 harvestLoss=1.5 worst=4.47035e-08
+fork
+t=1 input_sum=0.5 stock=0.464765 soil_sum=0.0352345 edges(parent>child:sum)=12>7:0.193333 13>12:0.393333 14>13:0.4 12>17:0.193333  bed=2 donor=7 store=0.175716 in/use=0.0182247/0.0181818 moisture=0.249435 bed=16 donor=17 store=0.175716 in/use=0.0182247/0.0181818 moisture=0.249435
+t=10 input_sum=4.99333 stock=4.63005 soil_sum=0.363279 edges(parent>child:sum)=12>7:1.18134 13>12:3.36207 14>13:4 12>17:1.18134  bed=2 donor=7 store=0.999696 in/use=0.0182247/0.0181818 moisture=0.249822 bed=16 donor=17 store=0.999696 in/use=0.0182247/0.0181818 moisture=0.249822
+pick t=19.1333 bed=2 crop=1 q=73 moisture=0.250214>0.000213623
+pick t=19.1333 bed=16 crop=1 q=73 moisture=0.250214>0.000213623
+t=20 input_sum=5.72534 stock=4.99757 soil_sum=0.727774 edges(parent>child:sum)=12>7:1.36358 13>12:3.72656 14>13:4.72596 12>17:1.36358  bed=2 donor=7 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000251046 bed=16 donor=17 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000251046
+t=30 input_sum=6.08984 stock=4.99757 soil_sum=1.09227 edges(parent>child:sum)=12>7:1.54583 13>12:4.09106 14>13:5.09045 12>17:1.54583  bed=2 donor=7 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000682854 bed=16 donor=17 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000682854
+pick t=55.15 bed=2 crop=2 q=47 moisture=0.00176885>0
+pick t=55.15 bed=16 crop=2 q=47 moisture=0.00176885>0
+pick t=91.1667 bed=2 crop=3 q=47 moisture=0.00155523>0
+pick t=91.1667 bed=16 crop=3 q=47 moisture=0.00155523>0
+single trunk
+t=1 input_sum=0.5 stock=0.437209 soil_sum=0.0627902 edges(parent>child:sum)=6>1:0.339313 11>6:0.345373 12>11:0.386667 13>12:0.393333 14>13:0.4  bed=2 donor=1 store=0.311757 in/use=0.029524/0.0181818 moisture=0.259374 bed=16 donor=11 store=0.00605917 in/use=0.0364494/0.0181818 moisture=0.267053
+t=10 input_sum=4.99333 stock=4.33676 soil_sum=0.656551 edges(parent>child:sum)=6>1:1.29279 11>6:2.2923 12>11:3.65449 13>12:3.99333 14>13:4  bed=2 donor=1 store=0.999508 in/use=0.029524/0.0181818 moisture=0.361453 bed=16 donor=11 store=0.9989 in/use=0.0364494/0.0181818 moisture=0.431461
+pick t=15.6167 bed=16 crop=1 q=80 moisture=0.534065>0.284065
+pick t=15.9833 bed=2 crop=1 q=79 moisture=0.429317>0.179317
+t=20 input_sum=7.31094 stock=5.99462 soil_sum=1.31629 edges(parent>child:sum)=6>1:1.58805 11>6:2.58756 12>11:4.31424 13>12:5.31314 14>13:6.31204  bed=2 donor=1 store=0.999508 in/use=0.0295249/0.0181818 moisture=0.224879 bed=16 donor=11 store=0.9989 in/use=0.0364494/0.0181818 moisture=0.364138
+t=30 input_sum=7.97069 stock=5.99462 soil_sum=1.97602 edges(parent>child:sum)=6>1:1.88331 11>6:2.88282 12>11:4.97399 13>12:5.97289 14>13:6.97179  bed=2 donor=1 store=0.999508 in/use=0.029524/0.0181818 moisture=0.338302 bed=16 donor=11 store=0.9989 in/use=0.0364494/0.0181818 moisture=0.546814
+pick t=30.8833 bed=16 crop=2 q=70 moisture=0.56295>0.31295
+pick t=33.75 bed=2 crop=2 q=65 moisture=0.380836>0.130836
+pick t=45.9667 bed=16 crop=3 q=70 moisture=0.588487>0.338487
+pick t=53.3167 bed=2 crop=3 q=61 moisture=0.352773>0.102773
+fork x2 refill third quality=47,47
+fork x2 edge third quality=47,47
+fork x2 seep third quality=70,70
+loop 4s outgoing 11/13=0.79/0 mirrored=0.79/0
+diamond parent=11 reflected parent=13 shut gate seep 0.0182247>0.0450003 units/s
+symmetric retained donors sent 0.00075,0 in one tick
+local gate before/after 0.0499999/0.0499588 U/s
+near first delivery (s, end of tick)=0.05 legacy donor fully visible=1.5 gap=1.45 max spray vertices=48 max residual=2.98023e-08
+trial_cpu enhanced=0 n=1800 mean_sim_us=4.31472 mean_view_us=0.932667
+trial_cpu enhanced=1 n=1800 mean_sim_us=4.22739 mean_view_us=1.90756
+replay alternate=0 turn=1 split=1 residual_spray=1
+replay alternate=1 turn=1 split=1 residual_spray=1
+replay alternate=0 turn=1 split=1 residual_spray=1
+replay alternate=1 turn=1 split=1 residual_spray=1
+ring edges scale=1 4s left/right=0.5/0.5 final_range=0.996667 max_error=2.98023e-08
+ring edges scale=4 4s left/right=0.5/0.5 final_range=0.986667 max_error=2.98023e-08
+harvest_case edges=0 detour=0 policy=0 actions=19 drained=0 soil_error=1.64262e-07 third_q=68,68 third_s=47.0333,47.0333 excess_s=6.23336,6.23336 total_soil=3.90163 loss=1.5
+harvest_case edges=0 detour=0 policy=1 actions=19 drained=0 soil_error=1.82539e-07 third_q=61,61 third_s=52.2667,52.2667 excess_s=19.6499,19.6499 total_soil=3.13102 loss=0
+harvest_case edges=0 detour=0 policy=2 actions=19 drained=1.61667 soil_error=1.6205e-07 third_q=70,70 third_s=46.4,46.4 excess_s=0,0 total_soil=4.23387 loss=0
+harvest_case edges=0 detour=1 policy=0 actions=20 drained=0 soil_error=1.68395e-07 third_q=68,69 third_s=46.6833,49.75 excess_s=6.9167,3.86666 total_soil=4.08421 loss=1.5
+harvest_case edges=0 detour=1 policy=1 actions=20 drained=0 soil_error=1.85217e-07 third_q=60,61 third_s=52.2667,53.8 excess_s=19.7332,19.2332 total_soil=3.18275 loss=0
+harvest_case edges=0 detour=1 policy=2 actions=20 drained=1.66528 soil_error=1.66037e-07 third_q=70,70 third_s=45.8667,49.2167 excess_s=0,0 total_soil=4.35577 loss=0
+harvest_case edges=1 detour=0 policy=0 actions=19 drained=0 soil_error=1.64262e-07 third_q=68,68 third_s=47.0333,47.0333 excess_s=6.23336,6.23336 total_soil=3.90163 loss=1.5
+harvest_case edges=1 detour=0 policy=1 actions=19 drained=0 soil_error=1.82539e-07 third_q=61,61 third_s=52.2667,52.2667 excess_s=19.6499,19.6499 total_soil=3.13102 loss=0
+harvest_case edges=1 detour=0 policy=2 actions=19 drained=1.61667 soil_error=1.6205e-07 third_q=70,70 third_s=46.4,46.4 excess_s=0,0 total_soil=4.23387 loss=0
+harvest_case edges=1 detour=1 policy=0 actions=20 drained=0 soil_error=1.68395e-07 third_q=68,69 third_s=46.6833,49.75 excess_s=6.9167,3.86666 total_soil=4.08421 loss=1.5
+harvest_case edges=1 detour=1 policy=1 actions=20 drained=0 soil_error=1.85217e-07 third_q=60,61 third_s=52.2667,53.8 excess_s=19.7332,19.2332 total_soil=3.18275 loss=0
+harvest_case edges=1 detour=1 policy=2 actions=20 drained=1.66528 soil_error=1.66037e-07 third_q=70,70 third_s=45.8667,49.2167 excess_s=0,0 total_soil=4.35577 loss=0
+route_cpu edges=0 dense=0 run=1 routed=0 sim_us=4.28117 view_us=2.21417 vertices=176832
+route_cpu edges=0 dense=0 run=1 routed=1 sim_us=4.726 view_us=3.6455 vertices=176832
+route_cpu edges=0 dense=0 run=2 routed=0 sim_us=4.48467 view_us=2.53733 vertices=176832
+route_cpu edges=0 dense=0 run=2 routed=1 sim_us=4.29417 view_us=3.31017 vertices=176832
+route_cpu edges=0 dense=0 run=3 routed=0 sim_us=4.39117 view_us=2.27533 vertices=176832
+route_cpu edges=0 dense=0 run=3 routed=1 sim_us=4.72267 view_us=3.39517 vertices=176832
+route_cpu edges=0 dense=1 run=1 routed=0 sim_us=4.61967 view_us=2.20267 vertices=176832
+route_cpu edges=0 dense=1 run=1 routed=1 sim_us=4.67083 view_us=3.41333 vertices=176832
+route_cpu edges=0 dense=1 run=2 routed=0 sim_us=4.68083 view_us=2.5295 vertices=176832
+route_cpu edges=0 dense=1 run=2 routed=1 sim_us=4.69083 view_us=3.34433 vertices=176832
+route_cpu edges=0 dense=1 run=3 routed=0 sim_us=4.62717 view_us=2.21133 vertices=176832
+route_cpu edges=0 dense=1 run=3 routed=1 sim_us=4.9685 view_us=3.37317 vertices=176832
+route_cpu edges=1 dense=0 run=1 routed=0 sim_us=4.71233 view_us=2.22783 vertices=176832
+route_cpu edges=1 dense=0 run=1 routed=1 sim_us=4.36483 view_us=3.32 vertices=176832
+route_cpu edges=1 dense=0 run=2 routed=0 sim_us=4.419 view_us=2.49283 vertices=176832
+route_cpu edges=1 dense=0 run=2 routed=1 sim_us=4.663 view_us=3.6195 vertices=176832
+route_cpu edges=1 dense=0 run=3 routed=0 sim_us=4.34983 view_us=2.22417 vertices=176832
+route_cpu edges=1 dense=0 run=3 routed=1 sim_us=5.65033 view_us=3.40183 vertices=176832
+route_cpu edges=1 dense=1 run=1 routed=0 sim_us=5.09067 view_us=4.0975 vertices=176832
+route_cpu edges=1 dense=1 run=1 routed=1 sim_us=5.17983 view_us=3.7285 vertices=176832
+route_cpu edges=1 dense=1 run=2 routed=0 sim_us=5.03033 view_us=2.682 vertices=176832
+route_cpu edges=1 dense=1 run=2 routed=1 sim_us=4.86717 view_us=3.30933 vertices=176832
+route_cpu edges=1 dense=1 run=3 routed=0 sim_us=4.83683 view_us=2.19017 vertices=176832
+route_cpu edges=1 dense=1 run=3 routed=1 sim_us=5.16783 view_us=3.44683 vertices=176832
+synthetic_transport side=32 run=1 mean_us=174.635 max_error=2.63331e-07
+synthetic_transport side=32 run=2 mean_us=175.459 max_error=2.63331e-07
+synthetic_transport side=32 run=3 mean_us=176.218 max_error=2.63331e-07
+synthetic_transport side=128 run=1 mean_us=3259.04 max_error=9.56235e-07
+synthetic_transport side=128 run=2 mean_us=3214.72 max_error=9.56235e-07
+synthetic_transport side=128 run=3 mean_us=3195.78 max_error=9.56235e-07
+beds=1 ditch=0 detour=0 dig+can cumulative=5,10,15 sim_s=46.7167 last_quality=67 inflow=0 soil=0 stock=0 max_balance_error=0 loop_us/tick=4.05865
+beds=1 ditch=1 detour=0 dig+can cumulative=4,4,4 sim_s=45.9667 last_quality=70 inflow=5.67181 soil=1.67424 stock=3.99757 max_balance_error=2.98023e-08 loop_us/tick=4.27063
+beds=2 ditch=0 detour=0 dig+can cumulative=10,20,30 sim_s=46.7167 last_quality=67 inflow=0 soil=0 stock=0 max_balance_error=0 loop_us/tick=4.23924
+bed=2 third harvest_s=91.1667 quality=47 dry/low/good/excess_s=36.0163/0/0/0
+bed=16 third harvest_s=91.1667 quality=47 dry/low/good/excess_s=36.0163/0/0/0
+beds=2 ditch=1 detour=0 dig+can cumulative=5,5,5 sim_s=91.1667 last_quality=47 inflow=8.31933 soil=3.3218 stock=4.99757 max_balance_error=5.96046e-08 loop_us/tick=4.44649
+bed=16 third harvest_s=45.9667 quality=70 dry/low/good/excess_s=0/2/13.0833/0
+bed=2 third harvest_s=53.3167 quality=61 dry/low/good/excess_s=0/19.2832/0.283333/0
+beds=2 ditch=1 detour=1 dig+can cumulative=6,6,6 sim_s=53.3167 last_quality=61 inflow=9.50901 soil=3.51431 stock=5.99462 max_balance_error=5.96046e-08 loop_us/tick=5.0302
+PASS water trial

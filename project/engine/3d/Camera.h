@@ -22,6 +22,7 @@ public:
 	void SetRotate(const Vector3& rotate) { transform_.rotate = rotate; }
 	void SetTranslate(const Vector3& translate) { transform_.translate = translate; }
 	void SetFovY(float fovY) { fovY_ = fovY; }
+	float GetFovY() const { return fovY_; }
 	void SetAspectRatio(float aspectRatio) { aspectRatio_ = aspectRatio; }
 	void SetNearClip(float nearClip) { nearClip_ = nearClip; }
 	void SetFarClip(float farClip) { farClip_ = farClip; }

@@ -162,6 +162,9 @@ void Object3d::SetTexture(uint32_t textureHandle) {
 }
 
 void Object3d::Draw() {
+    DrawStaticWithPipeline(nullptr);
+}
+void Object3d::DrawStaticWithPipeline(ID3D12PipelineState* pipeline) {
 	if (!constantBuffer_ || !object3dCommon_ || !model_) return;
 	if (!object3dCommon_->IsObjectPassActive()) {
 		Logger::Log("Object3d::Draw rejected because BeginObjectPass was not called.");
@@ -170,6 +173,7 @@ void Object3d::Draw() {
 	}
 	ID3D12GraphicsCommandList* commandList = object3dCommon_->GetDxCommon()->GetCommandList();
 	const bool isSkinned = model_->HasSkinCluster();
+    if(pipeline && isSkinned) return;
 	const bool useComputeSkinning = model_->UseComputeSkinning();
 	const bool useVertexShaderSkinning = isSkinned && !useComputeSkinning;
 
@@ -182,7 +186,7 @@ void Object3d::Draw() {
 	commandList->SetGraphicsRootSignature(object3dCommon_->GetRootSignature(useVertexShaderSkinning));
 
 	// パイプラインをセット
-	commandList->SetPipelineState(object3dCommon_->GetPipelineState(
+	commandList->SetPipelineState(pipeline?pipeline:object3dCommon_->GetPipelineState(
 		ResolveCullMode(cullMode_, isMirrored_), useVertexShaderSkinning));
 
 	// RootSignature の Index に合わせて定数バッファをセット

@@ -84,6 +84,9 @@ void FarmRuntimeController::InitializeEdition() {
     forecastPick_ = {};
     lesson_.reset();
     std::error_code error;
+    fpsEdition_=std::filesystem::is_regular_file("Settings/runtime/first_person.flag",error);
+    fpsAutoEnter_=fpsEdition_;
+    if (fpsEdition_) flow_.Continue();
     mainGameOnly_ = std::filesystem::is_regular_file("Settings/runtime/main_game.flag", error);
     if (!mainGameOnly_ && std::filesystem::is_regular_file("Settings/runtime/system_experience.flag", error)) {
         open_ = true;
@@ -160,6 +163,7 @@ void FarmRuntimeController::BuildObservationOverlay(farmui::View& view, const Fa
 
 void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
     view_ = {};
+    if (fps_.active) { view_.simpleField=true; return; }
     if (controlGuide_) { farmui::BuildControlGuide(view_,*controlGuide_); return; }
     if (lesson_) { farmui::BuildCanalLessonView(view_,lesson_->Read()); return; }
     if (!open_ && flow_.GetPhase()==FarmPlayFlow::Phase::Briefing && entryGap_.value_or(-1)>=0) {
@@ -343,6 +347,8 @@ void FarmRuntimeController::BuildView(const FarmRuntimeContext& s) {
                     FarmPestSystem::CountActive(s.farmGrid), s.farmProgressionSystem.PestSpread().version != 0);
             } else if (farm::FieldWheelNotice::Clock::now()<gapNoticeEnd_) {
                 view_.Add(Label::GapDone,{382,24,820,48});
+            } else if (s.farmGrid.HasPondBank() && hud.day==1 && s.farmIrrigationSystem.GetSuppliedCanalCount()==0) {
+                view_.Add(Label::PondCut,farmui::HUDLayout::shortGoal);
             } else {
                 farmui::BuildFarmNextGoalView(view_, goal, farmui::HUDLayout::shortGoal.Contains(pointer_),
                     mainGameOnly_ && hud.day == 1 && s.farmEconomySystem.GetLifetimeSales() == 0);
@@ -1261,6 +1267,7 @@ bool FarmRuntimeController::AllowsFieldHover(const FarmRuntimeContext& s) const 
         !s.farmIrrigationPreviewSystem.IsActive() && !s.farmCropSelectionSystem.IsOpen() && !view_.Covers(pointer_);
 }
 int FarmRuntimeController::ResolveHoveredTile(const FarmRuntimeContext& s) const {
+    if (fps_.active) return s.host.IsViewportFocused()?fps_.target:-1;
     if (ShowsIrrigationForecast() && forecastPick_.valid && s.host.IsViewportFocused() &&
         s.host.IsViewportHovered() && !view_.Covers(pointer_) &&
         forecastPick_.revision == s.farmIrrigationPreviewSystem.CandidateRevision())
@@ -1429,6 +1436,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     wheelCaptured_ = false;
     // Only the field route can renew a press; a modal or focus change cancels it.
     const auto press = std::exchange(fieldPress_, farm::FieldClick{});
+    const auto pondStroke = std::exchange(pondStroke_, farm::pond::Stroke{});
     const auto right = std::exchange(rightTap_, farm::FieldRightTap{});
     const auto previousWheel = std::exchange(fieldWheel_, farm::FieldToolWheel{});
     if (!s.host.IsViewportFocused() || s.host.IsTimelineScrubbing() || RequestsTitle() ||
@@ -1436,6 +1444,9 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
     if (!ready_) return false;
     if (exhibition_.Active()) { hotbarSlot_ = -1; return UpdateExhibition(s, input); }
     if (!s.host.IsViewportFocused()) {
+        carrotPull_.Cancel();
+        fpsFrame_.gripping=false;
+        fpsWaitRelease_=true;
         walk_.Disarm(); walkDestination_=-1; walkWaitRelease_=true;
         hotbarSlot_ = -1;
         arrivalAudio_.Update(StartFrame(),flow_.GetPhase()==FarmPlayFlow::Phase::Starting,false);
@@ -1445,6 +1456,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         frameCaptured_ = true; return true;
     }
     const bool insideViewport = s.host.ConvertMouseToVirtualScreen(input.GetMousePosition(), pointer_);
+    if (fpsEdition_ && UpdateFirstPerson(s,input)) return true;
     if (UpdateMenuAudio(s, input)) { hotbarSlot_ = -1; return true; }
     UpdateContestScreen();
     BuildView(s);
@@ -1638,6 +1650,7 @@ bool FarmRuntimeController::Update(const FarmRuntimeContext& s, const Input& inp
         if (action != Action::None) { Execute(s, {action}); BuildView(s); frameCaptured_ = true; return true; }
     }
     if (s.farmTimeAdvance.Read().status.active) return true;
+    if (UpdatePondHoe(s,input,pondStroke,insideViewport,click)) return true;
     if (UpdateFieldClick(s, input, press, click, candidate)) return true;
     UpdateToolWheel(s, input, previousWheel, insideViewport);
     if (paused_ || s.farmTimeAdvance.Read().held) {

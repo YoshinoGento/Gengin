@@ -2,6 +2,7 @@
 #include <wrl.h>
 #include <Windows.h>
 #include <stdint.h>
+#include <bitset>
 
 
 using namespace Microsoft::WRL;
@@ -22,6 +23,8 @@ public:
 	void Finalize();
 	void ToggleBorderlessFullscreen();
 	void SetBorderlessFullscreen(bool enabled);
+	void SetFieldMouseLook(bool enabled);
+	POINT SampleFieldLookDelta() const noexcept;
 	bool IsBorderlessFullscreen() const { return isBorderlessFullscreen_; }
 
 #ifdef _DEBUG
@@ -40,6 +43,13 @@ public:
 public:
 	// Getter
 	HWND GetHwnd() const { return hwnd; }
+	struct LeftDragSample {
+		POINT press{}, release{};
+		bool began=false, ended=false, down=false;
+	};
+	const LeftDragSample& ReadLeftDrag() const noexcept { return leftDrag_; }
+	bool WindowKeyPressed(unsigned key) const noexcept { return key<256 && windowPressed_[key]; }
+	bool WindowKeyHeld(unsigned key) const noexcept { return key<256 && windowHeld_[key]; }
 	uint32_t GetClientWidth() const;
 	uint32_t GetClientHeight() const;
 
@@ -54,4 +64,9 @@ private:
 	RECT windowedRect_ = {};
 
 	WNDCLASS wc{};
+	LeftDragSample leftDrag_{};
+	bool fieldMouseLook_ = false;
+	POINT fieldLookOrigin_{};
+	bool restoreFieldCursor_=false;
+	std::bitset<256> windowPressed_,windowHeld_;
 };

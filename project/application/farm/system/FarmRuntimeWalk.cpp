@@ -6,6 +6,79 @@
 #include "base/FrameClock.h"
 #include "io/Input.h"
 
+bool FarmRuntimeController::UpdatePondHoe(const FarmRuntimeContext& s,const Input& input,
+    farm::pond::Stroke stroke,bool inside,bool click) {
+    const auto& grid=s.farmGrid;
+    if (!grid.HasPondBank() || s.farmToolSystem.GetCurrentTool()!=FarmTool::Hoe ||
+        s.farmCropSelectionSystem.IsOpen() || s.host.IsTimelineScrubbing() || s.farmProgressionSystem.IsCleared() ||
+        input.PushMouseButton(InputMouseButton::Right) || input.GetMouseWheelDelta()!=0) return false;
+    const bool starting=stroke.last<0;
+    const auto mouse=input.ReadLeftDrag();
+    const bool keys=starting ? !click && !mouse.began && input.TriggerKey(InputKey::Enter) : stroke.keyboard;
+    if (starting && !mouse.began && !keys) return false;
+    if (!starting && !(keys?input.PushKey(InputKey::Enter):(mouse.down || mouse.ended))) return false;
+    if (!keys && (!inside || view_.Covers(pointer_))) return false;
+    const auto& layout=s.farmVisualSystem.GetLayout();
+    const float pitch=layout.tileSize+layout.tileGap;
+    int target=grid.GetSelectedIndex();
+    if (!grid.GetTile(target)) return false;
+    auto point=s.farmVisualSystem.GetTileCenter(grid,target);
+    int crossing=-1;
+    bool exterior=false;
+    if (keys) {
+        const int x=target%grid.GetWidth(), y=target/grid.GetWidth();
+        const auto step=[&](auto a,auto b){return input.TriggerKey(a)||input.TriggerKey(b)||
+            (starting && (input.PushKey(a)||input.PushKey(b)));};
+        const int dx=int(step(InputKey::D,InputKey::ArrowRight))-int(step(InputKey::A,InputKey::ArrowLeft));
+        const int dy=int(step(InputKey::W,InputKey::ArrowUp))-int(step(InputKey::S,InputKey::ArrowDown));
+        if (starting && !stroke.Begin(grid,target,point,true)) return false;
+        target=std::clamp(y+dy,0,grid.GetHeight()-1)*grid.GetWidth()+std::clamp(x+dx,0,grid.GetWidth()-1);
+        point=s.farmVisualSystem.GetTileCenter(grid,target);
+    } else {
+        const auto first=s.farmVisualSystem.GetTileCenter(grid,0);
+        const auto pick=[&](Vector2 client) {
+            Vector2 hud{}; Vector3 origin{},dir{};
+            if (!s.host.ConvertMouseToVirtualScreen(client,hud) || view_.Covers(hud) ||
+                !s.host.TryBuildViewportRayAt(client,origin,dir) || std::abs(dir.y)<.0001f) return false;
+            exterior=!s.farmVisualSystem.TryPickTile(grid,origin,dir,target);
+            const float y=exterior ? layout.center.y+layout.waterBottomOffset+layout.waterMaxDepth :
+                s.farmVisualSystem.GetTileCenter(grid,target).y;
+            const float t=(y-origin.y)/dir.y;
+            if (!std::isfinite(t) || t<0.f) return false;
+            point=origin+dir*t;
+            if(exterior) target=farm::pond::FeederTile(grid,first,pitch,point);
+            return target>=0;
+        };
+        const auto client=[](POINT p){return Vector2{float(p.x),float(p.y)};};
+        if (starting) {
+            if (!pick(client(mouse.press)) || !stroke.Begin(grid,target,point,false)) return false;
+            stroke.inFeeder=exterior;
+        }
+        if (!pick(mouse.ended?client(mouse.release):input.GetMousePosition())) return false;
+        if(stroke.inFeeder && exterior) {
+            stroke.start=stroke.tip=point;
+            if(!mouse.ended) pondStroke_=stroke;
+            fieldInputConsumed_=true; return true;
+        }
+        if(stroke.inFeeder || exterior) {
+            crossing=farm::pond::BankCrossing(grid,first,pitch,stroke.tip,point);
+            if(crossing<0) return false;
+            if(exterior) target=crossing;
+            else { stroke.last=crossing; stroke.inFeeder=false; }
+        }
+    }
+    const bool active=stroke.Pull(grid,target,point,pitch,[&](int i,bool across) {
+        if (!s.farmToolActionSystem.DigCanalAt(s.farmGrid,i,across)) return false;
+        s.farmDocumentSystem.MarkDirty(); walkHit_=true; return true;
+    },crossing);
+    if (active) {
+        if (keys || (!mouse.ended && !exterior)) pondStroke_=stroke;
+        s.farmGrid.SetSelectedIndex(target);
+    }
+    fieldInputConsumed_=true;
+    return true;
+}
+
 bool FarmRuntimeController::UpdateWalk(const FarmRuntimeContext& s,const Input& input,bool inside,bool click) {
     using farmui::Action;
     bool offered=false;
@@ -37,7 +110,7 @@ bool FarmRuntimeController::UpdateWalk(const FarmRuntimeContext& s,const Input& 
     const auto* clock=Framework::GetInstance()->GetFrameClock();
     const float dt=clock?clock->GetRealDeltaSeconds():0.f;
     const int dig=walk_.Step(s.farmGrid,dx,dz,!walkWaitRelease_ && ((left && world)||input.PushKey(InputKey::Enter)),dt,walkDestination_);
-    if (dig>=0 && s.farmToolActionSystem.DigCanalAt(s.farmGrid,dig)) {
+    if (dig>=0 && s.farmToolActionSystem.DigCanalAt(s.farmGrid,dig,walk_.LastCutAcrossBank())) {
         s.farmDocumentSystem.MarkDirty(); walkHit_=true;
     }
     const int tile=walk_.Tile(s.farmGrid);

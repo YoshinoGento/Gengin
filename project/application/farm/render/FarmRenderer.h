@@ -4,6 +4,7 @@
 #include "environment/VegetationWind.h"
 #include "farm/render/FarmMeshLayout.h"
 #include "farm/system/FarmBrushPlaySystem.h"
+#include "farm/system/FarmCarrotPull.h"
 #include <memory>
 #include <vector>
 
@@ -32,10 +33,13 @@ public:
 	void Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
         int hoveredTileIndex = -1, const FarmHarvestVisualSystem* harvest = nullptr, bool showSelection = true,
         const FarmPestVisualSystem* pests = nullptr, const vegetation::WindFrame& wind = {},
-        const FarmBrushPlaySystem* brush = nullptr,const FarmActionParticles* actions = nullptr,const FarmerPose* farmer = nullptr);
+        const FarmBrushPlaySystem* brush = nullptr,const FarmActionParticles* actions = nullptr,const FarmerPose* farmer = nullptr,
+        const Vector3* pondHoeTip = nullptr, CarrotGrip grip = {},std::span<const FarmIrrigationTileFlow> flow={},
+        std::span<const Vector4> waterSamples={},std::span<const Vector4> waterPorts={},float waterClock=0);
     std::optional<FarmBrushContact> PickBrushContact(const FarmGrid& grid,const FarmVisualSystem& visual,
         int groundTile,Vector3 origin,Vector3 unitRay) const;
 	void Draw();
+    size_t DrawLayer(bool water,ID3D12PipelineState* staticPipeline=nullptr);
 	void DrawShadow();
 	int GetLastDrawTileCount() const { return lastDrawTileCount_; }
 	int GetPartCount() const { return static_cast<int>(parts_.size()); }

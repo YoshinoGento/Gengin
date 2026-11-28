@@ -1,4 +1,5 @@
 #include "farm/system/FarmDocumentSystem.h"
+#include "farm/system/FarmPondBank.h"
 
 #include "base/Logger.h"
 #include "farm/core/FarmGrid.h"
@@ -323,6 +324,7 @@ nlohmann::json BuildJson(
 		{ "height", snapshot.height },
 		{ "selectedIndex", snapshot.selectedY * snapshot.width + snapshot.selectedX },
 	};
+	if (snapshot.pondBank) document["grid"]["pondBank"] = true;
 	document["tiles"] = nlohmann::json::array();
 	for (const farm::FarmTile& tile : snapshot.tiles) {
 		document["tiles"].push_back({
@@ -349,6 +351,7 @@ nlohmann::json BuildJson(
 				{ "nutrientSupply", tile.careHistory.nutrientSupply },
 			} },
 		});
+		if (tile.retainsPondBank) document["tiles"].back()["retainsPondBank"] = true;
 	}
 	document["economy"] = {
 		{ "money", economySnapshot.money },
@@ -503,6 +506,10 @@ bool ParseSnapshot(
 		}
 
 		farm::FarmGrid::Snapshot candidate;
+		if (gridJson.contains("pondBank") && !gridJson["pondBank"].is_boolean()) {
+			error = "Invalid pond bank flag."; return false;
+		}
+		candidate.pondBank = gridJson.value("pondBank", false);
 		int selectedIndex = 0;
 		if (!ReadNonNegativeInt(gridJson["width"], candidate.width) ||
 			!ReadNonNegativeInt(gridJson["height"], candidate.height) ||
@@ -622,6 +629,10 @@ bool ParseSnapshot(
 					return false;
 				}
 			}
+			if (tileJson.contains("retainsPondBank") && !tileJson["retainsPondBank"].is_boolean()) {
+				error = "Invalid pond bank flag."; return false;
+			}
+			tile.retainsPondBank = tileJson.value("retainsPondBank",false);
 			candidate.tiles.push_back(tile);
 		}
 
@@ -1493,6 +1504,7 @@ bool FarmDocumentSystem::Reset(
 	snapshot.selectedX = 0;
 	snapshot.selectedY = 0;
 	snapshot.tiles.assign(static_cast<std::size_t>(snapshot.width) * snapshot.height, farm::FarmTile{});
+	if (defaultMode_ == FarmProgressionMode::FreeFarming) farm::pond::PrepareStarter(snapshot);
 	const farm::FarmGrid::Snapshot previousGridSnapshot = [&]() {
 		farm::FarmGrid::Snapshot value;
 		grid.CaptureSnapshot(value);

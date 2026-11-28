@@ -1,5 +1,6 @@
 #include "farm/system/FarmToolActionSystem.h"
 #include "farm/core/FarmCanalSite.h"
+#include "farm/system/FarmPondBank.h"
 #include "farm/system/FarmToolBehavior.h"
 #include "farm/system/FarmContestSubmissionSystem.h"
 #include "farm/system/FarmSoilSystem.h"
@@ -23,6 +24,7 @@ bool TilesEqual(const farm::FarmTile& left, const farm::FarmTile& right)
 	return left.heightLevel == right.heightLevel &&
 		left.feature == right.feature &&
 		left.irrigationEnabled == right.irrigationEnabled &&
+		left.retainsPondBank == right.retainsPondBank &&
 		left.state == right.state &&
 		left.crop == right.crop &&
 		left.moisture == right.moisture &&
@@ -392,6 +394,7 @@ bool FarmToolActionSystem::ToggleSelectedCanal(farm::FarmGrid& grid)
 	const char* commandName = "Remove Canal";
 	if (before.feature == farm::FarmTileFeature::Canal) {
 		after.feature = farm::FarmTileFeature::None;
+		after.retainsPondBank = false;
 		after.waterAmount = 0.0f;
 	} else {
 		after.feature = farm::FarmTileFeature::Canal;
@@ -400,11 +403,16 @@ bool FarmToolActionSystem::ToggleSelectedCanal(farm::FarmGrid& grid)
 	return CommitTileChange(grid, tileIndex, before, after, commandName);
 }
 
-bool FarmToolActionSystem::DigCanalAt(farm::FarmGrid& grid,int index) {
+bool FarmToolActionSystem::DigCanalAt(farm::FarmGrid& grid,int index,bool cutAcrossBank) {
     const auto* tile=grid.GetTile(index);
+    if (tile && tile->retainsPondBank && cutAcrossBank && farm::pond::IsBank(grid,index)) {
+        auto after=*tile; after.retainsPondBank=false;
+        return CommitTileChange(grid,index,*tile,after,"Open Pond Bank");
+    }
     if (!tile || tile->feature!=farm::FarmTileFeature::None || !CanToggleCanal(grid,index)) return false;
     auto after=*tile;
     after.feature=farm::FarmTileFeature::Canal;
+    after.retainsPondBank=farm::pond::IsBank(grid,index) && !cutAcrossBank;
     return CommitTileChange(grid,index,*tile,after,"Place Canal");
 }
 
@@ -461,6 +469,7 @@ bool FarmToolActionSystem::CommitCanalPath(
 		entry.before = *tile;
 		entry.after = *tile;
 		entry.after.feature = remove ? farm::FarmTileFeature::None : farm::FarmTileFeature::Canal;
+		entry.after.retainsPondBank = false;
 		entry.after.waterAmount = 0.0f;
 		entries.push_back(entry);
 	}
@@ -530,6 +539,7 @@ bool FarmToolActionSystem::ToggleSelectedWaterSource(farm::FarmGrid& grid)
 bool FarmToolActionSystem::CanToggleWaterSource(
 	const farm::FarmGrid& grid, int tileIndex) const noexcept
 {
+	if (grid.HasPondBank()) return false;
 	const farm::FarmTile* tile = grid.GetTile(tileIndex);
 	if (tile == nullptr || !farm::IsValidFarmTileFeature(tile->feature)) {
 		return false;

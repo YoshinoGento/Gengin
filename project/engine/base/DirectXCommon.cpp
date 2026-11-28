@@ -17,6 +17,16 @@
 using namespace Microsoft::WRL;
 
 namespace {
+// Immutable for the lifetime of the depth buffer and render targets; resize is presentation only.
+const SIZE& RenderSize() {
+    static const SIZE extent=[] {
+        wchar_t trial[2]{}, hi[2]{};
+        if(GetEnvironmentVariableW(L"SUIRO_WATER_TRIAL",trial,2)==1 && trial[0]==L'1' &&
+           GetEnvironmentVariableW(L"SUIRO_WATER_TRIAL_1080",hi,2)==1 && hi[0]==L'1') return SIZE{1920,1080};
+        return SIZE{WinApp::kClientWidth,WinApp::kClientHeight};
+    }();
+    return extent;
+}
 void RequireGraphics(HRESULT result, const char* operation) {
     if (SUCCEEDED(result)) return;
     char message[256]{};
@@ -115,7 +125,7 @@ void DirectXCommon::InitializeRenderTargetView() {
 
 void DirectXCommon::InitializeDepthStencilView() {
     D3D12_RESOURCE_DESC desc{};
-    desc.Width = WinApp::kClientWidth; desc.Height = WinApp::kClientHeight;
+    desc.Width = RenderSize().cx; desc.Height = RenderSize().cy;
     desc.MipLevels = 1; desc.DepthOrArraySize = 1; desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
     desc.SampleDesc.Count = 1; desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -134,8 +144,8 @@ void DirectXCommon::InitializeDepthStencilView() {
 void DirectXCommon::InitializeRenderTexture() {
     sceneRenderTexture_.Initialize(
         this,
-        WinApp::kClientWidth,
-        WinApp::kClientHeight,
+        RenderSize().cx,
+        RenderSize().cy,
         kRenderTargetFormat,
         { renderTextureClearColor_[0], renderTextureClearColor_[1], renderTextureClearColor_[2], renderTextureClearColor_[3] },
         D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -143,8 +153,8 @@ void DirectXCommon::InitializeRenderTexture() {
 
     postEffectResultTexture_.Initialize(
         this,
-        WinApp::kClientWidth,
-        WinApp::kClientHeight,
+        RenderSize().cx,
+        RenderSize().cy,
         kRenderTargetFormat,
         { 0.0f, 0.0f, 0.0f, 1.0f },
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -152,8 +162,8 @@ void DirectXCommon::InitializeRenderTexture() {
 
     finalDisplayTexture_.Initialize(
         this,
-        WinApp::kClientWidth,
-        WinApp::kClientHeight,
+        RenderSize().cx,
+        RenderSize().cy,
         kRenderTargetFormat,
         { 0.0f, 0.0f, 0.0f, 1.0f },
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
@@ -161,8 +171,8 @@ void DirectXCommon::InitializeRenderTexture() {
 
     normalTexture_.Initialize(
         this,
-        WinApp::kClientWidth,
-        WinApp::kClientHeight,
+        RenderSize().cx,
+        RenderSize().cy,
         kNormalTextureFormat,
         { 0.5f, 0.5f, 1.0f, 1.0f },
         D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -422,9 +432,9 @@ void DirectXCommon::PreDraw() {
     normalTexture_.Clear(commandList_.Get());
     commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    D3D12_VIEWPORT viewport{ 0, 0, (FLOAT)WinApp::kClientWidth, (FLOAT)WinApp::kClientHeight, 0, 1 };
+    D3D12_VIEWPORT viewport{ 0, 0, (FLOAT)RenderSize().cx, (FLOAT)RenderSize().cy, 0, 1 };
     commandList_->RSSetViewports(1, &viewport);
-    D3D12_RECT scissor{ 0, 0, WinApp::kClientWidth, WinApp::kClientHeight };
+    D3D12_RECT scissor{ 0, 0, RenderSize().cx, RenderSize().cy };
     commandList_->RSSetScissorRects(1, &scissor);
 }
 
@@ -482,9 +492,9 @@ void DirectXCommon::TransitionDepthBuffer(D3D12_RESOURCE_STATES stateAfter) {
 }
 
 void DirectXCommon::SetFullscreenViewportAndScissor() {
-    D3D12_VIEWPORT viewport{ 0.0f, 0.0f, static_cast<FLOAT>(WinApp::kClientWidth), static_cast<FLOAT>(WinApp::kClientHeight), 0.0f, 1.0f };
+    D3D12_VIEWPORT viewport{ 0.0f, 0.0f, static_cast<FLOAT>(RenderSize().cx), static_cast<FLOAT>(RenderSize().cy), 0.0f, 1.0f };
     commandList_->RSSetViewports(1, &viewport);
-    D3D12_RECT scissor{ 0, 0, WinApp::kClientWidth, WinApp::kClientHeight };
+    D3D12_RECT scissor{ 0, 0, RenderSize().cx, RenderSize().cy };
     commandList_->RSSetScissorRects(1, &scissor);
 }
 
@@ -589,7 +599,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> DirectXCommon::CreateUAVBufferResource(si
 
     ComPtr<ID3D12Resource> resource;
     HRESULT hr = device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, initialState, nullptr, IID_PPV_ARGS(&resource));
-    assert(SUCCEEDED(hr));
+    RequireGraphics(hr,"CreateCommittedResource (UAV buffer)");
     return resource;
 }
 

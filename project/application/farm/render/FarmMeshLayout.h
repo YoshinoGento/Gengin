@@ -1,7 +1,9 @@
 #pragma once
 
 #include "farm/core/FarmGrid.h"
+#include "farm/system/FarmPondBank.h"
 #include "farm/system/FarmVisualSystem.h"
+#include "farm/system/FarmIrrigationSystem.h"
 #include "farm/render/FarmSoilSurface.h"
 #include "farm/render/FarmCanalCorner.h"
 #include "environment/VegetationWind.h"
@@ -258,14 +260,27 @@ inline FarmSelectionMeshParts BuildFarmHoverMeshParts(
 
 // Pure presentation conversion, usable by CPU tests without allocating GPU resources.
 inline FarmTileMeshParts BuildFarmTileMeshParts(
-	const FarmGrid& grid, int index, const FarmVisualSystem& visualSystem,float pendingWater=0.f,bool awaitingHoe=false) noexcept {
+	const FarmGrid& grid, int index, const FarmVisualSystem& visualSystem,float pendingWater=0.f,bool awaitingHoe=false,
+    std::span<const FarmIrrigationTileFlow> flow={}) noexcept {
 	constexpr float kEarthDepth = 0.24f;
 	constexpr float kTopThickness = 0.04f;
 	constexpr float kWaterHalfThickness = 0.005f;
 	constexpr float kRimFreeboard = 0.045f;
 	const Vector4 waterColor{0.073f, 0.245f, 0.228f, 1.0f};
 	FarmTileMeshParts result;
-	auto visual = visualSystem.GetTileVisualData(grid, index);
+    const auto sample=[&](int i) {
+        auto v=visualSystem.GetTileVisualData(grid,i);
+        if(v.valid && v.feature==FarmTileFeature::Canal && !v.showWaterSurface &&
+            i>=0 && static_cast<size_t>(i)<flow.size()) {
+            const auto& f=flow[i];
+            if(f.incoming>0 || f.outgoing>0 || f.sourceRefill>0 || f.soilSent>0) {
+                // A whole tick's through-flow may leave zero stock at its donor.
+                v.showWaterSurface=true; v.waterSurfaceCenter.y+=.008f;
+            }
+        }
+        return v;
+    };
+	auto visual = sample(index);
     visual.soilWetness=std::clamp(visual.soilWetness-pendingWater,0.f,1.f);
 	const auto* tile = grid.GetTile(index);
 	if (!visual.valid || !tile) { return result; }
@@ -355,7 +370,15 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 	const float run = cellHalf - inner;
 	if (!std::isfinite(run) || run < 0.0001f) { return {}; }
 	for (int edge = 0; edge < 4; ++edge) {
-		neighborData[edge] = visualSystem.GetTileVisualData(grid, neighbors[edge]);
+		neighborData[edge] = sample(neighbors[edge]);
+		if (edge == 1 && pond::IsOpen(grid,index)) {
+			auto& outside = neighborData[edge];
+			outside = visual;
+			outside.showWaterSurface = true;
+			// Arms meet at the mean of two centers. The exterior channel is level at its lip.
+			const float lip = layout.center.y + layout.waterBottomOffset + layout.waterMaxDepth;
+			outside.waterSurfaceCenter.y = layout.pondLipRise>0 ? visual.waterSurfaceCenter.y : 2.f*lip - visual.waterSurfaceCenter.y;
+		}
 		const auto& neighbor = neighborData[edge];
 		if (neighbor.valid && neighbor.feature != FarmTileFeature::None) {
 			// Both halves meet at the mean height, regardless of traversal order.
@@ -377,14 +400,17 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 	// Remove the old full-height bed: it would occlude a descending water ramp.
 	// Deep overlapping undersides stay below the field; each top section has one owner.
 	const float bodyHalfDepth = (bottom - groundBottom + 2.0f * layout.heightStep) * 0.5f;
-	bool filledBendCorner = false;
+	bool hasSharedBendCorner = false;
 	const Vector4 bedColor{0.29f, 0.25f, 0.15f, 1.0f};
 	for (int z = 0; z < 3; ++z) {
 		for (int x = 0; x < 3; ++x) {
-			if (x!=1 && z!=1 && connected(x/2) && connected(2+z/2)) {
+			if (x!=1 && z!=1 && neighbors[x/2]>=0 && connected(x/2) && connected(2+z/2)) {
 				// Both orthogonal neighbors exist, so their diagonal is in bounds too.
-				const auto d=visualSystem.GetTileVisualData(grid,neighbors[x/2]+(z==2?width:-width));
+				const auto d=sample(neighbors[x/2]+(z==2?width:-width));
 				if (d.valid && d.feature!=FarmTileFeature::None) {
+					// A four-cell junction owns this bed even when its diagonal dries.
+					// The three-cell fillet would cut across a differently sloped bed.
+					hasSharedBendCorner=true;
 					const auto& ex=neighborData[x/2];
 					const auto& ez=neighborData[2+z/2];
 					const auto corner=[&](float h,float hx,float hz,float hd,bool wet) {
@@ -399,7 +425,6 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 					corner(bottom,ex.center.y+off,ez.center.y+off,d.center.y+off,false);
 					if (visual.showWaterSurface && ex.showWaterSurface && ez.showWaterSurface && d.showWaterSurface) {
 						corner(visual.waterSurfaceCenter.y,ex.waterSurfaceCenter.y,ez.waterSurfaceCenter.y,d.waterSurfaceCenter.y,true);
-						filledBendCorner=true;
 					}
 					continue;
 				}
@@ -421,7 +446,7 @@ inline FarmTileMeshParts BuildFarmTileMeshParts(
 			{inner*apronScale,height*.5f,inner*apronScale},{.37f,.35f,.27f,1},false,{},FarmMeshShape::BendLining,
 			FarmMeshSurface::None,yaw);
 		const int xEdge=connected(0)?0:1, zEdge=connected(2)?2:3;
-		if (!filledBendCorner && visual.showWaterSurface && neighborData[xEdge].showWaterSurface && neighborData[zEdge].showWaterSurface) {
+		if (!hasSharedBendCorner && visual.showWaterSurface && neighborData[xEdge].showWaterSurface && neighborData[zEdge].showWaterSurface) {
 			const float sx=xEdge==0?-1.f:1.f, sz=zEdge==2?-1.f:1.f;
 			const float level=visual.waterSurfaceCenter.y;
 			const float gx=sx*(neighborData[xEdge].waterSurfaceCenter.y-level)*.5f/run;

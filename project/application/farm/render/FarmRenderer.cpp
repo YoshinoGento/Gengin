@@ -5,6 +5,8 @@
 #include "farm/system/FarmPestVisualSystem.h"
 #include "farm/render/FarmMaterialStyle.h"
 #include "farm/render/FarmFarmerModel.h"
+#include "farm/render/FarmCarrotGripPose.h"
+#include "farm/render/FarmPondLayout.h"
 #include "3d/Object3d.h"
 #include "3d/ModelManager.h"
 #include <filesystem>
@@ -43,14 +45,16 @@ bool FarmRenderer::Initialize(Object3dCommon* common, ModelManager* models, Text
     constexpr size_t kToolParts=4+2; // Four simultaneous cans and the handle/blade of one hoe.
     constexpr size_t kReserve=kMaximumParts+kMaximumTargetParts+kMaximumCropParts+kMaximumHarvestParts+FarmPestMeshParts::kCapacity+kToolParts;
     constexpr size_t kFarmerParts=6+2; // Six body/tool pieces and the two transient furrow pieces.
-	parts_.reserve(kReserve+kFarmerParts);
-	objects_.reserve(kReserve+kFarmerParts);
+	parts_.reserve(kReserve+kFarmerParts+kFarmPondParts+kGripParts);
+	objects_.reserve(kReserve+kFarmerParts+kFarmPondParts+kGripParts);
 	return true;
 }
 
 void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual, Camera* camera,
 	int hoveredTileIndex, const FarmHarvestVisualSystem* harvest, bool showSelection, const FarmPestVisualSystem* pests,
-	const vegetation::WindFrame& wind,const FarmBrushPlaySystem* brush,const FarmActionParticles* actions,const FarmerPose* farmer) {
+	const vegetation::WindFrame& wind,const FarmBrushPlaySystem* brush,const FarmActionParticles* actions,const FarmerPose* farmer,
+    const Vector3* pondHoeTip,CarrotGrip grip,std::span<const FarmIrrigationTileFlow> flow,std::span<const Vector4> waterSamples,
+    std::span<const Vector4> waterPorts,float waterClock) {
     liveCrops_.clear(); preparedBoard_=nullptr;
 	parts_.clear();
 	lastDrawTileCount_ = 0;
@@ -59,22 +63,39 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 	if (grid.GetTileCount() > static_cast<int>(kMaximumParts)) { limitExceeded_ = true; return; }
 	std::size_t terrainCount = 0;
 	std::size_t plantCount = 0;
+    const bool sampled=waterSamples.size()==static_cast<size_t>(grid.GetTileCount())+1;
+    const bool routed=sampled && waterPorts.size()==static_cast<size_t>(grid.GetTileCount());
+    const auto& layout=visual.GetLayout();
+    const float invPitch=routed && layout.tileSize+layout.tileGap>0.f?1.f/(layout.tileSize+layout.tileGap):0.f;
+	VisitFarmPond(grid,visual,[&](FarmMeshPart part){
+        if(sampled && part.water) part.wetFront=waterSamples.back();
+        if(routed && part.water) { part.color={}; part.wetFront={0,0,0,waterSamples.back().w}; }
+        parts_.push_back(part);
+    });
     const auto* strokes=actions?actions->HoeStrokes(grid):nullptr;
 	for (int index = 0; index < grid.GetTileCount(); ++index) {
 		auto tileParts = BuildFarmTileMeshParts(grid, index, visual,actions?actions->PendingWater(grid,index):0.f,
-            strokes && strokes->WaitingForHit(index));
+            strokes && strokes->WaitingForHit(index),flow);
         if(actions && grid.GetTile(index)->feature==FarmTileFeature::Canal) {
             const auto front=actions->WaterFront(grid,index);
-            if(front.parent>=0) {
+            if(front.fromPond || front.parent>=0) {
                 const auto center=visual.GetTileCenter(grid,index);
-                RevealFarmWater(tileParts,center,visual.GetTileCenter(grid,front.parent),
+                const float pitch=visual.GetLayout().tileSize+visual.GetLayout().tileGap;
+                const auto upstream=front.fromPond?pond::FeederCenter(center,pitch):visual.GetTileCenter(grid,front.parent);
+                RevealFarmWater(tileParts,center,upstream,
                     front.outlet>=0?visual.GetTileCenter(grid,front.outlet):center,
-                    (visual.GetLayout().tileSize+visual.GetLayout().tileGap)*.5f,front.fraction);
+                    pitch*.5f,front.fraction);
             }
         }
 		if (terrainCount + tileParts.count > kMaximumParts) {
 			parts_.clear(); lastDrawTileCount_ = 0; limitExceeded_ = true; return;
 		}
+        if(sampled) for(size_t k=0;k<tileParts.count;++k)
+            if(auto& part=tileParts.parts[k];part.water) {
+                part.wetFront=waterSamples[index];
+                if(routed) {const auto center=visual.GetTileCenter(grid,index);
+                    part.color=waterPorts[index]; part.wetFront={center.x,center.z,invPitch,waterSamples[index].w};}
+            }
 		parts_.insert(parts_.end(), tileParts.parts.begin(), tileParts.parts.begin() + tileParts.count);
 		terrainCount += tileParts.count;
 		const auto repellent = BuildFarmRepellentMeshParts(grid, index, visual);
@@ -88,6 +109,9 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 			parts_.clear(); lastDrawTileCount_ = 0; limitExceeded_ = true; return;
 		}
 		parts_.insert(parts_.end(), repellent.parts.begin(), repellent.parts.begin() + repellent.count);
+        if (index==grip.tile && grip.tension>0.f)
+            VisitCarrotGrip(visual.GetTileVisualData(grid,index),grip,crops,
+                [this](const FarmMeshPart& p){parts_.push_back(p);});
         for(size_t i=0;i<crops.count;++i) liveCrops_.push_back({parts_.size()+i,index,grid.GetTile(index)->crop});
 		parts_.insert(parts_.end(), crops.parts.begin(), crops.parts.begin() + crops.count);
 		plantCount += repellent.count + crops.count;
@@ -100,8 +124,10 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
         if (const auto mark=BuildFurrowMark(grid,visual,*farmer))
             parts_.insert(parts_.end(),mark->begin(),mark->end());
     }
-    if(const auto* stroke=strokes?strokes->Active():nullptr) {
-        const auto pose=hoeing::Pose(*stroke);
+    const auto* stroke=strokes?strokes->Active():nullptr;
+    if(pondHoeTip || stroke) {
+        auto pose=pondHoeTip ? hoeing::ToolPose{{},visual.GetLayout().tileSize,.74f} : hoeing::Pose(*stroke);
+        if(pondHoeTip) pose.grip=*pondHoeTip-pose.Edge();
         if(pose.scale>=.005f) {
             FarmMeshPart tool{};
             tool.position=pose.grip; tool.roll=pose.roll; tool.scale={pose.scale,pose.scale,pose.scale};
@@ -171,7 +197,8 @@ void FarmRenderer::Prepare(const FarmGrid& grid, const FarmVisualSystem& visual,
 		const auto material = BuildFarmMaterialStyle(part);
 		object.SetSpecularType(material.detail.x > 0.0f ?
 			Object3d::SpecularType::BlinnPhong : Object3d::SpecularType::None);
-		object.SetShininess(material.shininess);
+        // The routed PS reads this static-material CB as its own packed parameter block.
+        object.SetShininess(routed && part.water?waterClock:material.shininess);
 		if (!object.SetSurfaceDetail(material.detail) || !object.SetSurfaceFront(part.wetFront)) { parts_.clear(); lastDrawTileCount_ = 0; return; }
 		object.SetEnableLighting(!part.water && part.surface != FarmMeshSurface::Selection &&
 			part.surface != FarmMeshSurface::Hover && part.surface != FarmMeshSurface::PestCue);
@@ -217,6 +244,15 @@ std::optional<FarmBrushContact> FarmRenderer::PickBrushContact(const FarmGrid& g
 void FarmRenderer::Draw() {
 	if (!visible_ || !IsReady()) { return; }
 	for (std::size_t index = 0; index < parts_.size(); ++index) { objects_[index]->Draw(); }
+}
+
+size_t FarmRenderer::DrawLayer(bool water,ID3D12PipelineState* staticPipeline) {
+    if(!visible_ || !IsReady()) return 0;
+    size_t draws=0;
+    for(size_t i=0;i<parts_.size();++i) if(parts_[i].water==water) {
+        objects_[i]->DrawStaticWithPipeline(staticPipeline); draws+=objects_[i]->GetModel()->GeometryDrawCount();
+    }
+    return draws;
 }
 
 void FarmRenderer::DrawShadow() {

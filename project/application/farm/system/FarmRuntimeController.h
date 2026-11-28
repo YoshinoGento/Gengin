@@ -1,4 +1,5 @@
 #pragma once
+#include "farm/system/FarmPondBank.h"
 #include "farm/ui/FarmRuntimeUI.h"
 #include "farm/ui/FarmControlGuideView.h"
 #include "farm/system/FarmGrowthComparisonSystem.h"
@@ -16,6 +17,9 @@
 #include "farm/system/FarmCanalLessonSystem.h"
 #include "farm/system/FarmFieldInput.h"
 #include "farm/system/FarmWalkSystem.h"
+#include "farm/system/FarmFirstPerson.h"
+#include "farm/system/FarmCarrotPull.h"
+#include "farm/ui/FarmFirstPersonHUD.h"
 #include <optional>
 
 struct FarmRuntimeContext;
@@ -25,9 +29,10 @@ class Input;
 // Routes Release controls to existing gameplay Systems; owns only menu/input state.
 class FarmRuntimeController final {
 public:
-    bool Initialize(SpriteCommon* common) { InitializeEdition(); ready_ = ui_.Initialize(common); return ready_; }
+    bool Initialize(SpriteCommon* common) { InitializeEdition(); ready_ = (!fpsEdition_ || fpsHUD_.Initialize(common)) && ui_.Initialize(common); return ready_; }
     InitializationTask InitializeIncrementally(SpriteCommon* common) {
         InitializeEdition();
+        if (fpsEdition_ && !fpsHUD_.Initialize(common)) co_return false;
         ready_ = co_await ui_.InitializeIncrementally(common);
         co_return ready_;
     }
@@ -44,7 +49,9 @@ public:
     FarmStartPresentationSystem::Frame StartFrame() const noexcept {
         return flow_.GetPhase()==FarmPlayFlow::Phase::Starting ? startPresentation_.GetFrame() : FarmStartPresentationSystem::Frame{};
     }
-    void Draw() { ui_.Draw(view_, pointer_); }
+    bool FirstPersonActive() const noexcept { return fps_.active; }
+    farm::CarrotGrip CarrotGripPose() const noexcept { return fps_.active ? carrotPull_.Pose(fps_.yaw) : farm::CarrotGrip{}; }
+    void Draw() { if (fps_.active) fpsHUD_.Draw(fpsFrame_); else ui_.Draw(view_, pointer_); }
     void PauseForPestWarning() noexcept { paused_ = true; }
     void PauseForWeatherChange() noexcept { paused_ = true; }
     void PauseOnComparisonEnd(bool ended) noexcept { if (ended && observation_) paused_ = true; }
@@ -54,6 +61,7 @@ public:
     bool IsOpen() const noexcept { return open_; }
     const farm::FarmerPose* Farmer() const noexcept { return walk_.Active() ? &walk_.Pose() : nullptr; }
     bool TakeWalkHit() noexcept { const bool hit=walkHit_; walkHit_=false; return hit; }
+    const Vector3* PondHoeTip() const noexcept { return pondStroke_.last>=0 ? &pondStroke_.tip : nullptr; }
     bool CapturesWheel() const noexcept { return wheelCaptured_; }
     const farm::FarmCanalLessonSystem* CanalLesson() const noexcept { return lesson_ ? &*lesson_ : nullptr; }
     bool RequestsTitle() const noexcept { return flow_.RequestsTitle(); }
@@ -117,6 +125,14 @@ private:
     void ExecuteExhibition(const FarmRuntimeContext& context, farmui::Request request);
     void BuildView(const FarmRuntimeContext& context);
     bool UpdateWalk(const FarmRuntimeContext&,const Input&,bool inside,bool click);
+    bool UpdateFirstPerson(const FarmRuntimeContext&,const Input&);
+    farm::FirstPerson fps_;
+    farm::FarmCarrotPull carrotPull_;
+    farmui::FirstPersonHUD fpsHUD_;
+    farmui::FirstPersonFrame fpsFrame_;
+    bool fpsEdition_{},fpsAutoEnter_{},fpsWaitRelease_{};
+    float fpsNoticeSeconds_{};
+    int fpsNotice_{};
     farm::FarmWalkSystem walk_;
     Vector2 walkPointer_{};
     int walkDestination_=-1;
@@ -134,6 +150,7 @@ private:
     void LeaveTerrain(const FarmRuntimeContext& context);
     bool UpdateTerrain(const FarmRuntimeContext& context, const Input& input, bool click);
     bool UpdateFieldClick(const FarmRuntimeContext& context, const Input& input, farm::FieldClick press, bool click, farmui::Request candidate);
+    bool UpdatePondHoe(const FarmRuntimeContext&,const Input&,farm::pond::Stroke,bool inside,bool click);
     bool UpdateHotbarFocus(const FarmRuntimeContext& context, const Input& input, farm::FieldToolWheel previousWheel, bool insideViewport);
     bool UpdateRightTap(const FarmRuntimeContext& context, const Input& input, farm::FieldRightTap gesture, bool insideViewport);
     void UpdateToolWheel(const FarmRuntimeContext& context, const Input& input, farm::FieldToolWheel previous, bool insideViewport);
@@ -183,6 +200,7 @@ private:
     bool frameCaptured_ = false;
     bool fieldInputConsumed_ = false; // Field input is exclusive but does not pause the clock.
     farm::FieldClick fieldPress_;
+    farm::pond::Stroke pondStroke_;
     farm::FieldWheelNotice wheelNotice_;
     farm::FieldRightTap rightTap_;
     farm::FieldToolWheel fieldWheel_;

@@ -1,5 +1,6 @@
 #include "gameplay/GamePlaySessionSystem.h"
 #include "farm/system/FarmDevelopmentSystem.h"
+#include "farm/system/FarmPondBank.h"
 #include "scene/SceneManager.h"
 #include "base/Framework.h"
 #include "base/FrameClock.h"
@@ -439,10 +440,17 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 			1.0f,
 			0.0f);
 	}
-	farmGrid_.Initialize(5, 4);
+	std::error_code editionError;
+	const bool pondEdition = std::filesystem::is_regular_file("Settings/runtime/pond_bank.flag",editionError);
+	const bool firstPersonEdition = std::filesystem::is_regular_file("Settings/runtime/first_person.flag",editionError);
+	if (pondEdition) farm::pond::Start(farmGrid_); else farmGrid_.Initialize(5, 4);
 	farmDateSystem_.Initialize();
 	farmToolSystem_.Initialize();
-	farmEconomySystem_.Initialize();
+	farm::FarmRules startingRules{};
+	if (firstPersonEdition) {
+		startingRules.initialCarrotSeedCount=9; startingRules.initialTomatoSeedCount=6; startingRules.initialPumpkinSeedCount=6;
+	}
+	farmEconomySystem_.Initialize(startingRules);
 	farmGrowthSystem_.Initialize();
 	farmGrowthComparisonSystem_.Initialize();
 	farmIrrigationPreviewSystem_.Initialize();
@@ -452,7 +460,8 @@ InitializationTask GamePlaySessionSystem::InitializeIncrementally() {
 	farmFeedbackSystem_.Initialize();
 	farmHarvestVisualSystem_.Clear();
 	farmPestVisualSystem_.Clear();
-	farmProgressionSystem_.Initialize({}, FarmProgressionMode::ContestSeason, true, true, true);
+	farmProgressionSystem_.Initialize({}, (pondEdition || firstPersonEdition) ? FarmProgressionMode::FreeFarming : FarmProgressionMode::ContestSeason,
+		!(pondEdition || firstPersonEdition), true, true);
 	farmStageAccessSystem_.Bind(farmDateSystem_, farmProgressionSystem_.StagePolicy());
 	farmEconomySystem_.BindStageAccess(farmStageAccessSystem_);
 	farmToolActionSystem_.BindStageAccess(farmStageAccessSystem_);
@@ -1711,11 +1720,13 @@ void GamePlaySessionSystem::Draw() {
 	const farm::FarmIrrigationSystem& displayedIrrigation = irrigationPreviewActive ? *previewIrrigation : lesson ? lesson->Water() : farmIrrigationSystem_;
 	farmRenderer_.Prepare(displayedFarmGrid, farmVisualSystem_, camera_.get(),
 		farmHoveredTile_, irrigationPreviewActive || lesson ? nullptr : &farmHarvestVisualSystem_,
-        !farmRuntimeController_.Farmer() && (lesson || farmRuntimeController_.ShowsLiveGap() || !farmRuntimeController_.PresentsIntroduction()),
+        !farmRuntimeController_.FirstPersonActive() && !farmRuntimeController_.Farmer() && (lesson || farmRuntimeController_.ShowsLiveGap() || !farmRuntimeController_.PresentsIntroduction()),
         !irrigationPreviewActive && !timelineScrubbing_ && farmProgressionSystem_.PestsEnabled() &&
         !farmRuntimeController_.PresentsIntroduction() ? &farmPestVisualSystem_ : nullptr, farmWind_.GetFrame(),
         !lesson && !irrigationPreviewActive ? &farmBrushPlay_ : nullptr,
-        !lesson && !irrigationPreviewActive && !timelineScrubbing_ ? &farmActionParticles_ : nullptr,farmRuntimeController_.Farmer());
+        !lesson && !irrigationPreviewActive && !timelineScrubbing_ ? &farmActionParticles_ : nullptr,farmRuntimeController_.Farmer(),
+        !lesson && !irrigationPreviewActive && !timelineScrubbing_ ? farmRuntimeController_.PondHoeTip() : nullptr,
+        !lesson && !irrigationPreviewActive && !timelineScrubbing_ ? farmRuntimeController_.CarrotGripPose() : farm::CarrotGrip{});
 
 	auto DrawLevelObjects = [&]() {
 		if (!showLevelObjects_) {
@@ -1892,7 +1903,7 @@ void GamePlaySessionSystem::Draw() {
 	if (farmHudInitialized_ || stageClearHudInitialized_) {
 		spriteCommon->PreDraw();
 #ifndef USE_IMGUI
-        if (!farmRuntimeController_.HidesFarmHUD() && !farmRuntimeController_.Farmer()) {
+        if (!farmRuntimeController_.HidesFarmHUD() && !farmRuntimeController_.Farmer() && !farmRuntimeController_.FirstPersonActive()) {
 #endif
 		if (farmHudInitialized_) {
 			farmHud_.Draw(farmRuntimeController_.SimpleField());
@@ -2204,7 +2215,8 @@ bool GamePlaySessionSystem::ResetFarmSessionState()
     farmTimeAdvance_.Reset();
 	const auto mode = farmProgressionSystem_.GetMode();
 	const auto rules = FarmProgressionSystem::InitialRules(mode);
-	if (!farmGrid_.Initialize(5, 4)) {
+	if (!(mode == FarmProgressionMode::FreeFarming ? farm::pond::Start(farmGrid_) :
+		farmGrid_.Initialize(5, 4))) {
 		AddLog("Farm restart failed: invalid grid dimensions.");
 		return false;
 	}
@@ -2256,6 +2268,12 @@ farm::FieldCues GamePlaySessionSystem::UpdateFieldPointerFeedback(bool active) {
 bool GamePlaySessionSystem::TryBuildViewportRay(
 	Vector3& outOrigin, Vector3& outDirection) const
 {
+	return TryBuildViewportRayAt(viewportMousePosition_,outOrigin,outDirection);
+}
+
+bool GamePlaySessionSystem::TryBuildViewportRayAt(Vector2 position,
+	Vector3& outOrigin, Vector3& outDirection) const
+{
 	outOrigin = {};
 	outDirection = {};
 	if (!camera_ || !viewportHovered_ ||
@@ -2263,8 +2281,8 @@ bool GamePlaySessionSystem::TryBuildViewportRay(
 		return false;
 	}
 
-	const float u = (viewportMousePosition_.x - viewportImageTopLeft_.x) / viewportImageSize_.x;
-	const float v = (viewportMousePosition_.y - viewportImageTopLeft_.y) / viewportImageSize_.y;
+	const float u = (position.x - viewportImageTopLeft_.x) / viewportImageSize_.x;
+	const float v = (position.y - viewportImageTopLeft_.y) / viewportImageSize_.y;
 	if (!std::isfinite(u) || !std::isfinite(v) ||
 		u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) {
 		return false;
@@ -2463,6 +2481,7 @@ void GamePlaySessionSystem::ToggleCameraMode() {
 }
 
 void GamePlaySessionSystem::UpdatePlayerCamera() {
+	if (farmRuntimeController_.FirstPersonActive()) return;
 	if (!usePlayerCamera_ || !levelGameplay_.HasPlayer()) {
 		return;
 	}
@@ -2986,6 +3005,7 @@ void GamePlaySessionSystem::AddLog(const std::string& message) {
 
 void GamePlaySessionSystem::Finalize()
 {
+	if (framework_) framework_->SetFieldMouseLook(false);
     farmRainAudio_.Finalize();
     farmFieldAudio_.Finalize();
     farmRuntimeController_.FinalizePresentationAudio();
@@ -3122,6 +3142,18 @@ FarmRuntimeContext GamePlaySessionSystem::RuntimeContext() {
         .levelGameplay = levelGameplay_,
         .pestVisual = &farmPestVisualSystem_,
     };
+}
+void GamePlaySessionSystem::SetFieldLens(bool enabled) {
+    if (!camera_) return;
+    constexpr float fieldVerticalFov=1.18f;
+    if (enabled && !overviewLens_) {
+        overviewLens_=camera_->GetFovY();
+        camera_->SetFovY(fieldVerticalFov);
+    } else if (!enabled && overviewLens_) {
+        camera_->SetFovY(*overviewLens_);
+        overviewLens_.reset();
+    } else return;
+    camera_->Update();
 }
 void GamePlaySessionSystem::ApplyCameraPose(const farm::OverviewPose& pose, bool updateOverview) {
     const auto finite = [](const Vector3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };

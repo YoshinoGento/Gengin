@@ -219,6 +219,8 @@ struct FarmTile {
 	FarmPestState pests{};
 	bool repellentPlant = false;
 	FarmMoldState mold{};
+	// A ditch dug along the pond still has its outer earthen wall.
+	bool retainsPondBank = false;
 };
 
 inline bool IsValidFarmTileFeature(FarmTileFeature feature) noexcept

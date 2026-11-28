@@ -15,9 +15,11 @@ public:
 		int selectedX = 0;
 		int selectedY = 0;
 		std::vector<FarmTile> tiles;
+		bool pondBank = false;
 	};
 
 	bool Initialize(int width, int height);
+	[[nodiscard]] bool HasPondBank() const noexcept { return pondBank_; }
 	void MoveSelection(int dx, int dy);
 	bool SetSelectedIndex(int index);
 	int GetWidth() const { return width_; }
@@ -48,6 +50,7 @@ private:
 	int selectedY_ = 0;
 	std::vector<FarmTile> tiles_;
 	uint64_t generation_ = 0;
+	bool pondBank_ = false;
 };
 
 } // namespace farm

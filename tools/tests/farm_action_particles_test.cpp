@@ -425,6 +425,27 @@ void FirstArrival() {
     undo.water.UpdateWater(undo.grid,.05f,1); undo.Tick();
     Check(undo.fx.WaterFront(undo.grid,17).parent<0 && undo.fx.WaterFront(undo.grid,12).fraction==1,"wave survived disconnection");
 }
+void PondArrival() {
+    for (int gate:{9,19}) {
+        Field f; Check(pond::Start(f.grid),"pond scene");
+        Check(f.tools.DigCanalAt(f.grid,14,false),"sealed middle ditch");
+        Check(f.tools.DigCanalAt(f.grid,gate),"open side mouth");
+        f.Tick();
+        int seen[20]{};
+        for (int frame=1;frame<65;++frame) {
+            f.water.UpdateWater(f.grid,.05f,1); f.Tick();
+            for(int i:{gate,14,13}) {
+                auto r=f.fx.WaterFront(f.grid,i);
+                if(r.fraction<=0 || r.fraction>=1) continue;
+                if(!seen[i]) seen[i]=frame;
+                if(i==gate) Check(r.fromPond && r.parent==-1 && r.outlet==14,"missing outside-to-turn wave");
+                else Check(!r.fromPond && r.parent==(i==14?gate:14),"wave coming from tool instead of donor");
+            }
+        }
+        Check(seen[gate]>0 && seen[14]>seen[gate] && seen[13]>seen[14],"side to side arrival order");
+        Check(!f.fx.WaterFront(f.grid,gate).fromPond,"pond wave repeated");
+    }
+}
 // Optional QA trace: vertices in tile-local coordinates, exactly as submitted by the field batch.
 void Trace(const char* path) {
     std::ofstream file(path,std::ios::binary);
@@ -459,7 +480,7 @@ void Trace(const char* path) {
 }
 }
 int main(int argc,char** argv) try {
-    ContactSounds(); Tools(); Water(); FirstArrival(); DirectionalSoilArrival(); Sowing(); HandWater(); HoeContact(); BasketSpill(); HarvestSizes();
+    ContactSounds(); Tools(); Water(); FirstArrival(); PondArrival(); DirectionalSoilArrival(); Sowing(); HandWater(); HoeContact(); BasketSpill(); HarvestSizes();
     if (argc==3 && std::string_view(argv[1])=="--trace") Trace(argv[2]);
     std::cout<<"PASS: committed tools, sowing, can pose, drops, rebound, soaking, every crop, water paths, preview, capacity and geometry\n";
     return 0;

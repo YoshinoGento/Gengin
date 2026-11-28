@@ -51,6 +51,9 @@ public:
 	bool TriggerMouseButton(InputMouseButton button) const;
 	bool ReleaseMouseButton(InputMouseButton button) const;
 	Vector2 GetMousePosition() const;
+	WinApp::LeftDragSample ReadLeftDrag() const noexcept {
+		return winApp_ ? winApp_->ReadLeftDrag() : WinApp::LeftDragSample{};
+	}
 	Vector2 GetMouseDelta() const;
 	int GetMouseWheelDelta() const;
 	bool IsGamepadConnected() const;

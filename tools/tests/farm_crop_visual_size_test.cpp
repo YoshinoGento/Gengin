@@ -1,5 +1,7 @@
 #include "farm_test_edit.h"
 #include "farm/system/FarmVisualSystem.h"
+#include "farm/system/FarmFirstPerson.h"
+#include "farm/render/FarmCarrotGripPose.h"
 #include "farm/system/FarmIrrigationSystem.h"
 #include "farm/core/FarmGrid.h"
 #include "farm/render/FarmMeshLayout.h"
@@ -132,6 +134,57 @@ static void CheckSizedMotion() {
     }
 }
 int main() {
+    {
+        using namespace farm;
+        FarmCarrotPull g;
+        PullInput start{true,true},down{false,true},up{};
+        assert(g.Step(2,1,{true,false},up,0));
+        assert(!g.Step(2,1,up,up,0));
+        assert(!g.Step(2,1,start,up,.120001f) && g.Pose(0).tension==0); g.Cancel();
+        assert(!g.Step(2,1,start,up,.04f) && g.Pose(0).tension==0);
+        assert(!g.Step(2,1,down,{true,false},1) && Near(g.Pose(0).tension,1));
+        assert(!g.Step(3,1,down,up,.01f) && !g.Step(3,1,up,up,.01f));
+        assert(!g.Step(2,1,up,start,.3f) && !g.Step(2,2,up,up,0));
+        assert(!g.Step(2,2,up,start,.3f));
+        assert(g.Step(2,2,down,up,0) && !g.Step(2,2,up,up,0));
+        assert(!g.Step(2,2,start,up,1)); g.Cancel(); assert(!g.Step(2,2,up,up,0));
+        FarmTileVisualData bed{}; bed.valid=true; bed.crop=CropType::Carrot; bed.cropStage=FarmCropGrowthStage::Ready;
+        float previous=0;
+        for(float scale:{.7f,1.5f}) {
+            bed.cropScale=scale;
+            auto crop=BuildFarmCropMeshParts(bed,1); const auto original=crop;
+            size_t count=0; float thickness=0;
+            VisitCarrotGrip(bed,{2,1.f,.7f},crop,[&](const FarmMeshPart& p){
+                assert(p.scale.x>0 && p.scale.y>0 && p.scale.z>0);
+                if(count==1) thickness=p.scale.y;
+                ++count;
+            });
+            assert(count==kGripParts && thickness>previous); previous=thickness;
+            assert(Near(crop.parts[0].position.y-original.parts[0].position.y,crop.parts[1].position.y-original.parts[1].position.y));
+        }
+        std::cout<<"PASS: carrot tap, hold, release once, cancel, target/board/input identity and soil response\n";
+    }
+    {
+        farm::FirstPerson fps;
+        fps.Enter(5,4,{});
+        auto diagonal=fps,straight=fps;
+        diagonal.Step(1,1,0,0,.05f,5,4);
+        straight.Step(0,1,0,0,.05f,5,4);
+        assert(Near(std::hypot(diagonal.x-fps.x,diagonal.z-fps.z),straight.z-fps.z));
+        for(int i=0;i<200;++i) fps.Step(1,1,0,0,.08f,5,4);
+        assert(fps.x<5 && fps.z<4);
+        farm::FarmGrid board; assert(board.Initialize(3,3));
+        farm::FarmVisualSystem visual; visual.Initialize({});
+        auto eye=visual.GetTileCenter(board,4)+Vector3{0,1.2f,0};
+        assert(visual.PickWorkTarget(board,eye,{0,-1,0},2)==4);
+        assert(visual.PickWorkTarget(board,eye,{0,-1,0},.25f)==-1);
+        assert(visual.PickWorkTarget(board,eye,{0,1,0},3.5f)==-1);
+        farm::FarmTile plant{}; plant.state=farm::FarmTileState::Planted; plant.crop=farm::CropType::Tomato; plant.growth=1;
+        assert(board.SetTile(4,plant));
+        eye=visual.GetTileCenter(board,4)+Vector3{0,.24f,-1.5f};
+        assert(visual.PickWorkTarget(board,eye,{0,0,1},2)==4);
+        std::cout<<"PASS: normalized FPS walk, board edges, soil reach and plant targeting\n";
+    }
     for (float scale : {.5f,1.f,2.f}) {
         farm::FarmTileVisualData v{}; v.valid=true; v.crop=farm::CropType::Pumpkin;
         v.cropStage=farm::FarmCropGrowthStage::Ready; v.cropScale=scale;

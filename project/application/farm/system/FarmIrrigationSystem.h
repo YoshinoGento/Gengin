@@ -4,14 +4,19 @@
 #include "farm/core/FarmTypes.h"
 
 #include <cstdint>
+#include <array>
 #include <vector>
 #include <span>
 
 namespace farm {
+enum class SoilIntake { PathStrength, LocalContact };
+enum class CanalTransport { ParentTree, LocalEdges };
 
 class FarmGrid;
 
 struct FarmIrrigationTileFlow {
+	// Signed volume crossing west, east, north, south faces; external refill is separate.
+	std::array<float,4> outward{};
 	float sourceRefill = 0.0f;
 	float incoming = 0.0f;
 	float outgoing = 0.0f;
@@ -19,7 +24,7 @@ struct FarmIrrigationTileFlow {
 	float soilSent = 0.0f;
 	float rainReceived = 0.0f;
 	std::uint64_t firstInflowRevision = 0; // Survives multiple fixed updates between renders.
-	int soilDonor = -1; // Actual donor, including retained water, only on positive delivery.
+	int soilDonor = -1; // Unique donor; -2 means multiple contributors, -1 no receipt.
 };
 
 struct FarmIrrigationStepSummary {
@@ -37,7 +42,8 @@ struct FarmIrrigationStepSummary {
 // Owns finite reservoir flow and soil delivery; topology is potential reachability.
 class FarmIrrigationSystem final {
 public:
-	void Initialize(const FarmRules& rules = {}) noexcept;
+	void Initialize(const FarmRules& rules = {}, SoilIntake intake=SoilIntake::PathStrength,
+		CanalTransport transport=CanalTransport::ParentTree) noexcept;
     [[nodiscard]] float GetMaxUpdateDeltaTime() const noexcept { return maxDeltaTime_; }
 	void Rebuild(const FarmGrid& grid);
 	bool UpdateWater(FarmGrid& grid, float deltaTime, float timeScale, float soilRainPerSecond = 0.0f);
@@ -66,12 +72,21 @@ public:
 	}
 
 private:
+	CanalTransport transport_=CanalTransport::ParentTree;
+	struct CanalEdge { int from,to,face; };
+	std::vector<int> distance_;
+	std::vector<CanalEdge> forwardEdges_;
+	void RecordTransfer(int from,int to,int face,float volume);
+	void MoveAcrossEdges(double dt);
+    SoilIntake intake_=SoilIntake::PathStrength;
+    bool ApplyLocalIntake(FarmGrid& grid,double dt);
 	struct MeasuredTileIdentity {
 		int height = 0;
 		FarmTileFeature feature = FarmTileFeature::None;
 		FarmTileState state = FarmTileState::Empty;
 		CropType crop = CropType::None;
 		bool irrigationEnabled = true;
+		bool retainsPondBank = false;
 	};
 	[[nodiscard]] bool MeasurementMatches(const FarmGrid& grid) const noexcept;
 	FarmIrrigationStepSummary lastStep_;
@@ -96,6 +111,7 @@ private:
 	std::vector<int> supplyingCanalIndices_;
 	std::vector<int> traversalQueue_;
 	int waterSourceCount_ = 0;
+	int pondOutlets_ = 0;
 	int suppliedCanalCount_ = 0;
 	int irrigationRangeTileCount_ = 0;
 	float sourceStrength_ = FarmRules{}.irrigationSourceStrength;

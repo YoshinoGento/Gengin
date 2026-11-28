@@ -52,6 +52,8 @@ farm::FarmGrid::Snapshot Decode(const Json& j) {
         farm::FarmTile tile{};
         tile.heightLevel = Integer(value.at("height"), 0, 2);
         tile.feature = static_cast<farm::FarmTileFeature>(Integer(value.at("feature"), 0, 2));
+        tile.retainsPondBank = value.value("retainsPondBank",false);
+        Require(!tile.retainsPondBank || tile.feature==farm::FarmTileFeature::Canal);
         if (version >= 2) {
             Require(value.at("irrigationEnabled").is_boolean());
             tile.irrigationEnabled = value.at("irrigationEnabled").get<bool>();
@@ -111,6 +113,7 @@ bool FarmLayoutSystem::SaveNew(const std::string& name, const farm::FarmGrid& gr
                 {"irrigationEnabled", tile->irrigationEnabled},
                 {"repellentPlant", tile->repellentPlant},
                 {"cultivated", tile->feature == farm::FarmTileFeature::None && tile->state != farm::FarmTileState::Empty}});
+            if (tile->retainsPondBank) tiles.back()["retainsPondBank"]=true;
         }
         const Json json{{"kind", "farm_layout"}, {"version", 3}, {"name", name},
             {"width", grid.GetWidth()}, {"height", grid.GetHeight()}, {"tiles", std::move(tiles)}};
@@ -141,6 +144,9 @@ bool FarmLayoutSystem::Load(const std::string& id, farm::FarmGrid& grid, int max
     try {
         auto snapshot = Decode(Read(Utf8Path(directory_) / (id + ".json")));
         Require(snapshot.width == grid.GetWidth() && snapshot.height == grid.GetHeight());
+        snapshot.pondBank = grid.HasPondBank();
+        if (snapshot.pondBank) for (const auto& t : snapshot.tiles)
+            Require(t.feature != farm::FarmTileFeature::WaterSource);
         const int selection = grid.GetSelectedIndex();
         snapshot.selectedX = selection >= 0 ? selection % snapshot.width : 0;
         snapshot.selectedY = selection >= 0 ? selection / snapshot.width : 0;

@@ -45,6 +45,7 @@ public:
 	Audio* GetAudio() const { return audio_.get(); }
 	Input* GetInput() const { return input_.get(); }
 	const WinApp* GetWinApp() const { return winApp_.get(); }
+	void SetFieldMouseLook(bool enabled);
 	SpriteCommon* GetSpriteCommon() const { return spriteCommon_.get(); }
 	Object3dCommon* GetObject3dCommon() const { return object3dCommon_.get(); }
 	ModelManager* GetModelManager() const { return modelManager_.get(); }

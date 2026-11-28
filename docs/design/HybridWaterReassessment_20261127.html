@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>水路農業 | 水の技術・ゲーム設計の再審査</title>
+<style>
+body{max-width:58rem;margin:auto;padding:2rem 1.2rem 4rem;color:#192d30;background:#fafbf8;font:16px/1.8 system-ui,sans-serif;overflow-wrap:anywhere}h1,h2,h3{line-height:1.4}h2{margin-top:2.4rem;border-bottom:1px solid #9bada8;padding-bottom:.3rem}a{color:#12635d}table{border-collapse:collapse;width:100%;margin:.8rem 0}td,th{border-bottom:1px solid #c4ceca;padding:.55rem;text-align:left;vertical-align:top}th{background:#e9efeb}li{margin:.35rem 0}code{font-size:.91em}small{color:#46615c}.lead{border-left:4px solid #24736b;padding-left:1rem}@media(max-width:40rem){body{padding:1rem}.wide{overflow-x:auto}.wide table{min-width:36rem}}@media print{body{max-width:none;font-size:10pt}h2,h3{break-after:avoid}tr{break-inside:avoid}}
+</style>
+<main>
+<small>設計審査 ／ 2026-11-27 ／ HEAD fa00c4a の作業ツリー</small>
+<h1>水路を変えると、収穫の何が変わるか</h1>
+<p class="lead"><b>判断：本編の水量は既存のCPU灌漑を正本とし、実際に辺を渡った量から水面・落水・泡を描く。高さ場ソルバーとGPU粒子は別々に採否を決める。</b> 掘った畑で水の行き先を読み直せることが先。波や粒を増やすだけでは、選べる農作業は増えない。</p>
+<p><a href="HybridWaterReview_20261127.html">前回レビュー</a>の監査項目を再読し、下記のソースを照合。既存のCPUテスト2本を現ソースから再ビルドして実行した。以下の「実測」はそのテスト結果、「確認」は静的に追えた動作、「判断・提案」は推論、「仮説」は未検証。GPUを計測した報告でも、新しい水を実装した報告でもない。</p>
+<h2>1. 独立調査：資料から何を借りるか</h2>
+<ul>
+<li><a href="https://matthias-research.github.io/pages/publications/hfFluid.pdf">Chentanez &amp; Müller, SCA 2010（著者論文）</a>：浅水流の高さ場と飛沫の間で質量・運動量を交換する。落水など高さ場では表せない部分を粒子が担う。本作の初版は逆に、飛沫を消しても給水と収穫が変わらない片方向の表示とする。これは論文の再実装ではない。</li>
+<li><a href="https://advances.realtimerendering.com/s2010/index.html">Valve, Water Flow in Portal 2（SIGGRAPH講演）</a>：流向・速さを表すテクスチャで法線と水上の模様を動かす。<a href="https://media.gdcvault.com/gdc2018/presentations/Grujic_Branislav_WaterRenderingFarCry5.pdf">Ubisoft / AMD, Water Rendering in Far Cry 5（GDC講演）</a>：地形・水位からFlow Mapを生成する例。本作では手描きの固定地図にせず、掘削後の開口と実流量から方向を更新する。水面の動きを描く方法であり、どの畑に何量届くかの計算ではない。</li>
+<li><a href="https://mmacklin.com/pbf_sig_preprint.pdf">Macklin &amp; Müller, Position Based Fluids（SIGGRAPH論文）</a>：密度制約を反復して粒子群自体を液体にする。自由表面の分裂には利点があるが、既存の弾道粒子に重力を足しただけではPBFにならない。農場全面で近傍探索、反復、表面生成を引き受ける理由は現状ない。</li>
+<li><a href="https://www.youtube.com/watch?v=1R5WFZk86kE">John LinのVoxel Waterデモ</a>は見た目の比較対象。動画の公開情報から解法や本作での速度は断定しない。<a href="https://juandiegomontoya.github.io/teardown_breakdown.html">MontoyaのTeardownフレーム解析</a>は第三者による観察で、開発元の流体仕様ではない。借りたいのは低い面数でも光の当たり方で厚みを読ませる発想。煙の膨らみ・滞空・全面の白さは水には持ち込まない。</li>
+</ul>
+<h2>2. 現行設計の強みと限界</h2>
+<p><b>確認：</b><a href="../../project/application/farm/system/FarmIrrigationSystem.cpp">FarmIrrigationSystem::Rebuild / UpdateWater</a>は池沿いの開口または水源から到達可能な水路を探索し、同じ更新前スナップショットから分岐へ有限の水を渡す。土が要求した量を水路の在庫に応じて配分し、供給停止後の残水も利用できる。<a href="../../project/application/farm/system/FarmPondBank.h">池岸</a>のある盤では東岸の定義された区間が取水口で、全方角から勝手に湧くわけではない。<a href="../../project/application/farm/system/FarmGrowthSystem.cpp">作物</a>は水分適正域を評価する。取水から収穫までの因果関係は、すでにある。</p>
+<p><b>限界：</b>探索済みの隣を飛ばして上流を一つに決めるため、ループの二本目や対向する合流は実水理にならない。左右対称の二経路でも探索順で選ばれ得る。「輪を掘ったから給水量が倍」「水位が逆転したから逆流する」と表示してはいけない。フィールドの在庫は正規化値でメートルではない。高解像度の見た目に換算する場合は断面と容量の対応を明記する。</p>
+<p><a href="../../project/application/farm/lab/CanalLabSystem.cpp">CanalLabSystem::Flow</a>は共有辺を一度巡回し、水頭差・移送元の残量・宛先の空きに応じた同量を差し引き・加算する。流向は毎ステップ集計し直し、運動量を保持しない。漏水、土手、経路を比較する参照器としては良い。固定盤、外周池、吸い込み地形、受け皿の目標は実験条件で、本編の農業仕様ではない。</p>
+<h2>3. 実測：水路の差と、作物にとっての差</h2>
+<p><a href="../../tools/tests/canal_lab_test.cpp">試験田の既存テスト</a>：同じ11×7盤で固定1/60秒、2,100ステップ。初着は受け皿の量が0.03超、目標は1.55以上。秒はシミュレーション時間。漏水は35秒間の累積モデル量で、リットルではない。</p>
+<div class="wide"><table><tr><th>流し方</th><th>初着</th><th>目標到達</th><th>累積漏水</th></tr>
+<tr><td>北の短路、漏れたまま</td><td>0.57秒</td><td>35秒以内は未達</td><td>28.3182</td></tr><tr><td>同じ短路、漏れ側に土手</td><td>0.42秒</td><td>4.13秒</td><td>0</td></tr><tr><td>西から長く迂回</td><td>0.88秒</td><td>6.18秒</td><td>0</td></tr></table></div>
+<p><a href="../../tools/tests/farm_irrigation_balance_test.cpp">本編の灌漑・栽培テスト</a>：1,215通りの配置等の組合せと、乾燥開始243通りの検査が成功。抜粋：production設定、短水路・2区画のニンジン、晴天・1倍。区画の給水を開けたままでは平均品質91、平均収穫可能時刻15.050秒、土への累積給水1.174。2秒ごとに土の湿りを判定し必要時だけ切り替えると、操作2回、品質92、15.017秒、給水0.719。水は節約できても、この盤では収穫時刻と品質の差は小さい。これは池岸を含む手プレイの実測ではなく、他作物や全盤面への一般化もしない。</p>
+<p><b>設計判断：</b>短路を補修したら最速で漏れもゼロという上の結果だけでは、補修が常に正解になりかねない。一方、初心者向けのニンジンで操作をしなくても育つのは長所であり、差を見せるために失敗作物を増やすべきではない。試すのは「正しい開閉時刻を当てる」ことではなく、同じ水をどの畝に先に使うか。</p>
+<h2>4. 比較と採否</h2>
+<div class="wide"><table><tr><th>候補</th><th>解決できること</th><th>できないこと・採用条件</th></tr>
+<tr><td>A 既存配水＋流向に沿う連続面</td><td>今の区画別配水、止水、土への到達を、見下ろしと一人称で一致させる。既存セーブを守りやすい。</td><td>逆流や背水は再現しない。まず本編の比較基準とする。</td></tr>
+<tr><td>B 水路網の辺を使う小さな貯留モデル</td><td>区画に在庫、開口に符号付き移送量。水位差で分岐・再合流・留め水を扱える。保存量を追いやすい。</td><td>これは完全な浅水流方程式ではない。広い池の横波や飛び越える流れは解けない。Aで不可能な選択が作物の結果に必要になったら、試験田内で比較する。</td></tr>
+<tr><td>C 細分化した2D浅水流＋視覚粒子</td><td>幅のある浅い地形で、水位・面内運動量・濡れ前線を扱える。</td><td>高さ場は一点に水面一枚。鉛直の滝や空洞は別表現。地形に沿う静水、wet/dry、CFLに基づくサブステップも必要。横への氾濫や逆向きの波を読んでプレイを変える場面ができた場合に限る。</td></tr>
+<tr><td>D 全面3D粒子／ボクセル流体</td><td>重なる水面、空洞、飛散する水塊などを扱う選択肢。</td><td>農場のセーブ・Undo・再現性・解像度依存の見た目まで複雑にする。現行の遊びには採用しない。GPU描画の飛沫を少数使うこととは別問題。</td></tr></table></div>
+<p><b>前回に賛成：</b>ゲーム水量の正本は一つ。粒子は初版で水量を運ばない。独立シーン、再生入力、粒子なしの比較、Fence管理は維持する。<b>反対：</b>前回の段階1で有限体積の浅水流を先に作り、本編の一列を段階5まで待つ順序。Cが通ってもAより楽しいことは証明できない。まず同じ一区画・同じ入力で基準映像と農作業の結果を取り、それを独立場でも再生する。</p>
+<h2>5. ひとつだけ遊びを足すなら</h2>
+<p><b>提案：手前の畝に今すぐ届けるか、くぼみに一度ためて奥の畝へ回すか。</b> 初回は水のある岸を見て一か所掘るだけ。すぐに表土が濃くなり、作物まで水が届いたことを見せる。次の小区画では、乾いた手前の畝、少し湿った奥の畝、一回分の限られた取水を置く。手前へ直結すればすぐ潤う。脇のくぼみにためると初着は遅いが、取水を閉じた後、自分のタイミングで奥へ回せる。どちらも収穫はできる。</p>
+<p>限られた取水はこの比較区画だけの実験条件。水源が無限に補給し、待つことにも機会費用がなければ、貯水は手数の多い迂回になる。初期水分と必要な畝の位置を入れ替えた二盤面で、選ばれる経路が変わるかを見る。毎回同じ水路・同じタイミングが勝つ、あるいはプレイヤーが時計だけを見るなら不採用。全周取水・罰としての枯死・恒常的な漏水警告・毎秒のゲート操作・新しい常時HUDは足さない。じょうろは失敗から戻る手段として残す。到達や湿りはすぐ、収穫の違いは後で返す。</p>
+<h2>6. 推奨する描画とデータの流れ</h2>
+<p><code>鍬・開閉入力 → 既存の農業コマンド → 固定更新で配水を確定 → 辺の移送量／在庫／土への受領量 → 連続水面・落水帯 → 必要箇所の飛沫・表面泡</code>。水面の模様や泡から作物に給水しない。</p>
+<ul>
+<li>本編の木状の配水では、子の実流入量と上流IDからその辺の移送量を取れる。分岐の合計を各枝すべてに流さない。将来Bで複数上流を許す時だけ、辺ごとの実移送量を計算箇所で明示的に保存する。辺の見かけ流速が必要なら断面と単位を定義し、正規化量をそのままm/sと呼ばない。</li>
+<li>底・護岸・開口から同じ濡れ領域を切り出し、そこへ水面と泡を載せる。L字は両端の向きに沿って模様を曲げる。岸を挟んだ隣とは補間しない。静水は細い反射と底が読める面だけ。水路の角や飛沫に少数の面と明暗差を残し、水面全体を立方体の粒で埋めない。</li>
+<li>落差のある通水辺だけで、上の水面から下の実際の着水面まで一枚の帯を伸ばす。帯の幅・衝突位置・飛沫発生率は同じ移送量と断面を使う。着水時だけ水滴を横へ跳ねさせ、戻った滴は消し、泡は濡れた面の下流へ運ぶ。閉鎖時は新規発生を止め、すでに飛んだ滴だけ寿命まで残す。</li>
+<li>描画フレームの途中で固定更新が複数回進む場合、最後の1ステップだけでは落水量を取り逃がす。前回描画以降の辺の移送量を積算し、地形世代・ステップで単発イベントを一度だけ消費する。Undo・ロード・区画切替で古い見た目を破棄。<a href="../../project/application/farm/system/FarmCanalArrival.h">既存の初着記録</a>と別の前線タイマーを独立に進めない。</li>
+</ul>
+<h2>7. コードとDirectX 12の審査</h2>
+<ul>
+<li><b>優先度 高・初期化失敗：</b><a href="../../project/engine/effect/ParticleManager.cpp">ParticleManager::CreateGPUParticleResources</a> は確保直後に <code>resource-&gt;Map</code>、成功確認は一部がassertのみで、続いてマップ先に書く。<a href="../../project/engine/base/SrvManager.cpp">SrvManager</a> は枯渇時に無効indexを返せる。既存経路の拡張前に、Resource、全Descriptor、Mapの成功を検査し、部分確保を巻き戻す。失敗時は水面のみで遊べるようにする。クラッシュを今回観測したという意味ではない。</li>
+<li><b>優先度 高・試作を本編の編集に流用しない：</b>CanalLabの <code>Edge</code> は <code>Dig(a)</code> の後で <code>Dig(b)</code> が失敗し得る。<code>Stroke</code> も途中でfalseを返すが既変更マスを戻さない。例えば付属盤の地面(2,0)から岩(2,1)に向かう操作。試験田で有用な地形条件だけ借り、本編では全経路を検査して一括確定、または部分成功を明示しUndoに載せる。既存テストの岩ケースは始点不変までは検査しない。</li>
+<li><b>所有と寿命：</b>本編状態はIrrigation、成長はGrowth。提示用の水量・流向はゲーム側で組み立てる。Sceneは進行、UIは入力通知と表示のみ。<code>GetLastTileFlows</code> のspanやFarmTileへのポインタを次の更新・非同期描画に持ち越さない。必要な辺と世代だけを再使用バッファに転記。GPU側は描画資源とslotの所有者を一つにし、汎用エンジンには農場・作物の型を入れない。最初から複数のソルバー基底クラスや専用Queueを作らない。</li>
+<li><b>安全性：</b>辺とセルの境界、乾燥時のゼロ除算、NaN/Inf、粒子番号・空きリストのOOB、未初期化カウンタ、イベント上限を検査する。満杯なら表示イベントだけ棄却し数える。ゲームの水量は失わない。スロット数やHLSLとのレイアウト契約はconstexpr/static_assert、流れの見え方や飛沫しきい値は単位・許容範囲・既定値のある既存設定に寄せる。内部同期や配列境界までJSONに出さない。</li>
+<li><b>CPU/GPUの費用：</b>現行の <a href="../../project/application/farm/render/FarmFieldEffectRenderer.cpp">畑エフェクト</a>はCPUで頂点を書き、まとめてDrawする。少数の飛沫の比較基準になる。GPU通常プールは単一emitterデータ、加算、1024枠分描画であり、空き枠が多くても描画指定数は減らない。複数落口なら有界の要求をまとめて送る。飛沫は遠景で水面上の泡へ切替。GPU化・生存粒子の圧縮・Indirect Drawは画面占有率と時間を測ってから。</li>
+<li><b>不要コピーと確保：</b>UpdateWaterは盤を複数回走査し、タイルの値コピーとSetTile、作業配列のassign/resizeを使う。assignを毎回の再確保とは断定しない。大盤で走査時間・確保回数を測る。<a href="../../project/application/farm/system/FarmTerrainQuerySystem.cpp">SampleGround</a>はタイルを走査して必要時に表示用部品まで作るので、全飛沫から呼ばない。必要になったら編集時に底・壁・開口を更新し、その世代の衝突データを参照する。</li>
+<li><b>Barrier・Fence・VRAM：</b>初版は既存Direct Queue。GPU更新を採ったら、同じUAVの書き込みに後続Dispatchが依存する箇所にUAV Barrier、VSで読む前に適切なSRV StateへTransition。深度をサンプルするならwrite DSVと重ねない。<a href="../../project/engine/base/DirectXCommon.cpp">PostDraw</a>はPresent後にFenceをSignalし必要時CPU待機。共有512 Descriptorを解放すると即再利用可能になるため、GPUが参照する間に解放しない。フレーム末尾の待機は同一フレームの複数Dispatchによる同一Uploadアドレス上書きを救わない。要求配列・CB領域は実行完了まで不変とし、終了・Resize・初期化失敗を含めて使用量を記録する。<a href="https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12">Microsoft: Resource Barriers</a> ／ <a href="https://learn.microsoft.com/en-us/windows/win32/direct3d12/fence-based-resource-management">Fenceによる領域再利用</a>。</li>
+</ul>
+<h2>8. 検証の順序と中止条件</h2>
+<ol>
+<li><b>本編の比較基準：</b>粒子OFF、既存の岸・水路・畝で「どこから来て、次にどの畝が濡れるか」を質問。見下ろしと一人称で同じ操作を記録。土の濡れと受領量にずれが出たら先に直す。</li>
+<li><b>遊びの比較：</b>同じ水予算・作物・初期状態で直結と貯留を入れ替えて遊ぶ。初見5人を目安に順序を交互にし、予測、掘り直しの理由、待ち時間、収穫結果、もう一度試したい理由を記録する。仮の通過条件は4/5人が説明なしに到達先を予測でき、二盤面で行動を変えた理由を具体的に話せること。小人数は問題発見用で、人気や統計的優位を証明しない。差が出なければCには進まない。</li>
+<li><b>WaterTestScene：</b>本編のセーブを使わず、同じ地形・固定入力を再生する。L字、Y字・再合流、静水、段落ち、枯れた区間、閉鎖後の残水、途中地形編集。Aで発生しない逆流は「未対応」と記録し、Bと混同しない。受入：総在庫変化＝取水－土への供給－明示的排水（雨の土への直達は別勘定）、NaN・負量なし、閉鎖辺を越える移送ゼロ。粒子ON/OFFで作物・保存結果一致。ゼロ在庫には絶対誤差を使う。</li>
+<li><b>水面→飛沫：</b>同じカットで旧版、水面のみ、少数CPU飛沫、必要ならGPU飛沫を比較。流向・先頭が粒子なしで読める、同時二落口の片方が消えない、途中閉鎖後に新規の泡が湧かないこと。通常距離で違いを識別できないならGPU化を止める。</li>
+<li><b>提出候補の実機：</b>対象GPUを先に決め、Release 1080p、同じカメラ・入力、ウォームアップ後600フレーム以上。水なし／面／面＋飛沫でCPU更新p95、GPUパスp95、Draw/Dispatch、動的確保、粒子数・棄却、Descriptor高水位、ローカルメモリ使用差を取る。前回の水GPU 2 ms・CPU 1 msは仮予算で実績ではない。GPUは<a href="https://learn.microsoft.com/en-us/windows/win32/direct3d12/queries">timestamp query</a>、CPUはPresent待ちを除いて測る。別走行でDebug Layer・GPU Validation、シーン往復・Resize各条件の復帰を確認。遊びが成立しない機能をベンチだけで救済しない。</li>
+</ol>
+<h2>9. 採用作品としての判定と未検証事項</h2>
+<p><b>現状：</b>水収支と作物への移送には説明・再現できる強みがある。ただし、粒子の多さや「Hybrid」という呼称だけでは主技術として弱い。<b>条件付きで推す見せ方：</b>同じ量の水で異なる掘り方を二つ見せ、どの畝が先に潤い、何を収穫できたかを見せる。その同じ映像に辺の移送量とGPU時間を重ねる。担当した計算、既存エンジン、参考手法、意図して省いた現象を一枚で説明できること。独自性は新しい流体方程式ではなく、農作業と表示を食い違わせず、一つの判断として遊べる統合に置く。</p>
+<p><b>未検証：</b>貯留が反復しても面白いか、通常距離で泡が読みやすさを増すか、BやCが必要な盤面があるか、対象GPUでのGPU時間・VRAM・長時間安定性、他PCでの動作、採用担当者の反応。今回、新しい画面の撮影、人間によるプレイテスト、GPU計測、Releaseゲーム本体のビルドは行っていない。</p>
+</main></html>

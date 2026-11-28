@@ -315,9 +315,11 @@ void FarmActionParticles::Step(float dt,const FarmGrid& grid,const FarmIrrigatio
     if(const auto hit=hoe_.Advance(grid,dt)) ScatterHoeImpact(*hit);
 }
 void FarmActionParticles::EmitArrival(arrival::Beat beat,int tile,int parent,const FarmGrid& grid,const FarmIrrigationSystem& water,const FarmVisualSystem& visual) {
-    const auto dst=visual.GetTileVisualData(grid,tile), src=visual.GetTileVisualData(grid,parent);
-    if(!dst.valid || !src.valid) return;
+    const auto dst=visual.GetTileVisualData(grid,tile);
+    if(!dst.valid) return;
     if(beat==arrival::Beat::Soil) {
+        const auto src=visual.GetTileVisualData(grid,parent);
+        if(!src.valid) return;
         if(count_>=kWaterBudget) return;
         // Start on the donor side of the flat soil plateau, below the raised ridges.
         const auto delta=dst.center-src.center;
@@ -332,10 +334,14 @@ void FarmActionParticles::EmitArrival(arrival::Beat beat,int tile,int parent,con
         return;
     }
     if(count_+2>kWaterBudget) return;
-    const int out=arrivals_.Surface(tile).outlet;
-    if(out>=0 && water.GetUpstreamTileIndex(out)==tile && out%grid.GetWidth()!=parent%grid.GetWidth() &&
-        out/grid.GetWidth()!=parent/grid.GetWidth()) {
-        auto bank=dst.waterSurfaceCenter+(dst.center-src.center)*.21f;
+    const auto front=arrivals_.Surface(tile);
+    const int out=front.outlet;
+    if(out<0 || water.GetUpstreamTileIndex(out)!=tile) return;
+    const auto upstream=front.fromPond?pond::FeederCenter(dst.center,visual.GetLayout().tileSize+visual.GetLayout().tileGap):
+        visual.GetTileCenter(grid,parent);
+    const auto next=visual.GetTileCenter(grid,out);
+    if(next.x!=upstream.x && next.z!=upstream.z) {
+        auto bank=dst.waterSurfaceCenter+(dst.center-upstream)*.21f;
         Mark(sounds_,FieldCue::Bend);
         bank.y=dst.waterSurfaceCenter.y+.018f;
         Scatter(FieldGrain::Drop,bank,bank.y-.012f,2,.27f,.70f,.032f);
@@ -364,18 +370,23 @@ void FarmActionParticles::SampleWater(const FarmGrid& grid, const FarmIrrigation
             from.y+=.032f; to.y+=.032f;
             const int previous=water.GetUpstreamTileIndex(parent);
             if(arrivals_.Playing(parent) || arrivals_.Playing(previous)) continue;
-            const bool turn = previous>=0 && previous%grid.GetWidth()!=i%grid.GetWidth() &&
-                previous/grid.GetWidth()!=i/grid.GetWidth();
+            const bool pondEntry=previous<0 && pond::IsOpen(grid,parent);
+            const bool hasEntry=previous>=0 || pondEntry;
+            auto upstream=from;
+            if(pondEntry) upstream=pond::FeederCenter(from,visual.GetLayout().tileSize+visual.GetLayout().tileGap);
+            else if(previous>=0) {
+                upstream=visual.GetTileVisualData(grid,previous).waterSurfaceCenter;
+                upstream.y+=.032f;
+            }
+            const bool turn=hasEntry && upstream.x!=to.x && upstream.z!=to.z;
             // Adjacent spans meet at the edge midpoint. The upstream tile center controls the bend.
             const float travel=.40f+.12f*Random();
             auto start=from, end=to;
-            if (previous>=0) {
-                auto upstream=visual.GetTileVisualData(grid,previous).waterSurfaceCenter;
-                upstream.y+=.032f;
-                start=(upstream+from)*.5f;
-            }
+            if (hasEntry) start=(upstream+from)*.5f;
+            if (pondEntry) start.y=visual.GetLayout().center.y+visual.GetLayout().waterBottomOffset+
+                visual.GetLayout().waterMaxDepth+.032f;
             if (water.GetDownstreamCanalCount(i)>0) end=(from+to)*.5f;
-            auto control=previous>=0 ? from : (start+end)*.5f;
+            auto control=hasEntry ? from : (start+end)*.5f;
             const float jitter=(Random()-.5f)*dst.waterHalfExtent*.42f;
             if (from.x==to.x) control.x+=jitter; else control.z+=jitter;
             if (auto* foam=Emit(FieldGrain::Foam,start,(control-start)*(2.f/travel),end.y,.088f+.035f*Random(),travel))
@@ -383,7 +394,6 @@ void FarmActionParticles::SampleWater(const FarmGrid& grid, const FarmIrrigation
             if (turn || src.center.y > dst.center.y+.05f) {
                 auto impact = turn ? from : to;
                 if (turn) {
-                    const auto upstream=visual.GetTileCenter(grid,previous);
                     impact.x += (from.x-upstream.x)*.19f; impact.z += (from.z-upstream.z)*.19f;
                 }
                 Scatter(FieldGrain::Drop,impact,impact.y-.014f,3,.45f,.95f,.035f);

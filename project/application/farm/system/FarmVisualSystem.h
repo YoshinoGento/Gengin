@@ -22,6 +22,7 @@ struct FarmVisualLayout {
 	float heightStep = 0.18f;
 	float waterBottomOffset = 0.025f;
 	float waterMaxDepth = 0.12f;
+	float pondLipRise = 0.0f; // Rendered elevation of the external reservoir, not extra tile stock.
 };
 
 // Value-only presentation contract. Mesh/Material ownership stays with the renderer.
@@ -53,7 +54,8 @@ public:
 		const FarmGrid& grid,
 		const Vector3& rayOrigin,
 		const Vector3& rayDirection,
-		int& outTileIndex) const noexcept;
+		int& outTileIndex, float* hitDistance = nullptr) const noexcept;
+	[[nodiscard]] int PickWorkTarget(const FarmGrid& grid,Vector3 eye,Vector3 direction,float reach) const noexcept;
 
 	void Draw(
 		const FarmGrid& grid,

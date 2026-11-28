@@ -14,6 +14,7 @@ bool FarmGrid::Initialize(int width, int height)
 	selectedX_ = 0;
 	selectedY_ = 0;
 	tiles_.clear();
+	pondBank_ = false;
 
 	if (width <= 0 || height <= 0) {
 		return false;
@@ -98,6 +99,7 @@ bool FarmGrid::IsValidTile(const FarmTile& tile) noexcept
         tile.growth != 0.0f || !tile.careHistory.IsEmpty() || tile.pests != FarmPestState{} ||
         (tile.state != FarmTileState::Empty && tile.state != FarmTileState::Tilled &&
          tile.state != FarmTileState::Watered))) return false;
+    if (tile.retainsPondBank && tile.feature != FarmTileFeature::Canal) return false;
     if (tile.feature == FarmTileFeature::None && tile.waterAmount != 0.0f) return false;
     if (tile.state != FarmTileState::Planted && !tile.careHistory.IsEmpty()) return false;
     if (!tile.pests.IsValid() || (tile.pests != FarmPestState{} &&
@@ -122,6 +124,7 @@ void FarmGrid::CaptureSnapshot(Snapshot& snapshot) const
 	snapshot.selectedX = selectedX_;
 	snapshot.selectedY = selectedY_;
 	snapshot.tiles = tiles_;
+	snapshot.pondBank = pondBank_;
 }
 
 bool FarmGrid::RestoreSnapshot(const Snapshot& snapshot)
@@ -138,6 +141,7 @@ bool FarmGrid::RestoreSnapshot(const Snapshot& snapshot)
 	selectedX_ = std::clamp(snapshot.selectedX, 0, width_ - 1);
 	selectedY_ = std::clamp(snapshot.selectedY, 0, height_ - 1);
 	tiles_ = snapshot.tiles;
+	pondBank_ = snapshot.pondBank;
 	++generation_;
 	return true;
 }
@@ -159,6 +163,7 @@ bool FarmGrid::ReplaceSnapshot(const Snapshot& snapshot)
 	// Allocate before committing dimensions so a failed allocation leaves the live grid intact.
 	auto tiles = snapshot.tiles;
 	tiles_.swap(tiles);
+	pondBank_ = snapshot.pondBank;
 	width_ = snapshot.width;
 	height_ = snapshot.height;
 	selectedX_ = snapshot.selectedX;

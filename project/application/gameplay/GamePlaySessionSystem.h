@@ -100,6 +100,7 @@ public:
     bool IsViewportHovered() const override { return viewportHovered_; }
     const Camera* ReadCamera() const override { return camera_.get(); }
     void ApplyCameraPose(const farm::OverviewPose& pose, bool updateOverview) override;
+    void SetFieldLens(bool enabled) override;
     ScreenTransitionResult BeginScreenTransition(scene::RipplePoint origin,
         scene::TransitionSoundTheme sound, scene::TransitionStyle style) override;
 
@@ -147,6 +148,7 @@ private:
 	bool MovePlayerToFarmTile(int tileIndex);
 	level::LevelGameplaySystem::GroundHeightQuery BuildPlayerGroundQuery() const;
 	bool TryBuildViewportRay(Vector3& outOrigin, Vector3& outDirection) const override;
+	bool TryBuildViewportRayAt(Vector2 position, Vector3& outOrigin, Vector3& outDirection) const override;
 	bool TrySelectFarmTileFromViewport();
 	InitializationTask InitializeFarmHUD();
 	void InitializeStageClearHUD();
@@ -245,6 +247,7 @@ private:
 	std::unique_ptr<Sprite> sprite_;
 	std::unique_ptr<Object3d> object3d_;
 	std::unique_ptr<Camera> camera_;
+	std::optional<float> overviewLens_;
 
 	Vector3 cameraPos_ = { 0.0f, 5.0f, -15.0f };
 	Vector3 cameraRot_ = { 0.3f, 0.0f, 0.0f };

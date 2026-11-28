@@ -3,9 +3,9 @@
 #include <cstdint>
 #include <string_view>
 namespace farmui {
-inline constexpr char kAtlasContract[] = "FarmRuntimeAtlas:sha256:834c4f0643e7f54744a382bec809e75e925eaaa0acb64d98a2cae143c06543af";
-inline constexpr std::uint64_t kAtlasFingerprint = 15404303776467774216ULL;
-inline constexpr std::uint64_t kAtlasByteCount = 2187546ULL;
+inline constexpr char kAtlasContract[] = "FarmRuntimeAtlas:sha256:7d97fb49f80b8f3c2e7b769aff34f59cc2946f7813e922b33b5f8bbb0c5db3ea";
+inline constexpr std::uint64_t kAtlasFingerprint = 18368638441073543827ULL;
+inline constexpr std::uint64_t kAtlasByteCount = 2188952ULL;
 enum class Label {
     Menu,
     Farm,
@@ -928,10 +928,11 @@ enum class Label {
     WalkLeave,
     WalkKeys,
     WalkMouse,
+    PondCut,
 };
 struct AtlasRect { float x, y, width, height; };
 inline constexpr std::array<AtlasRect, 2> kCheerBubbleUV = {{{0, 2950, 352, 132}, {360, 2950, 352, 132}}};
-inline constexpr std::array<AtlasRect, 921> kLabels = {{
+inline constexpr std::array<AtlasRect, 922> kLabels = {{
     {0.0f, 0.0f, 160.0f, 38.0f},
     {164.0f, 0.0f, 160.0f, 38.0f},
     {328.0f, 0.0f, 160.0f, 38.0f},
@@ -1853,11 +1854,12 @@ inline constexpr std::array<AtlasRect, 921> kLabels = {{
     {682.0f, 2780.0f, 82.0f, 38.0f},
     {768.0f, 2780.0f, 539.0f, 38.0f},
     {1311.0f, 2780.0f, 394.0f, 38.0f},
+    {1709.0f, 2780.0f, 342.0f, 38.0f},
 }};
 inline constexpr float kAtlasWidth = 3840.0f;
 inline constexpr float kAsciiY = 2822.0f;
 #ifdef _DEBUG
-inline constexpr std::array<std::u8string_view, 404> kGoalDebugText = {{
+inline constexpr std::array<std::u8string_view, 405> kGoalDebugText = {{
     u8"害虫の予兆：畑を確認",
     u8"害虫発生：畑を確認",
     u8"虫取り網で駆除",
@@ -2262,6 +2264,7 @@ inline constexpr std::array<std::u8string_view, 404> kGoalDebugText = {{
     u8"見渡す",
     u8"WASD / 矢印で歩く　Enter を押しながら引く",
     u8"左ドラッグで鍬を引く　右で歩く",
+    u8"右の土手から、鍬を畑へ引く",
 }};
 #endif
 }

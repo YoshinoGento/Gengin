@@ -1,6 +1,7 @@
 #include "effect/ParticleManager.h"
 #include "2d/TextureManager.h"
 #include "base/DirectXCommon.h"
+#include "effect/ParticleUploadMapping.h"
 #include "base/FrameClock.h"
 #include "base/Logger.h"
 #include "base/SrvManager.h"
@@ -17,6 +18,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 using namespace Microsoft::WRL;
+
 
 // Model::VertexData と同じフィールド順にする（position → normal → texcoord）
 // ※ Input Layout のメモリ配置と一致させる必要がある
@@ -170,8 +172,10 @@ static CropBurstPhase GetNextCropBurstPhase(CropBurstPhase phase) {
 }
 
 void ParticleManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager) {
-    assert(dxCommon);
-    assert(srvManager);
+    constexpr uint32_t requiredViews=8; // Two particle sets with one SRV and three UAVs each.
+    if(!dxCommon || !srvManager || !srvManager->GetSrvDescriptorHeap() ||
+        srvManager->GetAllocatedCount()>SrvManager::kMaxSRVCount-requiredViews)
+        throw graphics::InitializationError("ParticleManager requires a device and eight free descriptors.");
     dxCommon_ = dxCommon;
     srvManager_ = srvManager;
 
@@ -180,7 +184,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager
     CreateModel();
 
     instancingResource_ = dxCommon_->CreateBufferResource(sizeof(InstancingData) * kMaxInstanceCount);
-    instancingResource_->Map(0, nullptr, (void**)&instancingData_);
+    particle::MapUpload(instancingResource_.Get(),instancingData_,"instancing");
 
     instancingBufferView_.BufferLocation = instancingResource_->GetGPUVirtualAddress();
     instancingBufferView_.SizeInBytes = sizeof(InstancingData) * kMaxInstanceCount;
@@ -190,7 +194,7 @@ void ParticleManager::Initialize(DirectXCommon* dxCommon, SrvManager* srvManager
     // 資料スライド10: alphaReference をシェーダーに渡すためのバッファ
     // GPU側の register(b0) にバインドされる
     materialResource_ = dxCommon_->CreateBufferResource(sizeof(MaterialData));
-    materialResource_->Map(0, nullptr, (void**)&materialData_);
+    particle::MapUpload(materialResource_.Get(),materialData_,"material");
     CreateGPUParticleResources();
     CreateGPUParticleComputeRootSignature();
     CreateGPUParticleComputePipelineState();
@@ -533,6 +537,8 @@ void ParticleManager::CreateGPUParticleResources() {
         D3D12_RESOURCE_STATE_COMMON);
     gpuParticleResourceState_ = D3D12_RESOURCE_STATE_COMMON;
 
+    if(!gpuParticleResource_) throw graphics::InitializationError("Particle storage allocation failed");
+
     gpuParticleSrvHandle_ = srvManager_->Allocate();
     srvManager_->CreateSRVforStructuredBuffer(
         gpuParticleSrvHandle_,
@@ -551,6 +557,7 @@ void ParticleManager::CreateGPUParticleResources() {
     gpuParticleFreeListIndexResource_ = dxCommon_->CreateUAVBufferResource(
         sizeof(int32_t),
         D3D12_RESOURCE_STATE_COMMON);
+    if(!gpuParticleFreeListIndexResource_) throw graphics::InitializationError("Particle free list index allocation failed");
     gpuParticleFreeListIndexUavHandle_ = srvManager_->Allocate();
     srvManager_->CreateUAVforStructuredBuffer(
         gpuParticleFreeListIndexUavHandle_,
@@ -561,6 +568,7 @@ void ParticleManager::CreateGPUParticleResources() {
     gpuParticleFreeListResource_ = dxCommon_->CreateUAVBufferResource(
         sizeof(uint32_t) * kMaxGPUParticleCount,
         D3D12_RESOURCE_STATE_COMMON);
+    if(!gpuParticleFreeListResource_) throw graphics::InitializationError("Particle free list allocation failed");
     gpuParticleFreeListUavHandle_ = srvManager_->Allocate();
     srvManager_->CreateUAVforStructuredBuffer(
         gpuParticleFreeListUavHandle_,
@@ -569,22 +577,19 @@ void ParticleManager::CreateGPUParticleResources() {
         sizeof(uint32_t));
 
     gpuParticleViewResource_ = dxCommon_->CreateBufferResource(sizeof(GPUParticleViewData));
-    HRESULT hr = gpuParticleViewResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleViewData_));
-    assert(SUCCEEDED(hr));
+    particle::MapUpload(gpuParticleViewResource_.Get(),gpuParticleViewData_,"gpuParticleView");
     gpuParticleViewData_->viewProjection = MatrixMath::MakeIdentity4x4();
     gpuParticleViewData_->billboardMatrix = MatrixMath::MakeIdentity4x4();
 
     gpuParticleUpdateInfoResource_ = dxCommon_->CreateBufferResource(sizeof(UpdateParticleInfo));
-    hr = gpuParticleUpdateInfoResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleUpdateInfo_));
-    assert(SUCCEEDED(hr));
+    particle::MapUpload(gpuParticleUpdateInfoResource_.Get(),gpuParticleUpdateInfo_,"gpuParticleUpdateInfo");
     gpuParticleUpdateInfo_->deltaTime = 1.0f / 60.0f;
     gpuParticleUpdateInfo_->particleCount = kMaxGPUParticleCount;
     gpuParticleUpdateInfo_->timeScale = 1.0f;
     gpuParticleUpdateInfo_->padding = 0;
 
     gpuParticleEmitterResource_ = dxCommon_->CreateBufferResource(sizeof(GPUParticleEmitSettings));
-    hr = gpuParticleEmitterResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleEmitter_));
-    assert(SUCCEEDED(hr));
+    particle::MapUpload(gpuParticleEmitterResource_.Get(),gpuParticleEmitter_,"gpuParticleEmitter");
     gpuParticleEmitter_->translate = { 0.0f, 0.0f, 0.0f };
     gpuParticleEmitter_->radius = 0.5f;
     gpuParticleEmitter_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -598,8 +603,7 @@ void ParticleManager::CreateGPUParticleResources() {
     gpuParticleEmitter_->padding = 0;
 
     gpuParticleInteractionResource_ = dxCommon_->CreateBufferResource(sizeof(GPUParticleInteractionSettings));
-    hr = gpuParticleInteractionResource_->Map(0, nullptr, reinterpret_cast<void**>(&gpuParticleInteraction_));
-    assert(SUCCEEDED(hr));
+    particle::MapUpload(gpuParticleInteractionResource_.Get(),gpuParticleInteraction_,"gpuParticleInteraction");
     gpuParticleInteraction_->gridCenter = { 0.0f, 0.0f, 8.0f };
     gpuParticleInteraction_->particleSize = 0.03f;
     gpuParticleInteraction_->gridCountX = 8;
@@ -624,6 +628,7 @@ void ParticleManager::CreateAccentFXResources() {
         D3D12_RESOURCE_STATE_COMMON);
     accentParticleResourceState_ = D3D12_RESOURCE_STATE_COMMON;
 
+    if(!accentParticleResource_) throw graphics::InitializationError("Accent particle storage allocation failed");
     accentParticleSrvHandle_ = srvManager_->Allocate();
     srvManager_->CreateSRVforStructuredBuffer(
         accentParticleSrvHandle_,
@@ -642,6 +647,7 @@ void ParticleManager::CreateAccentFXResources() {
         sizeof(int32_t),
         D3D12_RESOURCE_STATE_COMMON);
     accentFreeListIndexResourceState_ = D3D12_RESOURCE_STATE_COMMON;
+    if(!accentFreeListIndexResource_) throw graphics::InitializationError("Accent free list index allocation failed");
     accentFreeListIndexUavHandle_ = srvManager_->Allocate();
     srvManager_->CreateUAVforStructuredBuffer(
         accentFreeListIndexUavHandle_,
@@ -653,6 +659,7 @@ void ParticleManager::CreateAccentFXResources() {
         sizeof(uint32_t) * kMaxAccentParticleCount,
         D3D12_RESOURCE_STATE_COMMON);
     accentFreeListResourceState_ = D3D12_RESOURCE_STATE_COMMON;
+    if(!accentFreeListResource_) throw graphics::InitializationError("Accent free list allocation failed");
     accentFreeListUavHandle_ = srvManager_->Allocate();
     srvManager_->CreateUAVforStructuredBuffer(
         accentFreeListUavHandle_,
@@ -661,13 +668,11 @@ void ParticleManager::CreateAccentFXResources() {
         sizeof(uint32_t));
 
     accentEmitterResource_ = dxCommon_->CreateBufferResource(sizeof(GPUParticleEmitSettings));
-    HRESULT hr = accentEmitterResource_->Map(0, nullptr, reinterpret_cast<void**>(&accentEmitter_));
-    assert(SUCCEEDED(hr));
+    particle::MapUpload(accentEmitterResource_.Get(),accentEmitter_,"accentEmitter");
     *accentEmitter_ = {};
 
     cropBurstInfoResource_ = dxCommon_->CreateBufferResource(sizeof(CropBurstInfo));
-    hr = cropBurstInfoResource_->Map(0, nullptr, reinterpret_cast<void**>(&cropBurstInfo_));
-    assert(SUCCEEDED(hr));
+    particle::MapUpload(cropBurstInfoResource_.Get(),cropBurstInfo_,"cropBurstInfo");
     *cropBurstInfo_ = {};
     cropBurstInfo_->particleCount = kMaxAccentParticleCount;
     cropBurstInfo_->deltaTime = 1.0f / 60.0f;
@@ -1485,11 +1490,11 @@ void ParticleManager::CreateModel() {
         {{  0.5f, -0.5f, 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f }, { 1.0f, 1.0f }},
     };
     vertexResource_ = dxCommon_->CreateBufferResource(sizeof(VertexData) * 6);
+    VertexData* data=nullptr;
+    particle::MapUpload(vertexResource_.Get(),data,"quad vertices");
     vertexBufferView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
     vertexBufferView_.SizeInBytes = sizeof(VertexData) * 6;
     vertexBufferView_.StrideInBytes = sizeof(VertexData);
-    VertexData* data = nullptr;
-    vertexResource_->Map(0, nullptr, (void**)&data);
     std::memcpy(data, vertices6, sizeof(VertexData) * 6);
     vertexResource_->Unmap(0, nullptr);
 }

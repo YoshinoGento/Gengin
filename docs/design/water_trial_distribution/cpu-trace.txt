@@ -1,0 +1,38 @@
+fork
+t=1 input_sum=0.5 stock=0.464765 soil_sum=0.0352345 edges(parent>child:sum)=12>7:0.193333 13>12:0.393333 14>13:0.4 12>17:0.193333  bed=2 donor=7 store=0.175716 in/use=0.0182247/0.0181818 moisture=0.249435 bed=16 donor=17 store=0.175716 in/use=0.0182247/0.0181818 moisture=0.249435
+t=10 input_sum=4.99333 stock=4.63005 soil_sum=0.363279 edges(parent>child:sum)=12>7:1.18134 13>12:3.36207 14>13:4 12>17:1.18134  bed=2 donor=7 store=0.999696 in/use=0.0182247/0.0181818 moisture=0.249822 bed=16 donor=17 store=0.999696 in/use=0.0182247/0.0181818 moisture=0.249822
+pick t=19.1333 bed=2 crop=1 q=73 moisture=0.250214>0.000213623
+pick t=19.1333 bed=16 crop=1 q=73 moisture=0.250214>0.000213623
+t=20 input_sum=5.72534 stock=4.99757 soil_sum=0.727774 edges(parent>child:sum)=12>7:1.36358 13>12:3.72656 14>13:4.72596 12>17:1.36358  bed=2 donor=7 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000251046 bed=16 donor=17 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000251046
+t=30 input_sum=6.08984 stock=4.99757 soil_sum=1.09227 edges(parent>child:sum)=12>7:1.54583 13>12:4.09106 14>13:5.09045 12>17:1.54583  bed=2 donor=7 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000682854 bed=16 donor=17 store=0.999696 in/use=0.018225/0.0181818 moisture=0.000682854
+pick t=55.15 bed=2 crop=2 q=47 moisture=0.00176885>0
+pick t=55.15 bed=16 crop=2 q=47 moisture=0.00176885>0
+pick t=91.1667 bed=2 crop=3 q=47 moisture=0.00155523>0
+pick t=91.1667 bed=16 crop=3 q=47 moisture=0.00155523>0
+single trunk
+t=1 input_sum=0.5 stock=0.437209 soil_sum=0.0627902 edges(parent>child:sum)=6>1:0.339313 11>6:0.345373 12>11:0.386667 13>12:0.393333 14>13:0.4  bed=2 donor=1 store=0.311757 in/use=0.029524/0.0181818 moisture=0.259374 bed=16 donor=11 store=0.00605917 in/use=0.0364494/0.0181818 moisture=0.267053
+t=10 input_sum=4.99333 stock=4.33676 soil_sum=0.656551 edges(parent>child:sum)=6>1:1.29279 11>6:2.2923 12>11:3.65449 13>12:3.99333 14>13:4  bed=2 donor=1 store=0.999508 in/use=0.029524/0.0181818 moisture=0.361453 bed=16 donor=11 store=0.9989 in/use=0.0364494/0.0181818 moisture=0.431461
+pick t=15.6167 bed=16 crop=1 q=80 moisture=0.534065>0.284065
+pick t=15.9833 bed=2 crop=1 q=79 moisture=0.429317>0.179317
+t=20 input_sum=7.31094 stock=5.99462 soil_sum=1.31629 edges(parent>child:sum)=6>1:1.58805 11>6:2.58756 12>11:4.31424 13>12:5.31314 14>13:6.31204  bed=2 donor=1 store=0.999508 in/use=0.0295249/0.0181818 moisture=0.224879 bed=16 donor=11 store=0.9989 in/use=0.0364494/0.0181818 moisture=0.364138
+t=30 input_sum=7.97069 stock=5.99462 soil_sum=1.97602 edges(parent>child:sum)=6>1:1.88331 11>6:2.88282 12>11:4.97399 13>12:5.97289 14>13:6.97179  bed=2 donor=1 store=0.999508 in/use=0.029524/0.0181818 moisture=0.338302 bed=16 donor=11 store=0.9989 in/use=0.0364494/0.0181818 moisture=0.546814
+pick t=30.8833 bed=16 crop=2 q=70 moisture=0.56295>0.31295
+pick t=33.75 bed=2 crop=2 q=65 moisture=0.380836>0.130836
+pick t=45.9667 bed=16 crop=3 q=70 moisture=0.588487>0.338487
+pick t=53.3167 bed=2 crop=3 q=61 moisture=0.352773>0.102773
+fork x2 refill third quality=47,47
+fork x2 edge third quality=47,47
+fork x2 seep third quality=70,70
+diamond parent=11 reflected parent=13 shut gate seep 0.0182247>0.0450003 units/s
+symmetric retained donors sent 0.00075,0 in one tick
+near first delivery (s, end of tick)=0.05 legacy donor fully visible=1.5 gap=1.45 max spray vertices=48 max residual=2.98023e-08
+beds=1 ditch=0 detour=0 dig+can cumulative=5,10,15 sim_s=46.7167 last_quality=67 inflow=0 soil=0 stock=0 max_balance_error=0 loop_us/tick=3.9639
+beds=1 ditch=1 detour=0 dig+can cumulative=4,4,4 sim_s=45.9667 last_quality=70 inflow=5.67181 soil=1.67424 stock=3.99757 max_balance_error=2.98023e-08 loop_us/tick=4.29496
+beds=2 ditch=0 detour=0 dig+can cumulative=10,20,30 sim_s=46.7167 last_quality=67 inflow=0 soil=0 stock=0 max_balance_error=0 loop_us/tick=4.24827
+bed=2 third harvest_s=91.1667 quality=47 dry/low/good/excess_s=36.0163/0/0/0
+bed=16 third harvest_s=91.1667 quality=47 dry/low/good/excess_s=36.0163/0/0/0
+beds=2 ditch=1 detour=0 dig+can cumulative=5,5,5 sim_s=91.1667 last_quality=47 inflow=8.31933 soil=3.3218 stock=4.99757 max_balance_error=5.96046e-08 loop_us/tick=4.70059
+bed=16 third harvest_s=45.9667 quality=70 dry/low/good/excess_s=0/2/13.0833/0
+bed=2 third harvest_s=53.3167 quality=61 dry/low/good/excess_s=0/19.2832/0.283333/0
+beds=2 ditch=1 detour=1 dig+can cumulative=6,6,6 sim_s=53.3167 last_quality=61 inflow=9.50901 soil=3.51431 stock=5.99462 max_balance_error=5.96046e-08 loop_us/tick=4.99684
+PASS water trial

@@ -14,6 +14,7 @@ bool TilesEqual(const FarmTile& left, const FarmTile& right) noexcept
 	return left.heightLevel == right.heightLevel &&
 		left.feature == right.feature &&
 		left.irrigationEnabled == right.irrigationEnabled &&
+		left.retainsPondBank == right.retainsPondBank &&
 		left.mold == right.mold &&
 		left.repellentPlant == right.repellentPlant &&
 		left.state == right.state &&
@@ -47,6 +48,7 @@ bool TryBuildCandidateTile(
 	switch (operation) {
 	case FarmIrrigationPreviewOperation::ToggleCanal:
 		if (source.feature == FarmTileFeature::Canal) {
+			output.retainsPondBank = false;
 			output.feature = FarmTileFeature::None;
 			output.waterAmount = 0.0f;
 			return true;
@@ -87,6 +89,7 @@ bool TryBuildCandidateTile(
 		return false;
 	case FarmIrrigationPreviewOperation::RemoveCanalPath:
 		if (source.feature == FarmTileFeature::Canal && IsUnusedTile(source)) {
+			output.retainsPondBank = false;
 			output.feature = FarmTileFeature::None;
 			output.waterAmount = 0.0f;
 			return true;
@@ -111,6 +114,7 @@ bool FarmIrrigationPreviewSystem::Begin(
 	FarmIrrigationPreviewOperation operation)
 {
 	Cancel();
+	if (operation == FarmIrrigationPreviewOperation::ToggleWaterSource && sourceGrid.HasPondBank()) return false;
 	const FarmTile* sourceTile = sourceGrid.GetTile(tileIndex);
 	if (sourceTile == nullptr || !IsValidFarmTileFeature(sourceTile->feature)) {
 		return false;

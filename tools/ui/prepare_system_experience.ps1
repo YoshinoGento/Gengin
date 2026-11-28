@@ -2,14 +2,19 @@ param(
     [string]$InitialFarm,
     [switch]$MainGame,
     [switch]$ParticleShowcase,
+    [switch]$PondBank,
+    [switch]$CanalLab,
+    [switch]$FirstPerson,
     [string]$OutputDirectory = 'generated/exhibitions/system_experience_20261111',
     [string]$BuildDirectory = 'generated/outputs/Release'
 )
 $ErrorActionPreference = 'Stop'
-if ($MainGame -and $ParticleShowcase) { throw 'Choose only one runtime edition' }
+if ($FirstPerson -and ($MainGame -or $ParticleShowcase -or $PondBank -or $CanalLab -or $InitialFarm)) { throw 'Choose only one runtime edition' }
+if (($MainGame -and $ParticleShowcase) -or ($PondBank -and ($MainGame -or $ParticleShowcase -or $InitialFarm)) -or
+    ($CanalLab -and ($MainGame -or $ParticleShowcase -or $PondBank -or $InitialFarm))) { throw 'Choose only one runtime edition' }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $target = [IO.Path]::GetFullPath((Join-Path $root $OutputDirectory))
-$farm = if (!$MainGame) { (Resolve-Path -LiteralPath $InitialFarm -ErrorAction Stop).Path }
+$farm = if (!$MainGame -and !$PondBank -and !$CanalLab -and !$FirstPerson) { (Resolve-Path -LiteralPath $InitialFarm -ErrorAction Stop).Path }
 if ($MainGame -and $InitialFarm) { throw 'Main game ships without a prepared save' }
 $release = (Resolve-Path -LiteralPath (Join-Path $root $BuildDirectory)).Path
 foreach ($path in @($target, $farm, $release) | Where-Object { $_ }) {
@@ -21,7 +26,7 @@ foreach ($path in @($target, $farm, $release) | Where-Object { $_ }) {
     }
 }
 if (Test-Path -LiteralPath $target) { throw 'Refusing to overwrite a runtime' }
-if (!$MainGame) {
+if (!$MainGame -and !$PondBank -and !$CanalLab -and !$FirstPerson) {
     if (!(Test-Path -LiteralPath (Join-Path $farm 'farm_documents.json'))) { throw 'Missing prepared catalog' }
     if (Get-ChildItem -LiteralPath $farm -Recurse -Attributes ReparsePoint) { throw 'Linked farm' }
 }
@@ -57,6 +62,8 @@ foreach ($name in @('NotoSansJP-VF.ttf','OFL.txt','NotoSerifJP-OFL.txt')) {
     $assets += Get-Item -LiteralPath (Join-Path $resources ('fonts/' + $name))
 }
 foreach ($asset in $assets) {
+    if (!$FirstPerson -and $asset.FullName.StartsWith((Join-Path $resources 'farm\first_person\'), [StringComparison]::OrdinalIgnoreCase)) { continue }
+    if (!$CanalLab -and $asset.FullName.StartsWith((Join-Path $resources 'farm\canal_lab\'), [StringComparison]::OrdinalIgnoreCase)) { continue }
     if ($MainGame -and $asset.FullName.StartsWith((Join-Path $resources 'farm\experience\'), [StringComparison]::OrdinalIgnoreCase)) { continue }
     $dest = Join-Path $target ('Resources/' + [IO.Path]::GetRelativePath($resources, $asset.FullName))
     New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
@@ -77,12 +84,24 @@ $copiedBinary = $null
 foreach ($name in @('dxcompiler.dll','dxil.dll')) { Copy-Item -LiteralPath (Join-Path $release $name) -Destination $target }
 Get-ChildItem -LiteralPath $release -Filter '*.cso' -File | Copy-Item -Destination $target
 Copy-Item -LiteralPath (Join-Path $root 'generated/codex_checks/contest_finish_20261027/review/Licenses') -Destination $target -Recurse
-$edition = if ($MainGame) { '大会本編' } elseif ($ParticleShowcase) { 'パーティクルエフェクト' } else { 'ゲームシステム体験版' }
+$edition = if ($FirstPerson) { '一人称農業' } elseif ($CanalLab) { '水路の試験田' } elseif ($PondBank) { '池岸の畑' } elseif ($MainGame) { '大会本編' } elseif ($ParticleShowcase) { 'パーティクルエフェクト' } else { 'ゲームシステム体験版' }
 $credits = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'exhibition/CREDITS.txt')).Replace('ゲームオーバー演出デモ版',$edition)
 $credits += "`r`n雨音・害虫駆除音: プロジェクト内の音声合成で生成。Resources/farm/weather/audio と pests/audio の manifest.json を参照。`r`n"
 [IO.File]::WriteAllText((Join-Path $target 'CREDITS.txt'), $credits, [Text.UTF8Encoding]::new($true))
 New-Item -ItemType Directory -Path (Join-Path $target 'Settings') | Out-Null
-if ($MainGame) {
+if ($FirstPerson) {
+    New-Item -ItemType Directory -Path (Join-Path $target 'Settings/runtime') | Out-Null
+    New-Item -ItemType File -Path (Join-Path $target 'Settings/runtime/first_person.flag') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'first_person_readme.txt') -Destination (Join-Path $target 'README.txt')
+} elseif ($CanalLab) {
+    New-Item -ItemType Directory -Path (Join-Path $target 'Settings/runtime') | Out-Null
+    New-Item -ItemType File -Path (Join-Path $target 'Settings/runtime/canal_workshop.flag') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'canal_lab_readme.txt') -Destination (Join-Path $target 'README.txt')
+} elseif ($PondBank) {
+    New-Item -ItemType Directory -Path (Join-Path $target 'Settings/runtime') | Out-Null
+    New-Item -ItemType File -Path (Join-Path $target 'Settings/runtime/pond_bank.flag') | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'pond_bank_readme.txt') -Destination (Join-Path $target 'README.txt')
+} elseif ($MainGame) {
     New-Item -ItemType Directory -Path (Join-Path $target 'Settings/runtime') | Out-Null
     New-Item -ItemType File -Path (Join-Path $target 'Settings/runtime/main_game.flag') | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'kurihaku/README.txt') -Destination $target

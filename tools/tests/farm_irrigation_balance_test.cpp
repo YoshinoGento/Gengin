@@ -3,6 +3,7 @@
 #include "farm/system/FarmEconomySystem.h"
 #include "farm/system/FarmGrowthSystem.h"
 #include "farm/system/FarmIrrigationSystem.h"
+#include "farm/system/FarmPondBank.h"
 #include "farm/system/FarmToolActionSystem.h"
 #include "farm/system/FarmWeatherSystem.h"
 
@@ -272,7 +273,66 @@ void VerifySharedRate() {
 }
 }
 
+static void PondBankChecks() {
+    FarmGrid grid;
+    Check(pond::Start(grid),"pond starter");
+    FarmToolActionSystem tools; tools.Initialize();
+    FarmIrrigationSystem water; water.Initialize();
+    const int gate=grid.GetSelectedIndex(), fork=gate-1, carrot=fork-1, tomato=3;
+    Check(pond::FeederTile(grid,{},1,{4.8f,0,1})==9 && pond::FeederTile(grid,{},1,{5.3f,0,2})==-1 &&
+        pond::FeederTile(grid,{},1,{4.8f,0,0})==-1,"off-bank pointer accepted");
+    const Vector3 inner{3,0,3}, outer{4.8f,0,1.1f};
+    Check(pond::BankCrossing(grid,{},1,inner,outer)==9 && pond::BankCrossing(grid,{},1,outer,inner)==9 &&
+        pond::BankCrossing(grid,{},1,{4.7f,0,2},{4.7f,0,3})==-1,"oblique or parallel shoreline intersection");
+    const auto advance=[&] { for(int n=0;n<90;++n) water.UpdateWater(grid,kStep,1); };
+    const float dry=grid.GetTile(carrot)->moisture;
+    advance();
+    Check(water.GetWaterSourceCount()==1 && grid.GetTile(fork)->waterAmount==0 &&
+        grid.GetTile(carrot)->moisture==dry,"intact bank leaked");
+    Check(!tools.CanToggleWaterSource(grid,0),"placed an interior source");
+    pond::Stroke hoe;
+    Check(hoe.Begin(grid,gate,{},false),"enter bank");
+    auto dig=[&](int i,bool across=true){return tools.DigCanalAt(grid,i,across);};
+    Check(hoe.Pull(grid,gate,{.01f,0,0},1,dig) && !pond::IsOpen(grid,gate),"click opened inlet");
+    Check(hoe.Pull(grid,fork,{-1,0,0},1,dig) && pond::IsOpen(grid,gate),"first opening");
+    water.UpdateWater(grid,kStep,1);
+    const auto budget=water.GetLastStep(grid).sourceRefill;
+    Check(budget>0,"missing external inflow");
+    advance();
+    Check(grid.GetTile(carrot)->moisture>dry && grid.GetTile(tomato)->moisture==dry,"first irrigation");
+    Check(!hoe.Pull(grid,carrot-1,{-3,0,0},1,dig) && grid.GetTile(carrot)->crop==CropType::Carrot &&
+        grid.GetTile(carrot-1)->feature==FarmTileFeature::None,"stroke passed through crop");
+    Check(dig(gate-5),"second opening");
+    water.UpdateWater(grid,kStep,1);
+    Check(water.GetLastStep(grid).sourceRefill<=budget+.00001,"duplicated inlet capacity");
+    Check(dig(fork-5),"second branch");
+    advance(); Check(grid.GetTile(tomato)->moisture>dry,"tomato branch remained dry");
+    FarmGrid::Snapshot snapshot; grid.CaptureSnapshot(snapshot);
+    FarmGrid restored;
+    Check(restored.ReplaceSnapshot(snapshot) && restored.HasPondBank(),"pond round trip");
+    snapshot.pondBank=false; Check(restored.ReplaceSnapshot(snapshot),"legacy restore");
+    water.Rebuild(restored); Check(water.GetWaterSourceCount()==0 && !water.IsSupplied(gate),"legacy edge fed");
+    // Same final ditch, dug from either side. The direction of the tool is not a water source.
+    for (bool reverse:{false,true}) {
+        Check(pond::Start(grid),"new bank");
+        pond::Stroke along;
+        Check(along.Begin(grid,gate,{},false) && along.Pull(grid,gate+5,{0,0,1},1,dig),"longitudinal ditch");
+        advance();
+        Check(!pond::IsOpen(grid,gate) && !pond::IsOpen(grid,gate+5) &&
+            grid.GetTile(gate)->waterAmount==0 && grid.GetTile(fork)->waterAmount==0,"parallel cut leaked");
+        pond::Stroke cross;
+        Check(cross.Begin(grid,reverse?fork:gate,{},false) &&
+            cross.Pull(grid,reverse?gate:fork,{reverse?1.f:-1.f,0,0},1,dig),"lateral breach");
+        advance();
+        Check(pond::IsOpen(grid,gate) && !pond::IsOpen(grid,gate+5) &&
+            water.GetUpstreamTileIndex(gate+5)==gate && water.GetUpstreamTileIndex(fork)==gate &&
+            grid.GetTile(gate+5)->waterAmount>0 && grid.GetTile(fork)->waterAmount>0,
+            "reverse digging changed hydraulic direction");
+    }
+}
+
 int main(int argc, char** argv) try {
+    PondBankChecks();
     const bool candidates = argc == 2 && std::string_view(argv[1]) == "--candidates";
     Check(argc == 1 || candidates, "usage: farm_irrigation_balance_test [--candidates]");
     std::cout << "tuning,layout,crop,policy,rain,speed,fields,sources,canals,ready_mean,ready_last,good_pct,excess_pct,"

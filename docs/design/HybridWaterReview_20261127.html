@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>水路農業｜水を主要技術にするための設計審査</title>
+<style>
+*{box-sizing:border-box} html{background:#f5f7f6;color:#152c32;font:16px/1.75 system-ui,"Yu Gothic",Meiryo,sans-serif}body{margin:auto;max-width:1020px;background:white;padding:40px 5% 64px}header{border-top:7px solid #176567;border-bottom:1px solid #b6cac9;padding:20px 0}h1{font-size:2rem;line-height:1.35;margin:8px 0}h2{font-size:1.4rem;border-bottom:2px solid #c6dcd8;padding-bottom:4px;margin:2em 0 .6em}h3{font-size:1.05rem;margin:1em 0 0}p{margin:.45em 0 .9em}small{color:#456064}a{color:#075b79;text-underline-offset:3px}code{font-size:.91em;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:.94em;margin:1em 0}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #cddbd8;vertical-align:top;overflow-wrap:anywhere}th{background:#eaf3ef}li{margin:.35em 0}ul,ol{padding-left:1.6em}.call{border-left:4px solid #bc8b3a;padding:.45em 1em;background:#f8f5ed}.flow{padding:10px 16px;border-left:4px solid #287b83;background:#eff7f6}.note{color:#546365}nav a{margin-right:1em} @media(max-width:600px){body{padding:18px 12px}table{font-size:.85em}td,th{padding:6px 4px}} @media print{body{padding:0;max-width:none}nav{display:none}h2,h3{break-after:avoid}tr,.flow,.call{break-inside:avoid}a{color:inherit}}
+</style>
+<header><small>水路農業 ／ 技術設計レビュー ／ 2026-11-27</small><h1>水の行き先が、畑で分かる</h1>
+<p>地形に沿う連続水面と、落ち口・衝突部だけに現れるGPU粒子。農作業を変えずに検証するための設計案。</p>
+<small>静的調査：ローカル作業ツリー（HEAD fa00c4a、未コミット分を含む）。以下の数値は明記した既存定数を除き、候補値または合否基準であって、測定結果ではない。</small></header>
+<nav><a href="#audit">現行実装</a><a href="#design">計算法・責務</a><a href="#render">外観</a><a href="#dx">DirectX 12</a><a href="#qa">検証・提出</a><a href="#refs">出典</a></nav>
+<h2>採用判断</h2>
+<p><strong>条件付きで主要技術にする価値がある。</strong>池から引いた水が、鍬で開けた溝に入り、曲がり、低い畝に落ち、乾いた土へ染み込む。この因果を固定カメラでも一人称でも読み取れることが、水面単体の美しさより強い。水門を閉じても下流に残った水は瞬時には消えない。</p>
+<p class="call"><b>最初の審査カット：</b>土手を一か所開ける → L字を曲がる → 一段下の水に着水 → 横の畝が濡れる → 閉じる。粒子を切っても流路と到達時刻が読み取れ、粒子を戻すと着水点だけが明確になるか。これを満たすまで反射や粒数を増やさない。</p>
+<h2 id="audit">1　現行コードで確認できたこと</h2>
+<table><thead><tr><th>対象と根拠</th><th>残すもの</th><th>不足・そのまま使う際の危険</th></tr></thead><tbody>
+<tr><td><a href="../../project/application/farm/system/FarmTerrainQuerySystem.cpp">FarmTerrainQuerySystem::SampleGround</a>、<a href="../../project/application/farm/render/FarmMeshLayout.h">FarmMeshLayout</a></td><td>地盤の高さ、傾斜、曲がり角、護岸・底の区別。既存の水路形状を基準形状にする。</td><td>足元の照会は全タイルを走査し、必要に応じて表示部品も組み立てる。全粒子×毎フレームで呼ばない。足を載せる高さと、水が通れる幅・底高は同じではない。底高・壁面・開口を地形変更時に格子化する。</td></tr>
+<tr><td><a href="../../project/application/farm/system/FarmIrrigationSystem.cpp">FarmIrrigationSystem::Rebuild / 水収支更新</a>、<a href="../../project/application/farm/system/FarmPondBank.h">FarmPondBank</a></td><td>実在する池の開口、4近傍、分岐給水、有限在庫、土への受け渡し、計測世代と収支。比較用のゲーム側正解。</td><td>再訪しない探索で上流を一つ決め、高い隣接先へは配水しない。複数方向からの合流、慣性、波の逆伝播を解く速度場ではない。waterAmountは0–1で、単位換算なしにメートルとして使えない。</td></tr>
+<tr><td><a href="../../project/application/farm/lab/CanalLabSystem.cpp">CanalLabSystem::Flow</a>、<a href="../../project/application/scene/CanalLabScene.cpp">CanalLabScene</a></td><td>本編と独立した11×7の試作。水頭差による辺間移送、給水・漏水・流向、固定更新、System/Controls/View分離は有用な基準。</td><td>移送上限付きの水位差モデル。currentX/Yは移送量/時間から集計し毎回リセット。運動量を次の時刻に引き継ぐ浅水流ソルバーではない。囲い池など試作のルールも本編へ移植しない。</td></tr>
+<tr><td><a href="../../project/application/farm/system/FarmVisualSystem.cpp">FarmVisualSystem::GetTileVisualData</a>、<a href="../../project/application/farm/system/FarmCanalArrival.h">FarmCanalArrival</a>、<a href="../../project/Resources/shader/Object3d.PS.hlsl">Object3d.PS.hlsl</a></td><td>水量に応じた水面高、曲がり部品、隣接面間の傾斜、流入前線のマスクと濡れた側の縁。既存版比較の相手。</td><td>面はタイル部品の組合せで、局所速度から白波を運ぶものではない。旧到達タイマーと新格子で二重に前線を進めると、水面・白波が別々に動く。</td></tr>
+<tr><td><a href="../../project/application/farm/system/FarmWaterPlaySystem.h">FarmWaterPlaySystem</a>、<a href="../../project/application/farm/render/FarmFieldEffectRenderer.cpp">FarmFieldEffectRenderer::Draw</a></td><td>カーソルの波紋、水上の葉、作業時の粒子。入力イベントと既存版の見た目を比較に使える。</td><td>畑のこれらの頂点はCPUで作り、マップ済みバッファに書いてまとめてDrawする。既にGPUで流体計算しているわけではない。新旧両方で着水泡を出さない。</td></tr>
+<tr><td><a href="../../project/engine/effect/ParticleManager.cpp">ParticleManager</a>、<a href="../../project/Resources/shader/UpdateParticle.CS.hlsl">UpdateParticle.CS</a></td><td>DEFAULTのStructuredBuffer、SRV/UAV、空き番号リスト、Compute PSO、インスタンス描画、C++/HLSLの64 B対応。GPU粒子の基盤は実在する。</td><td>通常プール1024、別のAccentプール512。通常の発生要求は一つのmapped emitterを上書き。通常更新は速度×時間、寿命と解放が中心で床や水面を読まない。通常描画は6頂点×1024、SRC_ALPHA＋ONE。複数の落ち口・透明な水滴には不適。</td></tr>
+<tr><td><a href="../../project/application/title/TitleReflectionRenderer.cpp">TitleReflectionRenderer</a>、<a href="../../project/Resources/shader/TitlePond.PS.hlsl">TitlePond.PS</a></td><td>タイトルの平面反射RT・水の色や光の扱いは、静かな池の美術基準。</td><td>タイトル用固定面と反射カメラ。標高の異なる各水路で640×360の反射を再描画しない。初版の動水には空色・法線・深さで十分かを先に比較。</td></tr>
+<tr><td><a href="../../project/application/gameplay/GamePlaySessionSystem.cpp">GamePlaySessionSystem::Draw</a>、<a href="../../project/application/Game.cpp">Game::Draw</a>、<a href="../../project/engine/effect/PostEffectSystem.cpp">PostEffectSystem</a></td><td>影→オブジェクト→粒子・畑エフェクト→シーンHUDという既存経路。シーンはオフスクリーンに描画、その後PostEffect→ImGui。Depth SRVも既に存在。</td><td>既存の巨大なセッションとParticleManagerへ水の状態・制御を追加しない。Depth SRVの存在は、深度書き込み中に同時サンプルできるという意味ではない。</td></tr>
+</tbody></table>
+<h2 id="design">2　何をシミュレーションし、何を演出にするか</h2>
+<p>採用候補は<strong>2.5Dの浅水流＋片方向に結合したGPU粒子</strong>。XZの各地点に一つの底と水面を持つ。静かな池・用水路・湿潤先端に向く。トンネル内と地上で水が重なるケース、砕けた波の巻き込み、任意の3D容器は対象外。全面SPH/FLIPはこのゲームの評価項目に対して衝突・表面再構築・粒子数のコストが大きい。ノーマルのスクロールだけでは開口や閉塞の結果を説明できない。</p>
+<div class="flow"><b>操作</b> 鍬／開閉 → <b>地形スナップショット</b> 底高・壁・取水口 → <b>固定ステップ</b> 水深・面流量 → <b>水面</b>／<b>落水イベント</b> → <b>GPU水滴・泡</b> → 描画<br><b>本編では別経路：</b>既存灌漑の供給・土への移送 → 作物。泡や水滴の個数から土の水分を逆算しない。</div>
+<h3>計算の契約</h3>
+<ol>
+<li>検証場のCPU参照器では、水深 h [m]、底高 b [m]、面積 A、水平運動量 hu, hw を保持。水位は η=b+h、水量は ΣhA。描画用の湿り具合と物理水深は別。1タイルを複数セルにし、最狭の開口に少なくとも数セルが入る解像度を選ぶ。</li>
+<li>固定ステップで境界条件を設定し、各共有辺で一回だけ符号付き流束を求める。候補は有限体積法＋Rusanov流束、底面勾配は静水を保つ再構築と対応するソース項で釣り合わせる。全辺で同じ旧状態を読み、次状態へ反映。流出可能量を送出側の残量で制限し、双方へ同じ移送量を使う。単なる負水深のclampは水を生むので修正量を隠さない。</li>
+<li>境界外は設定した水源・排出口以外は閉鎖。壁を跨ぐ流束はゼロ、開口だけ通す。wet/dryにヒステリシス、乾燥セルで速度へ変換する際のゼロ除算防止。dtは2方向の |u|+√(gh) に基づくCFL条件で分割。上限超過は物理時間の遅れとして計数し、不安定な大dtで取り戻さない。</li>
+<li>掘削・盛土で底高を変えるときは、新しい水面を固定して水量を創らない。まず水量を保持し、塞ぐセルの水は隣へ再配分、行き場がなければ操作を保留／明示的な排水として会計。閉鎖後も既存の水は残る。</li>
+<li>滝の鉛直面は高さ場で表現できない。段差の辺で<strong>実際に移送した量</strong>を使い、薄い落水面を上下の水面間につなぐ。水量は格子の送り元から受け側に一度だけ移す。滞空中の体積・運動量交換は初版では扱わず、水滴は視覚だけ。流量ゼロなら新しい落水・白泡は出さない。</li>
+</ol>
+<h3>責務・寿命（以下はすべて提案名）</h3>
+<table><tr><th>所有者</th><th>責務／所有しないもの</th></tr>
+<tr><td>WaterTestScene / WaterTestControls</td><td>Sceneは初期化・固定更新・描画の委譲。UIは開閉・地形編集・比較表示の要求を通知し、読み取り専用の統計を表示。水量を書き換えない。本編のセッション・作物・セーブを生成しない。</td></tr>
+<tr><td>WaterDomain / TerrainAdapter</td><td>座標変換・底高・壁・境界・世代を所有する値型。変更領域＋隣接一層のみ更新。表示メッシュと物理を同じ断面定義から生成。GPUにFarmTileポインタを渡さない。</td></tr>
+<tr><td>WaterSimulationSystem</td><td>テスト場の水量と時間の唯一の所有者。初版はCPU計算で同一入力を再生可能にする。現在／前の固定ステップを公開し、描画は補間。水理のGPU移植はプロファイルに基づく別段階。</td></tr>
+<tr><td>WaterEventBuilder / WaterParticleSystem</td><td>前者は通過した流束・落差・壁法線・速度変化から発生位置と強さを作る。継続流水は流量×dtの端数を持ち越し、単発衝突は世代＋step＋辺で一度だけ。後者は種別・寿命・空きリストをGPUで所有し、ゲーム状態には書き戻さない。</td></tr>
+<tr><td>WaterSurfaceRenderer / WaterGpuResources</td><td>Rendererは共有格子、水面、落水の帯を描く。GpuResourcesは確保・状態・解放待ちの唯一の所有者。SceneやUIにComPtr所有権や生Descriptor番号を配らない。</td></tr>
+<tr><td>FarmWaterAdapter（後段）</td><td>本編の正本は当面FarmIrrigationSystem。格子は可視化に限定し、各タイルの入出・畑への移送・在庫を境界予算として読み取る。残量が合わない場合は診断し、見かけで無制限に補給しない。新ソルバーを将来正本にするなら供給・セーブ・Undo・予測を一緒に移行し、旧更新を同時に走らせない。</td></tr></table>
+<h2 id="render">3　軽いボクセル調で、水を煙にしない</h2>
+<table><tr><th>場面</th><th>水面</th><th>粒子の出し方／見え方</th></tr>
+<tr><td>静水</td><td>格子頂点を共有した一枚の面。深さの色、控えめな空の反射、輪郭と法線に少し面取り感を残す。</td><td>平常時は発生なし。カーソルやじょうろが触れた点だけ波紋。常時キラキラさせない。</td></tr>
+<tr><td>直線・L字</td><td>同じwet maskで水と縁を切る。局所流速で模様を流し、曲がり口では速度方向を曲げる。壁越しには補間しない。</td><td>流れの中心には浮遊粒子を撒かない。外岸で急減速した湿潤セルにだけ泡を付け、流速で運ぶ。乾いた床を白い先頭が先走ったら不合格。</td></tr>
+<tr><td>段差・着水</td><td>落ち口の幅と水量に応じた連続した帯。上面と鉛直面に隙間を作らない。</td><td>落ち口は小さい角面の水滴、着水点は横へ開く飛沫。重力で落ち、前後位置で地面・水面との交差を取り、着水したら短命の表面泡へ。飛沫は白一色や等速上昇にしない。</td></tr>
+<tr><td>壁・乾いた畝</td><td>壁は流束を止める。土の濡れ色は土に渡った量に追従し、泡の衝突だけでは作物に給水しない。</td><td>壁面への入射法線速度／衝撃がしきい値を超えた場だけ散る。壁に沿う定常流を毎フレーム衝突扱いしない。遠景では微小粒を省いて面上の泡へ寄せる。</td></tr></table>
+<p>GPU側で水面を参照する座標系・原点・スケール・世代は表面と共通にする。乾燥セルと壁を跨いだ平滑化は禁じる。流れを見せる葉を一枚浮かべると、模様だけでは見えない停滞や、逆向きに動く白波を発見しやすい。</p>
+<h2 id="dx">4　DirectX 12：最小の安全な経路</h2>
+<p>初版は既存の<strong>Direct Queue 一つ</strong>にComputeとDrawを記録する。新Compute Queue、SSR、屈折用の画面コピー、粒子同士の衝突、粒子から農場への毎フレームReadbackは採用しない。</p>
+<table><tr><th>資源・パス</th><th>明示する状態・寿命</th></tr>
+<tr><td>底高／壁／水状態</td><td>グリッドはまずStructuredBufferにして既存のbuffer用SRV/UAV作成を流用。CPU版：固定長CPU配列 → フレーム用UPLOAD → DEFAULTのCOPY_DEST → 必要なNON_PIXEL/PIXEL_SHADER_RESOURCE。描画補間用の前後状態を別領域に保持。GPU版に進む場合はA/Bと辺流束を別Resourceにし、読みSRVと書きUAVを同じ領域へ重ねない。</td></tr>
+<tr><td>発生要求／粒子</td><td>水専用の有界イベント配列を一括送信。粒子・空き番号・カウンタはDEFAULT＋ALLOW_UNORDERED_ACCESS。発生→更新で同じUAVの値に依存するなら対象別UAV Barrier。更新後は粒子をNON_PIXEL_SHADER_RESOURCEに遷移してVSから描画。次回書く前にUAVへ戻す。異なる状態間のTransitionが依存を満たす箇所に一律UAV Barrierを重ねない。</td></tr>
+<tr><td>Descriptor</td><td><a href="../../project/engine/base/SrvManager.cpp">SrvManager</a>は共有512枠、Releaseで即再利用する仕組み。初期化で必要枠を確保、失敗・nullptrでこれまでの確保を巻き戻し、Releaseでも未割当handleをバインドしない。空き枠、最大使用数、退出後の復帰を記録。2D texture UAV経路は既存buffer用ヘルパーと別。採用する場合はフォーマット対応を確認して追加。</td></tr>
+<tr><td>Fence / CPU書き換え</td><td><a href="../../project/engine/base/DirectXCommon.cpp">PostDraw</a>はPresent(1)後にSignalし、未完了ならCPUで待ってからAllocator/ListをResetする。現状の直列化を前提に同じフレーム内の複数Dispatchで同一CBアドレスを上書きしてよい、とはならない。定数はRoot constantsまたは別の256 B整列CBVスライス。将来の多重フレームでは完了FenceでUPLOAD／Descriptor／Resourceを回収。改修を水の初版に抱き合わせない。</td></tr>
+<tr><td>描画・深度</td><td>格子更新と発生・更新 → 不透明地形 → まず不透明寄りの水面（Depth test/write）→ 水上の飛沫（Depth testあり・writeなし）→ HUD。表面泡は水面材に合成するか深度一致を管理。専用PSOは加算を既定にせず、必要ならpremultiplied alpha／ソートを評価。軟粒子は先送り。既存のtypeless depth＋Depth SRVを使う場合はwrite DSVを外し、read-only DSV＋DEPTH_READと必要なSRV状態に切替。次の書き込み前に復帰。同じ色面をRTVのままサンプルしない。</td></tr>
+<tr><td>計測・異常系</td><td>GPU timestamp queryを各パスに対で置き、Resolve→Fence完了後に遅延読取。Present込みCPU時間から水のGPU時間を推定しない。Debug Layer／GPU-based validationでOOB・不正状態・解放後使用を検出。性能測定は検証レイヤーを外したReleaseで別取り。</td></tr></table>
+<p><strong>概算例：</strong>128²セル×16 B×前後2面＝512 KiB。4,096粒×既存64 Bレイアウト＝256 KiB、空き番号4 B×4,096＝16 KiB。これは各バッファの論理容量だけで、面流束・地形・イベント・UPLOAD・RT・アラインメント・予約VRAMは別。解像度を縦横2倍にするとセル数は4倍、安定条件次第でサブステップ数も増える。粒子を増やすと、遠景より画面を覆う一人称の半透明重なりが先に効く場合がある。</p>
+<p><strong>継続レビュー条件：</strong>要素数×strideは64 bitで上限検査、初期化とDispatch末尾のindex検査、NaN/Inf・空マップ・ゼロ距離・乾燥除算を拒否。プール満杯なら低優先の飛沫を捨てて数える。泡再発生を無制限に連鎖させない。Solverは初期化時に配列を確保し、全盤コピー・毎フレームnew・一粒一Drawを避ける。固定レイアウトはconstexpr＋static_assert、粒寿命・抵抗・閾値・色・最大活動数は範囲検証付き設定。上限外は確保前に拒否する。</p>
+<h2 id="qa">5　WaterTestSceneの進め方と中止条件</h2>
+<p>通常起動に入れず、独立起動プロファイルからのみ入る設計。初期化、固定更新、描画委譲は既存CanalLabSceneを参考に、3Dは本編と同じ向き・距離の見下ろしとFPSカメラを用意。固定seedと「何ステップ目にどこを掘るか」の入力列を記録する。旧版・新水面のみ・新水面＋粒子を同じ地形・カメラ・給水条件で比較する。</p>
+<table><tr><th>段階</th><th>実験</th><th>次へ進むための条件（暫定）</th></tr>
+<tr><td>0 基準</td><td>静かな池、乾いたL字、段差と受け皿をJSON化。既存版で成立する条件としない条件を記録。</td><td>同一入力の再生、カメラ固定、粒子切替、毎stepの流入・在庫・流出・浸透ログが取れること。</td></tr>
+<tr><td>1 CPUの水だけ</td><td>静水・傾斜上の等水位・閉鎖・空から注水・開口を塞ぐ・Y字分岐/再合流。水面は単色、粒子なし。</td><td>負水深・非有限数0、閉じた壁越え0。閉鎖60秒の水量相対誤差例0.1%以下。空の実験は絶対誤差も定義。給排水ありは初期＋取水－排水－浸透－現在で比較。静水は流速と水位の最大ドリフトを測る。失敗なら粒子に着手しない。</td></tr>
+<tr><td>2 連続水面</td><td>固定カメラとFPSで同じL字、細い開口、一段落ち。wet mask・水位・速度矢印を重ねる。</td><td>曲がりで水面に継ぎ目や岸越しの漏れなし。止水時に先頭だけ動かない。粒子OFFで流向と到達を第三者が読めること。</td></tr>
+<tr><td>3 水滴と泡</td><td>壁衝突・同時2か所の落水、静水、途中閉鎖。発生点・流量・生存数・棄却数を重ねる。</td><td>静水の定常発生0、2か所とも発生、飛沫の着水と泡の下流移動が連続。満杯でも水量・作物結果は不変。固定30/60/120表示fpsで同じ固定step後の水収支を比較。</td></tr>
+<tr><td>4 提出判定</td><td>64²/128²/256² × 粒子0/1K/4K/16Kを必要な順に。1080p、同一視点・操作・品質。使用GPUとドライバを記載。ウォームアップ後600フレーム以上。</td><td>仮予算：60 fps（16.7 ms）のうち水のGPU p95 ≤2.0 ms、CPU固定更新・提出のp95 ≤1.0 msを別計測。GPU時間・p95・描画/Dispatch数・実VRAM差分・上限超過を提示。シーン出入100回・リサイズ後にDescriptor数が基準へ戻り、Debug Layerの新規エラー0。未達なら泡の画面占有、格子解像度、更新頻度の順に原因を分離。</td></tr>
+<tr><td>5 本編の一区画</td><td>作物一列だけで新旧表示を切替。開口→土が濡れる→閉鎖。セーブ読込／Undo／プレビュー／時間送りで可視状態を再生成。</td><td>同じ農業入力で土への移送・収穫・セーブ結果が一致。Undo後に前の盤の泡が残らない。独立デモと本編映像を区別して提出。</td></tr></table>
+<p><strong>提出用の30秒：</strong>まずプレイヤーが土手を開ける。次に同じカットに水深と流束矢印を重ね、角と段差だけを寄って見せる。止水後に泡が消え、畑に水分が残るところで終える。付録は旧／水面のみ／粒子ありの同条件映像と計測表。「水を作った」より、<b>どの現象を計算し、どれを演出に留め、それをどう確かめたか</b>を一枚で説明する。</p>
+<h2 id="refs">6　参考資料の使い分け</h2>
+<p><a href="https://www.youtube.com/watch?v=1R5WFZk86kE">Voxel Water Physics – Waterfalls, Rivers and Tunnels</a>：提示動画は地形に対する水の見え方・比較題材。取得できた公開ページはタイトルまでで、フレーム解析や内部実装の確認はしていない。3Dトンネルを模倣することを合格条件にしない。</p>
+<p><a href="https://juandiegomontoya.github.io/teardown_breakdown.html">Montoya, Teardown Teardown</a>：作者自身によるフレーム解析であり、ゲーム開発者の公式設計書ではない。Smoke節は少数面の形状と法線による立体感、Water節は面と泡を別に説明している。借りるのは粗い面でも量感を読める表現であって、煙シミュレーションや全面ディザ＋TAAではない。</p>
+<p><a href="https://diglib.eg.org/items/d0320015-4b07-416b-8f41-047485c9f7f3">Chentanez &amp; Müller, SCA 2010</a>（<a href="https://matthias-research.github.io/pages/publications/hfFluid.pdf">著者公開PDF</a>）：高さ場と飛沫等の粒子を組み合わせ、原論文では質量と運動量を交換する。本提案の初版は水量を格子に残す片方向表現。論文の再現、完全な3D流体、研究上の新規手法とは称さない。</p>
+<p>API上の根拠：<a href="https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12">Microsoft：Resource Barriers</a>、<a href="https://learn.microsoft.com/en-us/windows/win32/direct3d12/advanced-use-of-descriptor-tables">Descriptor再利用とFence</a>、<a href="https://learn.microsoft.com/en-us/windows/win32/direct3d12/queries">GPU Queries</a>。</p>
+<p class="note">今回実施したのはコード・シェーダー・参考資料の調査と設計のみ。ビルド、画像／動画撮影、既存テストの再実行、PIX計測、実機での性能・画質検証は行っていない。</p>
+</html>

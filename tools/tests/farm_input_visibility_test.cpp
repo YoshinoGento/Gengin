@@ -1,4 +1,5 @@
 #include "farm_test_edit.h"
+#include "farm_water_depth_cases.h"
 #include "io/MouseButtonEdges.h"
 #include "farm/render/FarmMeshLayout.h"
 #include "farm/render/FarmFarmerModel.h"
@@ -52,6 +53,8 @@ int main() {
     assert(grid.Initialize(5,4));
     farm::FarmVisualSystem visual;
     visual.Initialize({});
+    water_depth_cases::Run(visual);
+    std::cout<<"PASS: water-bed separation at three distances across 1280 mixed neighborhoods\n";
     {
         farm::FarmerPose pose{};
         pose.furrow={0,0,0,0,.22f};

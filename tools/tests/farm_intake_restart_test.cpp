@@ -2,6 +2,7 @@
 #include "farm/core/FarmGrid.h"
 #include "farm/system/FarmDocumentSystem.h"
 #include "farm/system/FarmLayoutSystem.h"
+#include "farm/system/FarmPondBank.h"
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -49,6 +50,22 @@ int main(int argc, char** argv) {
         Require(documents.Initialize((root / "documents").string(), grid, economy, selection, &date, &progression), "Document initialization");
         FarmLayoutSystem layouts;
         Require(layouts.Initialize((root / "layouts").string()), "Layout initialization");
+        {
+            farm::FarmGrid pond;
+            Require(pond.Initialize(5,4),"pond reader grid");
+            FarmProgressionSystem free; free.Initialize({},FarmProgressionMode::FreeFarming);
+            FarmDocumentSystem pondFiles;
+            Require(pondFiles.Initialize((root/"pond").string(),pond,economy,selection,nullptr,&free),"pond document init");
+            if (mode=="write") {
+                Require(farm::pond::Start(pond),"pond setup");
+                auto canal=*pond.GetSelectedTile(); canal.feature=farm::FarmTileFeature::Canal;
+                auto parallel=canal; parallel.retainsPondBank=true;
+                Require(pond.SetTile(9,parallel),"closed bank save setup");
+                Require(pond.SetTile(pond.GetSelectedIndex(),canal) && pondFiles.SaveAs("Pond",pond,economy,selection),"pond save");
+            } else Require(pondFiles.FileExists() && pond.HasPondBank() &&
+                farm::pond::IsOpen(pond,pond.GetSelectedIndex()) && pond.GetTile(9)->retainsPondBank &&
+                !farm::pond::IsOpen(pond,9) && free.IsFreeFarming(),"pond save reload");
+        }
 
         if (mode == "write") {
             SetIntakes(grid, false);

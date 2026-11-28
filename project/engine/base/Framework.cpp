@@ -23,6 +23,9 @@ Framework* Framework::instance = nullptr;
 /**
  * どこからでも自分自身を取得できる関数
  */
+void Framework::SetFieldMouseLook(bool enabled) {
+    if (winApp_) winApp_->SetFieldMouseLook(enabled);
+}
 Framework* Framework::GetInstance() {
 	return instance;
 }
